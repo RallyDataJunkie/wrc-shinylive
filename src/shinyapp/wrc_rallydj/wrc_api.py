@@ -32,31 +32,26 @@ def tablify(json_data, subcolkey=None, addcols=None):
     """Generate table from separate colnames/values JSON."""
     # Note that the JSON may be a few rows short cf. provided keys
     if subcolkey is None:
-        results = []
-        for values in json_data["values"]:
-            result_dict = {}
-            # Zip keys and values, filling None for missing values
-            zipped_values = zip_longest(json_data["fields"], values, fillvalue=None)
-            # Convert the zipped values to a dictionary and update the result_dict
-            result_dict.update(dict(zipped_values))
-            results.append(result_dict)
-        return pd.DataFrame(results)
+        fields = json_data["fields"]
+        values = json_data["values"]
+
+        # Create a DataFrame
+        df = pd.DataFrame(values, columns=fields)
     else:
         df = pd.DataFrame(columns=json_data["fields"])
-        if "values" not in json_data:
-            return df
-        for value in json_data["values"]:
-            _df = pd.DataFrame(value[subcolkey])
-            if len(_df.columns) < len(json_data["fields"]):
-                _df[[json_data["fields"][len(_df.columns) :]]] = None
-            _df.columns = json_data["fields"]
-            if addcols:
-                for c in addcols:
+        if "values" in json_data:
+            for value in json_data["values"]:
+                _df = pd.DataFrame(value[subcolkey])
+                if len(_df.columns) < len(json_data["fields"]):
+                    _df[[json_data["fields"][len(_df.columns) :]]] = None
+                _df.columns = json_data["fields"]
+                if addcols:
+                    for c in addcols:
+                        _df[c] = value[c]
+                for c in [k for k in value.keys() if k != subcolkey]:
                     _df[c] = value[c]
-            for c in [k for k in value.keys() if k != subcolkey]:
-                _df[c] = value[c]
-                df = pd.concat([df, _df])
-        return df
+                    df = pd.concat([df, _df])
+    return df
 
 
 def timeNow(typ="ms"):
@@ -351,10 +346,10 @@ class WRCAPIClient:
         if self.overall_df.empty or update:
             eventId = self.eventId if eventId is None else eventId
             rallyId = self.rallyId if rallyId is None else rallyId
-            stageId = self.stageId if stageId is None else stageId
+            stageId = self.stage_codes.get(stageId, stageId) or self.stageId
             championship = self.championship if championship is None else championship
 
-            stub = f"result/stageResult?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
+            stub = f"result/stageResult?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championshipId={self.getChampionshipId(championship)}&championship={championship}"
             json_data = self._WRC_json(stub)
             if not json_data:
                 return pd.DataFrame()
@@ -410,12 +405,11 @@ class WRCAPIClient:
         # Try to be robust on stageId being incorrectly entered...
         stageId = self.stage_codes.get(stageId, stageId) or self.stageId
         championship = self.championship if championship is None else championship
-
-        stub = f"result/stageTimes?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
+        stub = f"result/stageTimes?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championshipId={self.getChampionshipId(championship)}&championship={championship}"
         json_data = self._WRC_json(stub)
         if not json_data:
             return pd.DataFrame()
-        df_stageTimes = tablify(json_data).groupby("carNo").first().reset_index()
+        df_stageTimes = tablify(json_data)
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
         return df_stageTimes
 
