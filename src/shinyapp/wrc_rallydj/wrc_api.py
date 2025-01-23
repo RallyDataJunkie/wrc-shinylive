@@ -185,7 +185,9 @@ class WRCAPIClient:
         self.group = group
         self.full_calendar = pd.DataFrame()
 
-        self.rallyId2eventId={}
+        self.rallyId2eventId = {}
+        self.stage_codes = {}
+
         # These should really be set reactively depending on other values
         self.results_calendar_df = pd.DataFrame()
         self.stage_details_df = pd.DataFrame()
@@ -224,6 +226,7 @@ class WRCAPIClient:
             self.year = year
 
         self.rallyId2eventId={}
+        self.stage_codes={}
 
         self.results_calendar_df = pd.DataFrame()
         self.stage_details_df = pd.DataFrame()
@@ -238,6 +241,7 @@ class WRCAPIClient:
 
         self.full_calendar = self.getFullCalendar()
         self.rallyId2eventId = self.full_calendar[["rallyId", "eventId"]].set_index("rallyId")["eventId"].to_dict()
+
         self.seasonId = int(self.full_calendar["season"][0]["seasonId"])
         self.setEvent(eventName=eventName)
 
@@ -310,6 +314,11 @@ class WRCAPIClient:
                 return pd.dataFrame()
             df_stageDetails = tablify(json_data)
             self.stage_details_df = df_stageDetails
+            self.stage_codes = (
+                df_stageDetails[["STAGE", "stageId"]]
+                .set_index("STAGE")["stageId"]
+                .to_dict()
+            )
 
         return self.stage_details_df
 
@@ -358,12 +367,9 @@ class WRCAPIClient:
         else:
             return self.overall_df[self.overall_df["groupClass"] == group]
 
-    # We could look up the stageId for shakedown
-    # but that's more API calls; a heuristic is cheaper...
-    def get_shakedown_times(self, stage_times=None, shakedownId="SHD"):
-        stage_times = self.getStageTimes(stageId=shakedownId) if stage_times is None else stage_times
-        shakedown_times_df = pd.melt(
-            stage_times,
+    def getSplitsLong(self, splits_wide__df):
+        splits_long_df = pd.melt(
+            splits_wide__df,
             id_vars={
                 "carNo",
                 "driver",
@@ -371,16 +377,26 @@ class WRCAPIClient:
                 "teamName",
                 "eligibility",
                 "groupClass",
-            }.union(stage_times.columns),
-            value_vars=[c for c in stage_times.columns if c.startswith("round")],
+            }.intersection(splits_wide__df.columns),
+            value_vars=[c for c in splits_wide__df.columns if c.startswith("round")],
             var_name="roundN",
             value_name="_time",
         ).dropna()
-        shakedown_times_df["round"] = (
-            shakedown_times_df["roundN"].str.replace("round", "").astype(int)
+        splits_long_df["round"] = (
+            splits_long_df["roundN"].str.replace("round", "").astype(int)
         )
-        shakedown_times_df["timeInS"] = shakedown_times_df["_time"].apply(time_to_seconds)
-        return shakedown_times_df
+        splits_long_df["timeInS"] = splits_long_df["_time"].apply(time_to_seconds)
+        return splits_long_df
+
+    # We could look up the stageId for shakedown
+    # but that's more API calls; a heuristic is cheaper...
+    def get_shakedown_times(self, stage_times=None, shakedownId="SHD"):
+        stage_times = (
+            self.getStageTimes(stageId=shakedownId)
+            if stage_times is None
+            else stage_times
+        )
+        return self.getSplitsLong(stage_times=stage_times)
 
     def getStageTimes(
         self,
@@ -391,14 +407,15 @@ class WRCAPIClient:
     ):
         eventId = self.eventId if eventId is None else eventId
         rallyId = self.rallyId if rallyId is None else rallyId
-        stageId = self.stageId if stageId is None else stageId
+        # Try to be robust on stageId being incorrectly entered...
+        stageId = self.stage_codes.get(stageId, stageId) or self.stageId
         championship = self.championship if championship is None else championship
 
         stub = f"result/stageTimes?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
         json_data = self._WRC_json(stub)
         if not json_data:
             return pd.DataFrame()
-        df_stageTimes = tablify(json_data)
+        df_stageTimes = tablify(json_data).groupby("carNo").first().reset_index()
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
         return df_stageTimes
 
@@ -413,7 +430,7 @@ class WRCAPIClient:
         rallyId = self.rallyId if rallyId is None else rallyId
         stageId = self.stageId if stageId is None else stageId
         championship = self.championship if championship is None else championship
-        if self.year > 2023:
+        if int(self.year) > 2023:
             stub = f"result/splitTime?championshipId={self.getChampionshipId(championship)}&eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
         else:
             stub = f"result/splitTime?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
