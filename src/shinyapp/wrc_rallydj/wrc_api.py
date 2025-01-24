@@ -243,11 +243,11 @@ class WRCAPIClient:
         self.setEvent(eventName=eventName)
 
     @staticmethod
-    def rebaseTimes(times, carId=None, idCol=None, rebaseCol=None):
+    def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
         """Rebase times based on the time for a particular vehicle."""
-        if carId is None or idCol is None or rebaseCol is None:
+        if rebaseId is None or idCol is None or rebaseCol is None:
             return times
-        return times[rebaseCol] - times.loc[times[idCol] == carId, rebaseCol].iloc[0]
+        return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
 
     def setEvent(self, eventName=None):
         # If no event name provided, use current event
