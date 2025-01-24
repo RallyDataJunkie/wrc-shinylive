@@ -61,7 +61,7 @@ def timeNow(typ="ms"):
     return now
 
 
-def time_to_seconds(time_str):
+def time_to_seconds(time_str, retzero=False):
     """
     Convert a time string in the format 'HH:MM:SS.T' and variants thereof to total seconds including tenths (1 dp).
 
@@ -72,7 +72,10 @@ def time_to_seconds(time_str):
         float: Total time in seconds rounded to 1 decimal place.
     """
     if not time_str or not isinstance(time_str, str):  # Handle empty or invalid input
-        return None
+        if retzero:
+            return 0
+        else:
+            return None
 
     try:
         # Handle empty or invalid input
@@ -113,7 +116,6 @@ def apply_time_delta(base_time_str, delta_str):
         return round(base_seconds - delta_seconds, 1)
     else:
         return round(base_seconds + delta_seconds, 1)
-
 
 class WRCAPIClient:
     """Client for accessing Dakar Rally API data."""
@@ -240,6 +242,13 @@ class WRCAPIClient:
         self.seasonId = int(self.full_calendar["season"][0]["seasonId"])
         self.setEvent(eventName=eventName)
 
+    @staticmethod
+    def rebaseTimes(times, carId=None, idCol=None, rebaseCol=None):
+        """Rebase times based on the time for a particular vehicle."""
+        if carId is None or idCol is None or rebaseCol is None:
+            return times
+        return times[rebaseCol] - times.loc[times[idCol] == carId, rebaseCol].iloc[0]
+
     def setEvent(self, eventName=None):
         # If no event name provided, use current event
         if not eventName:
@@ -314,6 +323,8 @@ class WRCAPIClient:
                 .set_index("STAGE")["stageId"]
                 .to_dict()
             )
+            # Type mapping
+            df_stageDetails["distance"] = pd.to_numeric(df_stageDetails["distance"], errors="coerce")
 
         return self.stage_details_df
 
@@ -411,6 +422,8 @@ class WRCAPIClient:
             return pd.DataFrame()
         df_stageTimes = tablify(json_data)
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
+
+
         return df_stageTimes
 
     def getSplitTimes(
@@ -435,6 +448,53 @@ class WRCAPIClient:
         df_splitTimes = tablify(json_data)
         self.stage_id_annotations(df_splitTimes, eventId, rallyId, stageId)
         return df_splitTimes
+
+    def get_splits_as_numeric(self, splits):
+        """Convert the original split data to numerics."""
+        split_cols = [c for c in splits.columns if c.startswith("round")]
+        sw_actual = splits[["carNo", "stageTime"] + split_cols].copy()
+        # Convert string relative times to numeric relative times
+        for c in split_cols:
+            sw_actual[c] = sw_actual[c].apply(time_to_seconds)
+
+        # The original data has a stage time in the first row
+        # and the delta for the other rows
+        # Recreate the actual times
+        sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
+            sw_actual[split_cols].iloc[0]
+        )
+        sw_actual[f"round{len(split_cols)+1}"] = sw_actual["stageTime"].apply(
+            time_to_seconds
+        )
+        sw_actual.drop(columns="stageTime", inplace=True)
+        return sw_actual
+
+    def get_split_duration(self, df, split_cols, ret_id=True, id_col="carNo"):
+        """The time it takes a car to traverse a split section."""
+        # Ensure split_cols are strings
+        split_cols = [str(col) for col in split_cols]
+
+        # Create a copy of the dataframe with selected columns
+        df_ = df[split_cols].copy()
+
+        # Calculate differences between consecutive columns
+        diff_df = df_[split_cols[1:]].values - df_[split_cols[:-1]].values
+
+        # Convert back to dataframe
+        diff_df = pd.DataFrame(diff_df, columns=split_cols[1:], index=df_.index)
+
+        # Add first split column back
+        diff_df[split_cols[0]] = df_[split_cols[0]]
+
+        if ret_id:
+            # Add entryId column
+            diff_df[id_col] = df[id_col]
+
+            # Reorder columns
+            cols = [id_col] + split_cols
+            return diff_df[cols]
+
+        return diff_df
 
     def getStageWinners(self, eventId=None, championship=None):
         eventId = self.eventId if eventId is None else eventId

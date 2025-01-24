@@ -10,7 +10,7 @@ from shiny.express import ui, input
 
 from matplotlib import pyplot as plt
 
-from wrc_rallydj.wrc_api import WRCAPIClient
+from wrc_rallydj.wrc_api import WRCAPIClient, time_to_seconds
 
 # The cacheing is tricky:
 # - we want to be able to force updates for live stages etc
@@ -23,9 +23,12 @@ ui.panel_title(
 )
 
 # Create season selector
+# Currently offers a hard coded set of season year options
 ui.input_select("season", "Season:", list(range(2024, 2026)), selected=2025)
 
 # Create event selector
+# Dynamically populated using a list of events
+# based on the season selection
 ui.input_select("event", "Event:", {}, selected=wrc.rallyId)
 
 # Create stages selector
@@ -122,6 +125,14 @@ def update_stages_select():
     ui.update_select("stage", choices=stages)
 
 
+@reactive.effect
+@reactive.event(input.stage)
+def update_stages_driver_rebase_select():
+    rebase_drivers = (
+        stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
+    )
+    ui.update_select("stage_rebase_driver", choices=rebase_drivers)
+
 with ui.navset_card_underline():
 
     with ui.nav_panel("season"):
@@ -151,6 +162,35 @@ with ui.navset_card_underline():
             return render.DataGrid(wrc.getStartlist())
 
     with ui.nav_panel("stagetimes"):
+
+        # Create driver rebase selector
+        ui.input_select(
+            "stage_rebase_driver",
+            "Driver rebase:",
+            {},
+        )
+
+        @render.ui
+        @reactive.event(input.stage_rebase_driver)
+        def stage_times_short_frame():
+            stage_times = stage_times_data()[["pos", "carNo","driver", "stageTime", "diffFirst","diffPrev"]]
+            if not "diffFirst" in stage_times:
+                return
+            stage_times["Rebase Gap"] = stage_times["diffFirst"].apply(
+                time_to_seconds, retzero=True)
+            
+            rebase_driver = input.stage_rebase_driver()
+            stage_times.loc[:, "Rebase Gap"] = wrc.rebaseTimes(
+                stage_times, rebase_driver, "carNo", "Rebase Gap"
+            )
+            html = stage_times.style.format(precision=1).bar(subset=["Rebase Gap"], align='zero', color=['#5fba7d', '#d65f5f']).to_html()
+            
+            return ui.HTML(html)
+            # return render.DataGrid(
+            #    stage_times[
+            #        ["pos", "carNo", "driver", "stageTime", "Time", "Gap", "Diff"]
+            #    ]
+            # )
 
         @render.data_frame
         def stage_times_frame():
