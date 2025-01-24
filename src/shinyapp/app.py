@@ -310,10 +310,15 @@ with ui.navset_card_underline():
             split_times_wide, split_times_long, split_times_wide_numeric = (
                 split_times_data()
             )
-            return wrc.get_split_duration(
+            split_cols = [
+                c for c in split_times_wide_numeric.columns if c.startswith("round")
+            ]
+            output_ = wrc.get_split_duration(
                 split_times_wide_numeric,
-                [c for c in split_times_wide_numeric.columns if c.startswith("round")],
+                split_cols,
             )
+            wrc.subtract_from_rows_inplace(output_, split_cols)
+            return output_
 
         ui.markdown(
             """

@@ -117,6 +117,7 @@ def apply_time_delta(base_time_str, delta_str):
     else:
         return round(base_seconds + delta_seconds, 1)
 
+
 class WRCAPIClient:
     """Client for accessing Dakar Rally API data."""
 
@@ -241,6 +242,19 @@ class WRCAPIClient:
 
         self.seasonId = int(self.full_calendar["season"][0]["seasonId"])
         self.setEvent(eventName=eventName)
+
+    @staticmethod
+    def subtract_from_rows_inplace(df, colsList):
+        """
+        Subtracts the values of specified columns in the first row from all rows except the first.
+        Modifies the DataFrame in place.
+
+        Parameters:
+        df (pd.DataFrame): The DataFrame to modify.
+        colsList (list): List of column names to subtract.
+        """
+        df.loc[1:, colsList] -= df.loc[0, colsList].values  # Perform subtraction directly
+
 
     @staticmethod
     def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
