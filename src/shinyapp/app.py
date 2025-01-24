@@ -68,7 +68,7 @@ def stages_data():
     return stages
 
 
-@reactive.effect
+@reactive.calc
 def itinerary_data():
     wrc.rallyId = rally_id_var()
     wrc.eventId = wrc.rallyId2eventId[wrc.rallyId]
@@ -77,7 +77,7 @@ def itinerary_data():
     return itinerary
 
 
-@reactive.effect
+@reactive.calc
 def startlist_data():
     wrc.rallyId = rally_id_var()
 
