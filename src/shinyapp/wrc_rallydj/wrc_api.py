@@ -423,6 +423,29 @@ class WRCAPIClient:
         df_stageTimes = tablify(json_data)
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
 
+        if "diffFirst" in df_stageTimes:
+            df_stageTimes["Gap"] = df_stageTimes["diffFirst"].apply(
+                time_to_seconds, retzero=True
+            )
+        if "diffPrev" in df_stageTimes:
+            df_stageTimes["Diff"] = df_stageTimes["diffPrev"].apply(
+                time_to_seconds, retzero=True
+            )
+        if "stageTime" in df_stageTimes:
+            df_stageTimes["Time"] = df_stageTimes["stageTime"].apply(
+                time_to_seconds, retzero=True
+            )
+            # Pace annotations
+            df_stageDetails = self.getStageDetails()
+            stage_dist = float(
+                df_stageDetails.loc[df_stageDetails["stageId"] == stageId, "distance"].iloc[0]
+            )
+            df_stageTimes["speed (km/h)"] = stage_dist / (df_stageTimes["Time"] / 3600)
+            # Use .loc[] to modify the original DataFrame in place
+            df_stageTimes["pace (s/km)"] = df_stageTimes["Time"] / stage_dist
+            df_stageTimes["pace diff (s/km)"] = (
+                df_stageTimes["pace (s/km)"] - df_stageTimes.loc[0, "pace (s/km)"]
+            )
 
         return df_stageTimes
 
@@ -447,12 +470,15 @@ class WRCAPIClient:
             return pd.DataFrame()
         df_splitTimes = tablify(json_data)
         self.stage_id_annotations(df_splitTimes, eventId, rallyId, stageId)
+        df_splitTimes.dropna(how="all", axis=1, inplace=True)
         return df_splitTimes
 
-    def get_splits_as_numeric(self, splits):
+    def get_splits_as_numeric(self, splits, regularise=True):
         """Convert the original split data to numerics."""
+
         split_cols = [c for c in splits.columns if c.startswith("round")]
-        sw_actual = splits[["carNo", "stageTime"] + split_cols].copy()
+        base_cols = list({"carNo", "stageTime"}.intersection(splits.columns))
+        sw_actual = splits[base_cols + split_cols].copy()
         # Convert string relative times to numeric relative times
         for c in split_cols:
             sw_actual[c] = sw_actual[c].apply(time_to_seconds)
@@ -460,13 +486,14 @@ class WRCAPIClient:
         # The original data has a stage time in the first row
         # and the delta for the other rows
         # Recreate the actual times
-        sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
-            sw_actual[split_cols].iloc[0]
-        )
-        sw_actual[f"round{len(split_cols)+1}"] = sw_actual["stageTime"].apply(
-            time_to_seconds
-        )
-        sw_actual.drop(columns="stageTime", inplace=True)
+        if len(split_cols)>1 and regularise:
+            sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
+            sw_actual[split_cols].iloc[0] )
+        if "stageTime" in sw_actual.columns:
+            sw_actual[f"round{len(split_cols)+1}"] = sw_actual["stageTime"].apply(
+                time_to_seconds
+            )
+            sw_actual.drop(columns="stageTime", inplace=True)
         return sw_actual
 
     def get_split_duration(self, df, split_cols, ret_id=True, id_col="carNo"):

@@ -8,3 +8,4 @@ cattrs
 platformdirs
 url-normalize
 parse
+seaborn
