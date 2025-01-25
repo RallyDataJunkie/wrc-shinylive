@@ -1,6 +1,11 @@
 jupyterlite_simple_cors_proxy
 
+pandas
+requests
 requests-cache
+attrs
 cattrs
+platformdirs
 url-normalize
 parse
+seaborn
