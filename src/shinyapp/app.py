@@ -1,5 +1,7 @@
 import pandas as pd
 import seaborn as sns
+import json
+from pathlib import Path
 
 # import functools
 
@@ -10,8 +12,11 @@ from shiny import render, reactive
 from shiny.express import ui, input
 
 from matplotlib import pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 
 from wrc_rallydj.wrc_api import WRCAPIClient, time_to_seconds
+
+pd.set_option("display.colheader_justify", "left")
 
 # The cacheing is tricky:
 # - we want to be able to force updates for live stages etc
@@ -19,13 +24,42 @@ from wrc_rallydj.wrc_api import WRCAPIClient, time_to_seconds
 # the last requested data unless we force an update
 wrc = WRCAPIClient(use_cache=True, backend="memory", expire_after=600)
 
-ui.panel_title(
-    "RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ"
-)
+ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
+
+
+@reactive.calc
+@reactive.event(input.event)
+def getSplitDists():
+    year = str(input.season())
+    rallyId = str(rally_id_var())
+    with open(Path(__file__).parent / "patches.json", "r") as file:
+        patches_json = json.load(file)
+        try:
+            splits = patches_json["split_distances"][year][rallyId]
+            splits = pd.DataFrame.from_dict(splits, orient="index")
+            splits.columns = [f"round{i}" for i in range(1, splits.shape[1] + 1)]
+        except:
+            splits = pd.DataFrame()
+    return splits
+
+
+@reactive.calc
+@reactive.event(input.stage)
+def split_dists_for_stage():
+    split_dists = getSplitDists()
+    stageIdFromCode = {v: k for k, v in wrc.stage_codes.items()}
+    try:
+        split_dists = split_dists.loc[stageIdFromCode[input.stage()]]
+    except:
+        split_dists = {}
+    return split_dists
+
 
 # Create season selector
 # Currently offers a hard coded set of season year options
-ui.input_select("season", "Season:", list(range(2024, 2026)), selected=2025)
+ui.input_select(
+    "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
+)
 
 # Create event selector
 # Dynamically populated using a list of events
@@ -43,10 +77,11 @@ ui.input_select(
 @reactive.calc
 @reactive.event(input.event)
 def rally_id_var():
-    rally_id= input.event()
+    rally_id = input.event()
     wrc.eventId = wrc.rallyId2eventId[rally_id]
     wrc.rallyId = rally_id
     return wrc.rallyId
+
 
 @reactive.calc
 @reactive.event(input.season)
@@ -123,9 +158,7 @@ def update_events_select():
 @reactive.event(input.event)
 def update_stages_select():
     stages_df = stages_data()
-    stages = (
-        stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
-    )
+    stages = stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
     ui.update_select("stage", choices=stages)
 
 
@@ -157,6 +190,7 @@ with ui.navset_card_underline():
             return render.DataGrid(season)
 
     with ui.nav_panel("stages"):
+
         @render.data_frame
         def stages_frame():
             stages = stages_data()
@@ -199,18 +233,21 @@ with ui.navset_card_underline():
                 "pace (s/km)",
                 "pace diff (s/km)",
             ]
-            if input.stage()=="SHD":
+            if input.stage() == "SHD":
                 core_cols += [c for c in stage_times.columns if c.startswith("round")]
-            stage_times = stage_times[list(set(core_cols).intersection(stage_times.columns))]
+            stage_times = stage_times[
+                list(set(core_cols).intersection(stage_times.columns))
+            ]
             if "diffFirst" in stage_times.columns:
                 rebase_gap_col = "Rebase Gap (s)"
                 stage_times[rebase_gap_col] = stage_times["diffFirst"].apply(
-                time_to_seconds, retzero=True)
+                    time_to_seconds, retzero=True
+                )
 
                 rebase_driver = input.stage_rebase_driver()
                 stage_times.loc[:, rebase_gap_col] = wrc.rebaseTimes(
-                stage_times, rebase_driver, "carNo", rebase_gap_col
-            )
+                    stage_times, rebase_driver, "carNo", rebase_gap_col
+                )
                 cols_order = [
                     "pos",
                     "carNo",
@@ -224,9 +261,12 @@ with ui.navset_card_underline():
                     "pace diff (s/km)",
                 ]
                 html = (
-                    stage_times[[c for c in cols_order if c in stage_times.columns]].style.format(precision=1)
+                    stage_times[[c for c in cols_order if c in stage_times.columns]]
+                    .style.format(precision=1)
                     .bar(
-                        subset=[rebase_gap_col], align="zero", color=["#5fba7d", "#d65f5f"]
+                        subset=[rebase_gap_col],
+                        align="zero",
+                        color=["#5fba7d", "#d65f5f"],
                     )
                     .to_html()
                 )
@@ -253,52 +293,56 @@ with ui.navset_card_underline():
         # Create splits driver rebase selector
         ui.input_select(
             "splits_rebase_driver",
-            "Driver rebase (NOT WORKING YET):",
-            {},
-        )
-
-        # Select view type
-        # Should we also have a radio button,
-        # e.g. for absolute or relative;
-        # And maybe accumulated or in-section
-        ui.input_select(
-            "splits_view",
-            "Splits View (NOT WORKING YET):",
+            "Driver rebase:",
             {},
         )
 
         ui.markdown(
             """
 
-## Original data view (diff to stage winner)
+## Time gained / lost within each section in seconds relative to rebase driver
 
                     """
         )
 
-        @render.table
-        def split_times_base():
+        @render.plot(alt="A seaborn heatmap...")
+        @reactive.event(input.splits_rebase_driver)
+        def seaborn_heatmap_splits():
+            if input.stage() == "SHD":
+                return
             split_times_wide, split_times_long, split_times_wide_numeric = (
                 split_times_data()
             )
-            display_cols=["pos",
-                    "start",
-                    "carNo",
-                    "driver",
-                    "team/car",
-                    "teamName",
-                    "eligibility",
-                    "groupClass",
-                    "stageTime",
-                    "diffFirst"]
-            # A set intersection does not preserve order?
-            display_cols = [c for c in display_cols if c in split_times_wide.columns] + [c for c in split_times_wide.columns if c.startswith("round")]
+            if split_times_wide_numeric.empty:
+                return
+            split_cols = [
+                c for c in split_times_wide_numeric.columns if c.startswith("round")
+            ]
+            output_ = wrc.get_split_duration(
+                split_times_wide_numeric,
+                split_cols,
+            )
 
-            return split_times_wide[display_cols]
+            output_ = wrc.subtract_from_rows(
+                output_, split_cols, ignore_first_row=False
+            )
+            rebase_driver = input.splits_rebase_driver()
+            output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+            colors = ["green", "white", "red"]
+            cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+            output_.set_index("carNo", inplace=True)
+            output_.columns = [
+                f"Split {i}" for i in range(1, output_.shape[1] + 1)
+            ]  # [:-1] + ["Finish"]
+
+            return sns.heatmap(
+                output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
+            )
 
         ui.markdown(
             """
 
-## Time within each section in seconds
+## Time spent in each split section (s)
 
                     """
         )
@@ -310,6 +354,8 @@ with ui.navset_card_underline():
             split_times_wide, split_times_long, split_times_wide_numeric = (
                 split_times_data()
             )
+            if split_times_wide_numeric.empty:
+                return
             split_cols = [
                 c for c in split_times_wide_numeric.columns if c.startswith("round")
             ]
@@ -317,8 +363,45 @@ with ui.navset_card_underline():
                 split_times_wide_numeric,
                 split_cols,
             )
-            wrc.subtract_from_rows_inplace(output_, split_cols)
             return output_
+
+        # Select view type
+        # Should we also have a radio button,
+        # e.g. for absolute or relative;
+        # And maybe accumulated or in-section
+        # TO DO
+        # ui.input_select(
+        #    "splits_view",
+        #    "Splits View (NOT WORKING YET):",
+        #    {},
+        # )
+
+        @render.table
+        def split_times_base():
+            split_times_wide, split_times_long, split_times_wide_numeric = (
+                split_times_data()
+            )
+            if split_times_wide.empty:
+                return pd.DataFrame()
+
+            display_cols = [
+                "pos",
+                "start",
+                "carNo",
+                "driver",
+                "team/car",
+                "teamName",
+                "eligibility",
+                "groupClass",
+                "stageTime",
+                "diffFirst",
+            ]
+            # A set intersection does not preserve order?
+            display_cols = [
+                c for c in display_cols if c in split_times_wide.columns
+            ] + [c for c in split_times_wide.columns if c.startswith("round")]
+
+            return split_times_wide[display_cols]
 
         ui.markdown(
             """
@@ -328,12 +411,15 @@ with ui.navset_card_underline():
                     """
         )
 
-        # @render.ui
         @render.table
         def split_times_numeric():
+            if input.stage() == "SHD":
+                return
             split_times_wide, split_times_long, split_times_wide_numeric = (
                 split_times_data()
             )
+            if split_times_wide_numeric.empty:
+                return
             # Package version error in cmap?
             # cm = sns.light_palette("green", as_cmap=True)
             # html = split_times_wide_numeric.style.background_gradient(cmap=cm, subset=[c for c in split_times_wide_numeric.columns if c.startswith("round")]).to_html()
@@ -357,7 +443,7 @@ with ui.navset_card_underline():
 
             # "{:.1f}".format},
 
-            styles = {c:"{0:0.1f}" for c in split_cols }
+            styles = {c: "{0:0.1f}" for c in split_cols}
             return split_times_wide_numeric.style.format(styles)
 
         # @render.table
@@ -390,7 +476,9 @@ with ui.navset_card_underline():
                     "eligibility",
                     "groupClass",
                     "control",
-                    "reason","penaltyTime", "penaltyDuration"
+                    "reason",
+                    "penaltyTime",
+                    "penaltyDuration",
                 ]
             ]
             return render.DataGrid(penalties)
@@ -399,5 +487,16 @@ with ui.navset_card_underline():
 
         @render.data_frame
         def retirements_frame():
-            retirements = wrc.getRetirements()[["carNo", "driver","team/car", "teamName", "eligibility","groupClass","control","reason"]]
+            retirements = wrc.getRetirements()[
+                [
+                    "carNo",
+                    "driver",
+                    "team/car",
+                    "teamName",
+                    "eligibility",
+                    "groupClass",
+                    "control",
+                    "reason",
+                ]
+            ]
             return render.DataGrid(retirements)

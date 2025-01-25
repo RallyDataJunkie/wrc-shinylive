@@ -244,7 +244,7 @@ class WRCAPIClient:
         self.setEvent(eventName=eventName)
 
     @staticmethod
-    def subtract_from_rows_inplace(df, colsList):
+    def subtract_from_rows(df, colsList, ignore_first_row=True):
         """
         Subtracts the values of specified columns in the first row from all rows except the first.
         Modifies the DataFrame in place.
@@ -253,8 +253,11 @@ class WRCAPIClient:
         df (pd.DataFrame): The DataFrame to modify.
         colsList (list): List of column names to subtract.
         """
-        df.loc[1:, colsList] -= df.loc[0, colsList].values  # Perform subtraction directly
-
+        df = df.copy()
+        df.loc[int(ignore_first_row) :, colsList] -= df.loc[0, colsList].values.astype(
+            float
+        )  # Perform subtraction directly
+        return df
 
     @staticmethod
     def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
@@ -262,6 +265,17 @@ class WRCAPIClient:
         if rebaseId is None or idCol is None or rebaseCol is None:
             return times
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
+    
+    @staticmethod
+    def rebaseManyTimes(times, rebaseId=None, idCol=None, rebaseCols=None):
+        # Fetch the reference values for the specified 'rebaseId'
+        reference_values = times.loc[times[idCol] == rebaseId, rebaseCols].iloc[0]
+
+        # If rebaseCols is not a list, make it a list
+        rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
+
+        times[rebaseCols] = times[rebaseCols].subtract(reference_values)
+        return times
 
     def setEvent(self, eventName=None):
         # If no event name provided, use current event
@@ -435,6 +449,9 @@ class WRCAPIClient:
         if not json_data:
             return pd.DataFrame()
         df_stageTimes = tablify(json_data)
+        if df_stageTimes.empty:
+            return df_stageTimes
+
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
 
         if "diffFirst" in df_stageTimes:
@@ -503,9 +520,14 @@ class WRCAPIClient:
         if len(split_cols)>1 and regularise:
             sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
             sw_actual[split_cols].iloc[0] )
-        if "stageTime" in sw_actual.columns:
-            sw_actual[f"round{len(split_cols)+1}"] = sw_actual["stageTime"].apply(
-                time_to_seconds
+        if "stageTime" in sw_actual.columns and "dIffFirst" in sw_actual.columns:
+            sw_actual[f"round{len(split_cols)+1}"] = sw_actual.apply(
+                lambda row: (
+                    time_to_seconds(row["stageTime"])
+                    if row.name == 0
+                    else time_to_seconds(row["diffFirst"])
+                ),
+                axis=1,
             )
             sw_actual.drop(columns="stageTime", inplace=True)
         return sw_actual
