@@ -30,6 +30,7 @@ ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 # Shiny Express API
 # https://shiny.posit.co/py/api/express/
 
+
 @reactive.calc
 @reactive.event(input.event)
 def getSplitDists():
@@ -52,12 +53,14 @@ def split_dists_for_stage():
     split_dists = getSplitDists()
     stageIdFromCode = {v: k for k, v in wrc.stage_codes.items()}
     try:
-        split_cumdists = split_dists.loc[stageIdFromCode[input.stage()]].dropna().to_dict()
+        split_cumdists = (
+            split_dists.loc[stageIdFromCode[input.stage()]].dropna().to_dict()
+        )
         split_cumdists = {k: split_cumdists[k] for k in sorted(split_cumdists)}
 
         # Extract values in the sorted order of keys
         split_dists = {}
-        prev = 0 
+        prev = 0
 
         for k, v in split_cumdists.items():
             split_dists[k] = v - prev
@@ -65,7 +68,7 @@ def split_dists_for_stage():
 
     except:
         split_cumdists = {}
-        split_dists={}
+        split_dists = {}
 
     return split_cumdists, split_dists
 
@@ -192,6 +195,7 @@ def update_splits_driver_rebase_select():
     rebase_drivers = (
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
+    rebase_drivers["ult"] = "Ultimate"
     ui.update_select("splits_rebase_driver", choices=rebase_drivers)
 
 
@@ -314,14 +318,25 @@ with ui.navset_card_underline():
                 "Driver rebase:",
                 {},
             ),
-            "Times are displayed relative to rebased driver."
+            "Times are displayed relative to rebased driver. The 'Ultimate' time represents the quickest time in each split section."
 
         with ui.tooltip(id="splits_reverse_palette_tt"):
-            ui.input_checkbox("splits_reverse_palette", "Reverse rebase palette", False),
+            ui.input_checkbox(
+                "splits_reverse_palette", "Reverse rebase palette", False
+            ),
             "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
         with ui.tooltip(id="splits_section_view_tt"):
-            ui.input_select( "splits_section_view", "Section report view", {"time":"Time in section (s)", "pace":"Av. pace in section (s/km)","speed":"Av. speed in section (km/s)"} , selected="time" ),
+            ui.input_select(
+                "splits_section_view",
+                "Section report view",
+                {
+                    "time": "Time in section (s)",
+                    "pace": "Av. pace in section (s/km)",
+                    "speed": "Av. speed in section (km/s)",
+                },
+                selected="time",
+            ),
             "View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)"
 
         with ui.card(class_="mt-3"):
@@ -333,8 +348,10 @@ with ui.navset_card_underline():
                     )
                     "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
-            @render.plot(alt="A seaborn heatmap...")
-            @reactive.event(input.stage, input.splits_rebase_driver, input.splits_reverse_palette)
+            @render.plot(alt="Heatmap of within split delta times.")
+            @reactive.event(
+                input.stage, input.splits_rebase_driver, input.splits_reverse_palette
+            )
             def seaborn_heatmap_splits():
                 if input.stage() == "SHD":
                     return
@@ -356,12 +373,30 @@ with ui.navset_card_underline():
                 #    output_, split_cols, ignore_first_row=False
                 # )
 
+                ult_row = {"carNo": "ult"}
+
+                # Find minimum non-zero values for each round column
+                for col in split_cols:
+                    # Convert to numeric, filter non-zero, find minimum
+                    min_val = pd.to_numeric(
+                        output_[col][output_[col] > 0], errors="coerce"
+                    ).min()
+                    ult_row[col] = min_val
+                output_ = pd.concat(
+                    [output_, pd.DataFrame([ult_row])], ignore_index=True
+                )
+
+                print(output_)
                 rebase_driver = input.splits_rebase_driver()
                 output_ = wrc.rebaseManyTimes(
                     output_, rebase_driver, "carNo", split_cols
                 )
-
-                colors = ["red", "white", "green"] if input.splits_reverse_palette() else ["green", "white", "red"]
+                output_ = output_[output_["carNo"] != "ult"]
+                colors = (
+                    ["red", "white", "green"]
+                    if input.splits_reverse_palette()
+                    else ["green", "white", "red"]
+                )
 
                 cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
                 output_.set_index("carNo", inplace=True)
@@ -386,8 +421,12 @@ with ui.navset_card_underline():
             @reactive.event(input.splits_section_view)
             def split_report_view():
                 view = input.splits_section_view()
-                typ = {"time": "(s)", "speed": "(km/s)", "pace": "(s/km)"}[view]
-                return ui.markdown(f"*{view.capitalize()}* {typ} for each split.")
+                typ = {
+                    "time": ("(s)", "(*Lower* is better.)"),
+                    "speed": ("(km/s)", "(*Higher* is better.)"),
+                    "pace": ("(s/km)", "(*Lower* is better.)"),
+                }[view]
+                return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
 
             @render.table
             @reactive.event(input.splits_section_view, input.stage)
@@ -410,13 +449,13 @@ with ui.navset_card_underline():
                 # Scope the view if data available
                 split_cumdists, split_dists = split_dists_for_stage()
                 if split_dists:
-                    if view=="pace":
+                    if view == "pace":
                         output_.update(
                             output_.loc[:, split_dists.keys()].apply(
                                 lambda s: s / split_dists[s.name]
                             )
                         )
-                    elif view=="speed":
+                    elif view == "speed":
                         output_.update(
                             output_.loc[:, split_dists.keys()].apply(
                                 lambda s: 3600 * split_dists[s.name] / s
@@ -483,7 +522,7 @@ with ui.navset_card_underline():
                     "Accumulated time in seconds across the stage at each split."
 
             @render.table
-            @reactive.event(input.splits_section_view,input.stage)
+            @reactive.event(input.splits_section_view, input.stage)
             def split_times_numeric():
                 if input.stage() == "SHD":
                     return
