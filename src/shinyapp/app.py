@@ -318,16 +318,19 @@ with ui.navset_card_underline():
             split_cols = [
                 c for c in split_times_wide_numeric.columns if c.startswith("round")
             ]
+            #output_ = split_times_wide_numeric
             output_ = wrc.get_split_duration(
                 split_times_wide_numeric,
                 split_cols,
             )
 
-            output_ = wrc.subtract_from_rows(
-                output_, split_cols, ignore_first_row=False
-            )
+            # output_ = wrc.subtract_from_rows(
+            #    output_, split_cols, ignore_first_row=False
+            # )
             rebase_driver = input.splits_rebase_driver()
-            output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+            output_ = wrc.rebaseManyTimes(
+                output_, rebase_driver, "carNo", split_cols
+            )
             colors = ["green", "white", "red"]
             cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
             output_.set_index("carNo", inplace=True)

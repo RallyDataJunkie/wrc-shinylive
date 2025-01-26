@@ -6,7 +6,7 @@ import pandas as pd
 import requests
 from itertools import zip_longest
 import datetime
-
+from numpy import nan
 
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
@@ -62,25 +62,13 @@ def timeNow(typ="ms"):
 
 
 def time_to_seconds(time_str, retzero=False):
-    """
-    Convert a time string in the format 'HH:MM:SS.T' and variants thereof to total seconds including tenths (1 dp).
-
-    Parameters:
-        time_str (str): Time string in the format 'HH:MM:SS.T', 'MM:SS.T', 'SS.T'.
-
-    Returns:
-        float: Total time in seconds rounded to 1 decimal place.
-    """
-    if not time_str or not isinstance(time_str, str):  # Handle empty or invalid input
-        if retzero:
-            return 0
-        else:
-            return None
+    if not time_str or not isinstance(time_str, str):
+        return 0 if retzero else nan
 
     try:
-        # Handle empty or invalid input
-        if time_str.startswith("+") or time_str.startswith("-"):
-            time_str = time_str[1:]
+        # Handle sign
+        is_negative = time_str.startswith("-")
+        time_str = time_str.lstrip("+-")
 
         # Split the time string into parts
         parts = time_str.split(":")
@@ -93,13 +81,16 @@ def time_to_seconds(time_str, retzero=False):
             minutes, seconds = parts
             total_seconds = int(minutes) * 60 + float(seconds)
         else:
-            seconds = parts[0]
-            total_seconds = float(seconds)
+            total_seconds = float(parts[0])
+
+        # Apply negative sign if needed
+        total_seconds = -total_seconds if is_negative else total_seconds
 
         # Round to 1 decimal place
         return round(total_seconds, 1)
-    except:
-        print(f"Invalid time format: {time_str}")
+
+    except (ValueError, TypeError):
+        return 0 if retzero else nan
 
 
 # Function to apply time delta
@@ -265,16 +256,63 @@ class WRCAPIClient:
         if rebaseId is None or idCol is None or rebaseCol is None:
             return times
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
-    
+
     @staticmethod
-    def rebaseManyTimes(times, rebaseId=None, idCol=None, rebaseCols=None):
+    def rebaseManyTimes(times, rebaseId=None, idCol=None, rebaseCols=None, inplace=False):
+        if not inplace:
+            times = times.copy()
+
+        # Ensure rebaseCols is a list
+        rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
+
         # Fetch the reference values for the specified 'rebaseId'
         reference_values = times.loc[times[idCol] == rebaseId, rebaseCols].iloc[0]
 
+        # Subtract only the specified columns
+        times[rebaseCols] = times[rebaseCols].subtract(reference_values)
+
+        if not inplace:
+            return times
+
+    @staticmethod
+    def rebaseWithDummyValues(times, replacementVals, rebaseCols=None):
+        """
+        Add a dummy row, rebase the values, then remove the dummy row.
+
+        :param times: DataFrame containing the data to be modified
+        :param replacementVals: List of values to replace for each column in rebaseCols
+        :param rebaseCols: List of columns to apply the rebase operation
+        :return: Modified DataFrame with rebased values
+        """
+        if rebaseCols is None:
+            return times
+        times=times.copy()
+        # TO DO:
+        # should we have a generic checker that rebase cols are available
+        # or subset to the ones that are?
         # If rebaseCols is not a list, make it a list
         rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
-        times[rebaseCols] = times[rebaseCols].subtract(reference_values)
+        # Ensure replacementValsList is the same length as rebaseCols
+        if len(replacementVals) != len(rebaseCols):
+            raise ValueError(
+                "replacementValsList must have the same length as rebaseCols"
+            )
+
+        # Create a dummy row with the replacement values
+        dummy_row = {col: val for col, val in zip(rebaseCols, replacementVals)}
+
+        # Append the dummy row to the DataFrame
+        times = times.append(dummy_row, ignore_index=True)
+
+        # Rebase using the dummy row (rebase the last row in the DataFrame)
+        times[rebaseCols] = times[rebaseCols].subtract(
+            times.loc[times.index[-1], rebaseCols]
+        )
+
+        # Remove the dummy row
+        times = times.drop(times.index[-1])
+
         return times
 
     def setEvent(self, eventName=None):
@@ -508,7 +546,7 @@ class WRCAPIClient:
         """Convert the original split data to numerics."""
 
         split_cols = [c for c in splits.columns if c.startswith("round")]
-        base_cols = list({"carNo", "stageTime"}.intersection(splits.columns))
+        base_cols = list({"carNo", "stageTime", "diffFirst"}.intersection(splits.columns))
         sw_actual = splits[base_cols + split_cols].copy()
         # Convert string relative times to numeric relative times
         for c in split_cols:
@@ -517,19 +555,21 @@ class WRCAPIClient:
         # The original data has a stage time in the first row
         # and the delta for the other rows
         # Recreate the actual times
+
         if len(split_cols)>1 and regularise:
+            if "stageTime" in sw_actual.columns:
+                sw_actual["stageTime"] = sw_actual["stageTime"].apply(time_to_seconds)
+                sw_actual[f"round{len(split_cols)+1}"] = sw_actual.apply(
+                    lambda row: (
+                        row["stageTime"]
+                    ),
+                    axis=1,
+                )
+                sw_actual.drop(columns=["stageTime"], inplace=True)
+
             sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
-            sw_actual[split_cols].iloc[0] )
-        if "stageTime" in sw_actual.columns and "dIffFirst" in sw_actual.columns:
-            sw_actual[f"round{len(split_cols)+1}"] = sw_actual.apply(
-                lambda row: (
-                    time_to_seconds(row["stageTime"])
-                    if row.name == 0
-                    else time_to_seconds(row["diffFirst"])
-                ),
-                axis=1,
+                sw_actual[split_cols].iloc[0]
             )
-            sw_actual.drop(columns="stageTime", inplace=True)
         return sw_actual
 
     def get_split_duration(self, df, split_cols, ret_id=True, id_col="carNo"):
