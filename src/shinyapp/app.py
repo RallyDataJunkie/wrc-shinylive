@@ -52,10 +52,22 @@ def split_dists_for_stage():
     split_dists = getSplitDists()
     stageIdFromCode = {v: k for k, v in wrc.stage_codes.items()}
     try:
-        split_dists = split_dists.loc[stageIdFromCode[input.stage()]]
-    except:
+        split_cumdists = split_dists.loc[stageIdFromCode[input.stage()]].dropna().to_dict()
+        split_cumdists = {k: split_cumdists[k] for k in sorted(split_cumdists)}
+
+        # Extract values in the sorted order of keys
         split_dists = {}
-    return split_dists
+        prev = 0 
+
+        for k, v in split_cumdists.items():
+            split_dists[k] = v - prev
+            prev = v  # Update the previous value for the next iteration
+
+    except:
+        split_cumdists = {}
+        split_dists={}
+
+    return split_cumdists, split_dists
 
 
 # Create season selector
@@ -292,8 +304,11 @@ with ui.navset_card_underline():
         #    return render.DataGrid(stage_times)
 
     with ui.nav_panel("splittimes"):
+        # @render.text
+        # def display_split_dists():
+        #    return f"{split_dists_for_stage()}"
 
-        with ui.tooltip(id="splits_rebase"):
+        with ui.tooltip(id="splits_rebase_tt"):
             ui.input_select(
                 "splits_rebase_driver",
                 "Driver rebase:",
@@ -301,13 +316,17 @@ with ui.navset_card_underline():
             ),
             "Times are displayed relative to rebased driver."
 
-        with ui.tooltip(id="splits_rebase"):
+        with ui.tooltip(id="splits_reverse_palette_tt"):
             ui.input_checkbox("splits_reverse_palette", "Reverse rebase palette", False),
             "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
+        with ui.tooltip(id="splits_section_view_tt"):
+            ui.input_select( "splits_section_view", "Section report view", {"time":"Time in section (s)", "pace":"Av. pace in section (s/km)","speed":"Av. speed in section (km/s)"} , selected="time" ),
+            "View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)"
+
         with ui.card(class_="mt-3"):
             with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_in_section_delta"):
+                with ui.tooltip(placement="right", id="splits_in_section_delta_tt"):
                     ui.span(
                         "Time gained / lost within each section in seconds relative to rebase driver ",
                         question_circle_fill,
@@ -315,7 +334,7 @@ with ui.navset_card_underline():
                     "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
             @render.plot(alt="A seaborn heatmap...")
-            @reactive.event(input.splits_rebase_driver, input.splits_reverse_palette)
+            @reactive.event(input.stage, input.splits_rebase_driver, input.splits_reverse_palette)
             def seaborn_heatmap_splits():
                 if input.stage() == "SHD":
                     return
@@ -336,6 +355,7 @@ with ui.navset_card_underline():
                 # output_ = wrc.subtract_from_rows(
                 #    output_, split_cols, ignore_first_row=False
                 # )
+
                 rebase_driver = input.splits_rebase_driver()
                 output_ = wrc.rebaseManyTimes(
                     output_, rebase_driver, "carNo", split_cols
@@ -353,16 +373,26 @@ with ui.navset_card_underline():
                     output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
                 )
 
+        with ui.card(class_="mt-3"):
             with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_in_section_time"):
+                with ui.tooltip(placement="right", id="splits_section_report_tt"):
                     ui.span(
-                        "Time spent in each split section (s) ",
+                        "Split section report ",
                         question_circle_fill,
                     )
-                    "Times are deltas on a driver's time to the rebased driver's time on the time taken to complete a split section. If a column is brightly coloured ti was a particulalry good/back split section for the rebased driver. If a row is brightly coloured, it was a particularly good/bad set of sections for that driver."
+                    "Split section report, with viewed determined by ."
+
+            @render.ui
+            @reactive.event(input.splits_section_view)
+            def split_report_view():
+                view = input.splits_section_view()
+                typ = {"time": "(s)", "speed": "(km/s)", "pace": "(s/km)"}[view]
+                return ui.markdown(f"*{view.capitalize()}* {typ} for each split.")
 
             @render.table
-            def split_times_in_section():
+            @reactive.event(input.splits_section_view, input.stage)
+            def split_report_in_section():
+                view = input.splits_section_view()
                 if input.stage() == "SHD":
                     return
                 split_times_wide, split_times_long, split_times_wide_numeric = (
@@ -377,7 +407,23 @@ with ui.navset_card_underline():
                     split_times_wide_numeric,
                     split_cols,
                 )
-                return output_
+                # Scope the view if data available
+                split_cumdists, split_dists = split_dists_for_stage()
+                if split_dists:
+                    if view=="pace":
+                        output_.update(
+                            output_.loc[:, split_dists.keys()].apply(
+                                lambda s: s / split_dists[s.name]
+                            )
+                        )
+                    elif view=="speed":
+                        output_.update(
+                            output_.loc[:, split_dists.keys()].apply(
+                                lambda s: 3600 * split_dists[s.name] / s
+                            )
+                        )
+                styles = {c: "{0:0.1f}" for c in split_cols}
+                return output_.style.format(styles)
 
             # Select view type
             # Should we also have a radio button,
@@ -392,7 +438,7 @@ with ui.navset_card_underline():
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_times_original"):
+                with ui.tooltip(placement="right", id="splits_times_original_tt"):
                     ui.span(
                         "WRC split times data ",
                         question_circle_fill,
@@ -400,6 +446,7 @@ with ui.navset_card_underline():
                     "Original timing data from WRC live timing API."
 
             @render.table
+            @reactive.event(input.stage)
             def split_times_base():
                 split_times_wide, split_times_long, split_times_wide_numeric = (
                     split_times_data()
@@ -428,14 +475,15 @@ with ui.navset_card_underline():
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_times_acculumated"):
+                with ui.tooltip(placement="right", id="splits_times_acculumated_tt"):
                     ui.span(
                         "Raw accumulated time at each split in seconds ",
                         question_circle_fill,
                     )
-                    "Accumulated time in seconds at each split."
+                    "Accumulated time in seconds across the stage at each split."
 
             @render.table
+            @reactive.event(input.splits_section_view,input.stage)
             def split_times_numeric():
                 if input.stage() == "SHD":
                     return
