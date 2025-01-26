@@ -565,7 +565,7 @@ class WRCAPIClient:
                     ),
                     axis=1,
                 )
-                sw_actual.drop(columns=["stageTime"], inplace=True)
+                sw_actual.drop(columns=["stageTime", "diffFirst"], inplace=True)
 
             sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
                 sw_actual[split_cols].iloc[0]

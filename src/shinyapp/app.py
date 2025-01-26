@@ -15,6 +15,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
 from wrc_rallydj.wrc_api import WRCAPIClient, time_to_seconds
+from icons import question_circle_fill
 
 pd.set_option("display.colheader_justify", "left")
 
@@ -26,6 +27,8 @@ wrc = WRCAPIClient(use_cache=True, backend="memory", expire_after=600)
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
+# Shiny Express API
+# https://shiny.posit.co/py/api/express/
 
 @reactive.calc
 @reactive.event(input.event)
@@ -290,181 +293,199 @@ with ui.navset_card_underline():
 
     with ui.nav_panel("splittimes"):
 
-        # Create splits driver rebase selector
-        ui.input_select(
-            "splits_rebase_driver",
-            "Driver rebase:",
-            {},
-        )
+        with ui.tooltip(id="splits_rebase"):
+            ui.input_select(
+                "splits_rebase_driver",
+                "Driver rebase:",
+                {},
+            ),
+            "Times are displayed relative to rebased driver."
 
-        ui.markdown(
-            """
+        with ui.tooltip(id="splits_rebase"):
+            ui.input_checkbox("splits_reverse_palette", "Reverse rebase palette", False),
+            "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
-## Time gained / lost within each section in seconds relative to rebase driver
+        with ui.card(class_="mt-3"):
+            with ui.card_header():
+                with ui.tooltip(placement="right", id="splits_in_section_delta"):
+                    ui.span(
+                        "Time gained / lost within each section in seconds relative to rebase driver ",
+                        question_circle_fill,
+                    )
+                    "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
-                    """
-        )
+            @render.plot(alt="A seaborn heatmap...")
+            @reactive.event(input.splits_rebase_driver, input.splits_reverse_palette)
+            def seaborn_heatmap_splits():
+                if input.stage() == "SHD":
+                    return
+                split_times_wide, split_times_long, split_times_wide_numeric = (
+                    split_times_data()
+                )
+                if split_times_wide_numeric.empty:
+                    return
+                split_cols = [
+                    c for c in split_times_wide_numeric.columns if c.startswith("round")
+                ]
+                # output_ = split_times_wide_numeric
+                output_ = wrc.get_split_duration(
+                    split_times_wide_numeric,
+                    split_cols,
+                )
 
-        @render.plot(alt="A seaborn heatmap...")
-        @reactive.event(input.splits_rebase_driver)
-        def seaborn_heatmap_splits():
-            if input.stage() == "SHD":
-                return
-            split_times_wide, split_times_long, split_times_wide_numeric = (
-                split_times_data()
-            )
-            if split_times_wide_numeric.empty:
-                return
-            split_cols = [
-                c for c in split_times_wide_numeric.columns if c.startswith("round")
-            ]
-            #output_ = split_times_wide_numeric
-            output_ = wrc.get_split_duration(
-                split_times_wide_numeric,
-                split_cols,
-            )
+                # output_ = wrc.subtract_from_rows(
+                #    output_, split_cols, ignore_first_row=False
+                # )
+                rebase_driver = input.splits_rebase_driver()
+                output_ = wrc.rebaseManyTimes(
+                    output_, rebase_driver, "carNo", split_cols
+                )
 
-            # output_ = wrc.subtract_from_rows(
-            #    output_, split_cols, ignore_first_row=False
+                colors = ["red", "white", "green"] if input.splits_reverse_palette() else ["green", "white", "red"]
+
+                cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+                output_.set_index("carNo", inplace=True)
+                output_.columns = [
+                    f"Split {i}" for i in range(1, output_.shape[1] + 1)
+                ]  # [:-1] + ["Finish"]
+
+                return sns.heatmap(
+                    output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
+                )
+
+            with ui.card_header():
+                with ui.tooltip(placement="right", id="splits_in_section_time"):
+                    ui.span(
+                        "Time spent in each split section (s) ",
+                        question_circle_fill,
+                    )
+                    "Times are deltas on a driver's time to the rebased driver's time on the time taken to complete a split section. If a column is brightly coloured ti was a particulalry good/back split section for the rebased driver. If a row is brightly coloured, it was a particularly good/bad set of sections for that driver."
+
+            @render.table
+            def split_times_in_section():
+                if input.stage() == "SHD":
+                    return
+                split_times_wide, split_times_long, split_times_wide_numeric = (
+                    split_times_data()
+                )
+                if split_times_wide_numeric.empty:
+                    return
+                split_cols = [
+                    c for c in split_times_wide_numeric.columns if c.startswith("round")
+                ]
+                output_ = wrc.get_split_duration(
+                    split_times_wide_numeric,
+                    split_cols,
+                )
+                return output_
+
+            # Select view type
+            # Should we also have a radio button,
+            # e.g. for absolute or relative;
+            # And maybe accumulated or in-section
+            # TO DO
+            # ui.input_select(
+            #    "splits_view",
+            #    "Splits View (NOT WORKING YET):",
+            #    {},
             # )
-            rebase_driver = input.splits_rebase_driver()
-            output_ = wrc.rebaseManyTimes(
-                output_, rebase_driver, "carNo", split_cols
-            )
-            colors = ["green", "white", "red"]
-            cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
-            output_.set_index("carNo", inplace=True)
-            output_.columns = [
-                f"Split {i}" for i in range(1, output_.shape[1] + 1)
-            ]  # [:-1] + ["Finish"]
 
-            return sns.heatmap(
-                output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
-            )
+        with ui.card(class_="mt-3"):
+            with ui.card_header():
+                with ui.tooltip(placement="right", id="splits_times_original"):
+                    ui.span(
+                        "WRC split times data ",
+                        question_circle_fill,
+                    )
+                    "Original timing data from WRC live timing API."
 
-        ui.markdown(
-            """
+            @render.table
+            def split_times_base():
+                split_times_wide, split_times_long, split_times_wide_numeric = (
+                    split_times_data()
+                )
+                if split_times_wide.empty:
+                    return pd.DataFrame()
 
-## Time spent in each split section (s)
+                display_cols = [
+                    "pos",
+                    "start",
+                    "carNo",
+                    "driver",
+                    "team/car",
+                    "teamName",
+                    "eligibility",
+                    "groupClass",
+                    "stageTime",
+                    "diffFirst",
+                ]
+                # A set intersection does not preserve order?
+                display_cols = [
+                    c for c in display_cols if c in split_times_wide.columns
+                ] + [c for c in split_times_wide.columns if c.startswith("round")]
 
-                    """
-        )
+                return split_times_wide[display_cols]
 
-        @render.table
-        def split_times_in_section():
-            if input.stage() == "SHD":
-                return
-            split_times_wide, split_times_long, split_times_wide_numeric = (
-                split_times_data()
-            )
-            if split_times_wide_numeric.empty:
-                return
-            split_cols = [
-                c for c in split_times_wide_numeric.columns if c.startswith("round")
-            ]
-            output_ = wrc.get_split_duration(
-                split_times_wide_numeric,
-                split_cols,
-            )
-            return output_
+        with ui.card(class_="mt-3"):
+            with ui.card_header():
+                with ui.tooltip(placement="right", id="splits_times_acculumated"):
+                    ui.span(
+                        "Raw accumulated time at each split in seconds ",
+                        question_circle_fill,
+                    )
+                    "Accumulated time in seconds at each split."
 
-        # Select view type
-        # Should we also have a radio button,
-        # e.g. for absolute or relative;
-        # And maybe accumulated or in-section
-        # TO DO
-        # ui.input_select(
-        #    "splits_view",
-        #    "Splits View (NOT WORKING YET):",
-        #    {},
-        # )
+            @render.table
+            def split_times_numeric():
+                if input.stage() == "SHD":
+                    return
+                split_times_wide, split_times_long, split_times_wide_numeric = (
+                    split_times_data()
+                )
+                if split_times_wide_numeric.empty:
+                    return
+                # Package version error in cmap?
+                # cm = sns.light_palette("green", as_cmap=True)
+                # html = split_times_wide_numeric.style.background_gradient(cmap=cm, subset=[c for c in split_times_wide_numeric.columns if c.startswith("round")]).to_html()
+                # def style_negative(v, props=''):
+                #    return props if v < 100 else None
+                split_cols = [
+                    c for c in split_times_wide_numeric.columns if c.startswith("round")
+                ]
+                # The following sort of styling does work
+                # html = (
+                #    split_times_wide_numeric.style.map(
+                #        style_negative, subset=split_cols, props="color:red;"
+                #    )
+                #    .map(
+                #        lambda v: "opacity: 20%;" if (v < 100) and (v > -0.3) else None,
+                #        subset=split_cols,
+                #    )
+                #    .to_html()
+                # )
+                # return ui.HTML(html)
 
-        @render.table
-        def split_times_base():
-            split_times_wide, split_times_long, split_times_wide_numeric = (
-                split_times_data()
-            )
-            if split_times_wide.empty:
-                return pd.DataFrame()
+                # "{:.1f}".format},
 
-            display_cols = [
-                "pos",
-                "start",
-                "carNo",
-                "driver",
-                "team/car",
-                "teamName",
-                "eligibility",
-                "groupClass",
-                "stageTime",
-                "diffFirst",
-            ]
-            # A set intersection does not preserve order?
-            display_cols = [
-                c for c in display_cols if c in split_times_wide.columns
-            ] + [c for c in split_times_wide.columns if c.startswith("round")]
+                styles = {c: "{0:0.1f}" for c in split_cols}
+                return split_times_wide_numeric.style.format(styles)
 
-            return split_times_wide[display_cols]
-
-        ui.markdown(
-            """
-
-## Raw accumulated time at each split in seconds
-
-                    """
-        )
-
-        @render.table
-        def split_times_numeric():
-            if input.stage() == "SHD":
-                return
-            split_times_wide, split_times_long, split_times_wide_numeric = (
-                split_times_data()
-            )
-            if split_times_wide_numeric.empty:
-                return
-            # Package version error in cmap?
-            # cm = sns.light_palette("green", as_cmap=True)
-            # html = split_times_wide_numeric.style.background_gradient(cmap=cm, subset=[c for c in split_times_wide_numeric.columns if c.startswith("round")]).to_html()
-            # def style_negative(v, props=''):
-            #    return props if v < 100 else None
-            split_cols = [
-                c for c in split_times_wide_numeric.columns if c.startswith("round")
-            ]
-            # The following sort of styling does work
-            # html = (
-            #    split_times_wide_numeric.style.map(
-            #        style_negative, subset=split_cols, props="color:red;"
+            # @render.table
+            # def split_times_rich2():
+            #    split_times_wide, split_times_long, split_times_wide_numeric = (
+            #        split_times_data()
             #    )
-            #    .map(
-            #        lambda v: "opacity: 20%;" if (v < 100) and (v > -0.3) else None,
-            #        subset=split_cols,
+            #    return split_times_wide
+            # @render.table
+            # def split_times_rich3():
+            #    split_times_wide, split_times_long, split_times_wide_numeric = (
+            #        split_times_data()
             #    )
-            #    .to_html()
-            # )
-            # return ui.HTML(html)
-
-            # "{:.1f}".format},
-
-            styles = {c: "{0:0.1f}" for c in split_cols}
-            return split_times_wide_numeric.style.format(styles)
-
-        # @render.table
-        # def split_times_rich2():
-        #    split_times_wide, split_times_long, split_times_wide_numeric = (
-        #        split_times_data()
-        #    )
-        #    return split_times_wide
-        # @render.table
-        # def split_times_rich3():
-        #    split_times_wide, split_times_long, split_times_wide_numeric = (
-        #        split_times_data()
-        #    )
-        #    return split_times_long
-        # @render.data_frame
-        # def split_times_frame():
-        #    split_times_wide, split_times_long, split_times_wide_numeric = split_times_data()
-        #    return render.DataGrid(split_times_wide)
+            #    return split_times_long
+            # @render.data_frame
+            # def split_times_frame():
+            #    split_times_wide, split_times_long, split_times_wide_numeric = split_times_data()
+            #    return render.DataGrid(split_times_wide)
 
     with ui.nav_panel("penalties"):
 
