@@ -440,6 +440,8 @@ class WRCAPIClient:
             return self.overall_df[self.overall_df["groupClass"] == group]
 
     def getSplitsLong(self, splits_wide__df):
+        if splits_wide__df.empty:
+            return pd.DataFrame()
         splits_long_df = pd.melt(
             splits_wide__df,
             id_vars={
@@ -457,7 +459,21 @@ class WRCAPIClient:
         splits_long_df["round"] = (
             splits_long_df["roundN"].str.replace("round", "").astype(int)
         )
-        splits_long_df["timeInS"] = splits_long_df["_time"].apply(time_to_seconds)
+        splits_long_df["timeInS_"] = splits_long_df["_time"].apply(time_to_seconds)
+
+        # Normalise times
+        def process_time(group):
+            first_time = group["timeInS_"].iloc[0]
+            group.loc[group.index[1:], "timeInS"] = (
+                group["timeInS_"].iloc[1:] + first_time
+            )
+            group.loc[group.index[0], "timeInS"] = first_time
+            return group
+
+        splits_long_df = (
+            splits_long_df.groupby("round").apply(process_time)#.reset_index(drop=True)
+        )
+
         return splits_long_df
 
     # We could look up the stageId for shakedown

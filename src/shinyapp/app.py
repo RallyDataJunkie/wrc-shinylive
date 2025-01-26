@@ -1,5 +1,5 @@
 import pandas as pd
-import seaborn as sns
+from seaborn import heatmap, lineplot
 import json
 from pathlib import Path
 
@@ -153,13 +153,16 @@ def stage_times_data():
 def split_times_data():
     wrc.stageId = input.stage()
     # WRC API data fetch
-    split_times_wide = wrc.getSplitTimes()
-    split_times_long = wrc.getSplitsLong(split_times_wide)
-    split_times_wide_numeric = wrc.get_splits_as_numeric(
-        split_times_wide, regularise=input.stage() != "SHD"
-    )
-    return split_times_wide, split_times_long, split_times_wide_numeric
-
+    # TO DO remove try - errors should be caught elsewhere?
+    try:
+        split_times_wide = wrc.getSplitTimes()
+        split_times_long = wrc.getSplitsLong(split_times_wide)
+        split_times_wide_numeric = wrc.get_splits_as_numeric(
+            split_times_wide, regularise=input.stage() != "SHD"
+        )
+        return split_times_wide, split_times_long, split_times_wide_numeric
+    except:
+        return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
 
 @reactive.effect
 @reactive.event(input.season)
@@ -386,7 +389,6 @@ with ui.navset_card_underline():
                     [output_, pd.DataFrame([ult_row])], ignore_index=True
                 )
 
-                print(output_)
                 rebase_driver = input.splits_rebase_driver()
                 output_ = wrc.rebaseManyTimes(
                     output_, rebase_driver, "carNo", split_cols
@@ -404,9 +406,50 @@ with ui.navset_card_underline():
                     f"Split {i}" for i in range(1, output_.shape[1] + 1)
                 ]  # [:-1] + ["Finish"]
 
-                return sns.heatmap(
+                return heatmap(
                     output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
                 )
+
+            @render.plot(alt="Line chart of within split delta times.")
+            @reactive.event(
+                input.stage, input.splits_rebase_driver, input.splits_reverse_palette
+            )
+            def seaborn_linechart_splits():
+                if input.stage() == "SHD":
+                    return
+                split_times_wide, split_times_long, split_times_wide_numeric = (
+                    split_times_data()
+                )
+                if split_times_long.empty:
+                    return
+                rebase_driver = input.splits_rebase_driver()
+
+                # TO DO - need a function to rebase a long df by group
+                ll2 = split_times_long.pivot(
+                    index="carNo", columns="roundN", values="timeInS"
+                ).reset_index()
+                cols = [c for c in ll2.columns if c.startswith("round")]
+                lw = wrc.rebaseManyTimes(ll2, rebase_driver, "carNo", cols)
+                lw["round0"] = 0.0
+                lw = lw[["carNo", "round0"] + cols]
+                ll3 = pd.melt(
+                    lw,
+                    id_vars=["carNo"],
+                    value_vars=["round0"] + cols,
+                    var_name="roundN",
+                    value_name="timeInS",
+                )
+                ll3["round"] = ll3["roundN"].str.replace("round", "").astype(int)
+                split_cumdists, split_dists = split_dists_for_stage()
+                if split_cumdists:
+                    split_cumdists["round0"] = 0.0
+                    ll3["dist"] = ll3["roundN"].map(split_cumdists)
+                    g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
+
+                else:
+                    g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
+                g.set_ylim(g.get_ylim()[::-1])
+                return g
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
@@ -426,7 +469,9 @@ with ui.navset_card_underline():
                     "speed": ("(km/s)", "(*Higher* is better.)"),
                     "pace": ("(s/km)", "(*Lower* is better.)"),
                 }[view]
-                return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
+                return ui.markdown(
+                    f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
+                )
 
             @render.table
             @reactive.event(input.splits_section_view, input.stage)
