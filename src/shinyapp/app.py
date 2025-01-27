@@ -32,6 +32,32 @@ ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 # https://shiny.posit.co/py/api/express/
 
 
+def _reshape_splits_wide_with_ult(split_times_wide_numeric, rebase_driver):
+    split_cols = [c for c in split_times_wide_numeric.columns if c.startswith("round")]
+    # output_ = split_times_wide_numeric
+    output_ = wrc.get_split_duration(
+        split_times_wide_numeric,
+        split_cols,
+    )
+
+    # output_ = wrc.subtract_from_rows(
+    #    output_, split_cols, ignore_first_row=False
+    # )
+    ult_row = {"carNo": "ult"}
+
+    # Find minimum non-zero values for each round column
+    for col in split_cols:
+        # Convert to numeric, filter non-zero, find minimum
+        min_val = pd.to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
+        ult_row[col] = min_val
+
+    output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
+    output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+    output_ = output_[output_["carNo"] != "ult"]
+    output_["carNo"] = output_["carNo"].map(carNum2name())
+    return output_, split_cols
+
+
 @reactive.calc
 @reactive.event(input.event)
 def getSplitDists():
@@ -298,42 +324,17 @@ with ui.card(class_="mt-3"):
         if split_times_wide_numeric.empty:
             return
         split_times_wide_numeric = split_times_wide_numeric.copy()
-        split_cols = [
-            c for c in split_times_wide_numeric.columns if c.startswith("round")
-        ]
-        # output_ = split_times_wide_numeric
-        output_ = wrc.get_split_duration(
-            split_times_wide_numeric,
-            split_cols,
+
+        output_, split_cols = _reshape_splits_wide_with_ult(
+            split_times_wide_numeric, rebase_driver
         )
-
-        # output_ = wrc.subtract_from_rows(
-        #    output_, split_cols, ignore_first_row=False
-        # )
-        ult_row = {"carNo": "ult"}
-
-        # Find minimum non-zero values for each round column
-        for col in split_cols:
-            # Convert to numeric, filter non-zero, find minimum
-            min_val = pd.to_numeric(
-                output_[col][output_[col] > 0], errors="coerce"
-            ).min()
-            ult_row[col] = min_val
-
-        output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
-
-        output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
-
-        output_ = output_[output_["carNo"] != "ult"]
 
         colors = (
             ["red", "white", "green"]
             if input.rebase_reverse_palette()
             else ["green", "white", "red"]
         )
-
         cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
-        output_["carNo"] = output_["carNo"].map(carNum2name())
 
         output_.set_index("carNo", inplace=True)
         output_.columns = [
@@ -370,33 +371,10 @@ with ui.card(class_="mt-3"):
         if split_times_wide_numeric.empty:
             return
         split_times_wide_numeric = split_times_wide_numeric.copy()
-        split_cols = [
-            c for c in split_times_wide_numeric.columns if c.startswith("round")
-        ]
-        # output_ = split_times_wide_numeric
-        output_ = wrc.get_split_duration(
-            split_times_wide_numeric,
-            split_cols,
+
+        output_, split_cols = _reshape_splits_wide_with_ult(
+            split_times_wide_numeric, rebase_driver
         )
-
-        # output_ = wrc.subtract_from_rows(
-        #    output_, split_cols, ignore_first_row=False
-        # )
-        ult_row = {"carNo": "ult"}
-
-        # Find minimum non-zero values for each round column
-        for col in split_cols:
-            # Convert to numeric, filter non-zero, find minimum
-            min_val = pd.to_numeric(
-                output_[col][output_[col] > 0], errors="coerce"
-            ).min()
-            ult_row[col] = min_val
-
-        output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
-
-        output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
-
-        output_ = output_[output_["carNo"] != "ult"]
 
         colors = (
             ["red", "white", "green"]
@@ -404,13 +382,6 @@ with ui.card(class_="mt-3"):
             else ["green", "white", "red"]
         )
 
-        cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
-        output_["carNo"] = output_["carNo"].map(carNum2name())
-
-        # output_.set_index("carNo", inplace=True)
-        # output_.columns = [
-        #    f"Split {i}" for i in range(1, output_.shape[1] + 1)
-        # ]  # [:-1] + ["Finish"]
         long_df = pd.melt(
             output_, id_vars=["carNo"], var_name="roundN", value_name="time"
         )
