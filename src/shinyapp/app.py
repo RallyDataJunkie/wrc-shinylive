@@ -96,7 +96,7 @@ with ui.sidebar():
     with ui.tooltip(id="splits_section_view_tt"):
         ui.input_select(
             "splits_section_view",
-            "Section report view",
+            "Split Section report view",
             {
                 "time": "Time in section (s)",
                 "pace": "Av. pace in section (s/km)",
@@ -174,7 +174,7 @@ with ui.card(class_="mt-3"):
     with ui.card_header():
         with ui.tooltip(placement="right", id="splits_section_report_tt"):
             ui.span(
-                "Split section report ",
+                "Split section report [select as required] ",
                 question_circle_fill,
             )
             "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
@@ -183,14 +183,18 @@ with ui.card(class_="mt-3"):
     @reactive.event(input.splits_section_view)
     def split_report_view():
         view = input.splits_section_view()
+        default = "Time (s) for each split. (Lower is better.)"
         if view == "time_acc":
-            return
-        typ = {
-            "time": ("(s)", "(*Lower* is better.)"),
-            "speed": ("(km/s)", "(*Higher* is better.)"),
-            "pace": ("(s/km)", "(*Lower* is better.)"),
-        }[view]
-        return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
+            return ui.markdown(default)
+        split_cumdists, split_dists = split_dists_for_stage()
+        if split_dists:
+            typ = {
+                "time": ("(s)", "(*Lower* is better.)"),
+                "speed": ("(km/s)", "(*Higher* is better.)"),
+                "pace": ("(s/km)", "(*Lower* is better.)"),
+            }[view]
+            return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
+        return ui.markdown(default)
 
     # @render.table
     @render.data_frame
@@ -218,6 +222,9 @@ with ui.card(class_="mt-3"):
             split_times_wide_numeric[split_cols] = split_times_wide_numeric[
                 split_cols
             ].round(1)
+            split_times_wide_numeric.columns = [
+                "Driver"]+[f"Split {i}" for i in range(1, len(split_cols))]+["Finish"]
+            
             return render.DataGrid(
                 split_times_wide_numeric,
             )
@@ -245,6 +252,8 @@ with ui.card(class_="mt-3"):
 
         output_["carNo"] = output_["carNo"].map(carNum2name())
         output_[split_cols] = output_[split_cols].round(1)
+        output_.columns = [
+                "Driver"]+[f"Split {i}" for i in range(1, len(split_cols))]+["Finish"]
         return render.DataGrid(
             output_,
         )
