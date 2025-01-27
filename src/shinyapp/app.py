@@ -63,7 +63,7 @@ def split_dists_for_stage():
         prev = 0
 
         for k, v in split_cumdists.items():
-            split_dists[k] = round(v - prev,1)
+            split_dists[k] = round(v - prev, 1)
             prev = v  # Update the previous value for the next iteration
 
     except:
@@ -242,6 +242,31 @@ with ui.navset_card_underline():
             return render.DataGrid(wrc.getStartlist())
 
     with ui.nav_panel("stagetimes"):
+
+        @render.ui
+        @reactive.event(input.stage, input.stage_rebase_driver)
+        def stage_hero():
+            stage = input.stage()
+            if stage == "SHD":
+                return
+            stages = stages_data()
+            times = stage_times_data()
+            stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
+            x = f"""
+            __{times.loc[0, "driver"]}__
+
+            {times.loc[0, "stageTime"]}
+            """
+            return ui.value_box(
+                title=stage_name,
+                value=ui.markdown(x),
+                showcase=stages.loc[stages["stageId"] == input.stage(), "STAGE"].iloc[
+                    0
+                ],
+                theme="text-green",
+                showcase_layout="left center",
+                full_screen=True,
+            )
 
         # Create stage driver rebase selector
         ui.input_select(
@@ -494,7 +519,7 @@ with ui.navset_card_underline():
                     f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
                 )
 
-            #@render.table
+            # @render.table
             @render.data_frame
             @reactive.event(input.splits_section_view, input.stage)
             def split_report_in_section():
@@ -595,7 +620,7 @@ with ui.navset_card_underline():
                     "Accumulated time in seconds across the stage at each split."
 
             @render.data_frame
-            #@render.table
+            # @render.table
             @reactive.event(input.splits_section_view, input.stage)
             def split_times_numeric():
                 if input.stage() == "SHD":
