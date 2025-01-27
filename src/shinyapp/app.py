@@ -109,11 +109,13 @@ with ui.sidebar():
         # Scope the view if data available
 
     # Create driver rebase selector
-    ui.input_select(
-        "rebase_driver",
-        "Driver rebase:",
-        {},
-    )
+    with ui.tooltip(id="splits_section_view_tt"):
+        ui.input_select(
+            "rebase_driver",
+            "Driver rebase:",
+            {},
+        ),
+        "\"Rebase\" times relative to a nominated driver. The \"ULTIMATE\" driver is derived from the quickest times within each split sector ."
 
     with ui.tooltip(id="rebase_reverse_palette_tt"):
         ui.input_checkbox("rebase_reverse_palette", "Reverse rebase palette", False),
@@ -158,7 +160,7 @@ def stage_hero():
         full_screen=True,
     )
     p3 = ui.value_box(
-        value=times.loc[3, "diffFirst"],
+        value=times.loc[2, "diffFirst"],
         title=_get_hero_text(3),
         theme="text-purple",
         showcase=f"Pace: ({round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)",
