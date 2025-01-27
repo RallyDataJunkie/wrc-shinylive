@@ -176,6 +176,7 @@ class WRCAPIClient:
 
         self.rallyId2eventId = {}
         self.stage_codes = {}
+        self.carNum2name = {}
 
         # These should really be set reactively depending on other values
         self.results_calendar_df = pd.DataFrame()
@@ -416,6 +417,13 @@ class WRCAPIClient:
             # We
             df_startlist = tablify(json_data, "startListItems", addcols=["date", "startDateTimeLocal"])
             self.startlist_df = df_startlist
+            self.carNum2name = (
+                self.startlist_df[["carNo", "driver"]]
+                .set_index("carNo")["driver"]
+                .str.split(" ")
+                .apply(lambda x: x[-1][:3])
+                .to_dict()
+            )
         return self.startlist_df
 
     def getOverall(self, eventId=None, rallyId=None, stageId=None, championship=None, group=None, update=False):
@@ -556,6 +564,7 @@ class WRCAPIClient:
         df_splitTimes = tablify(json_data)
         self.stage_id_annotations(df_splitTimes, eventId, rallyId, stageId)
         df_splitTimes.dropna(how="all", axis=1, inplace=True)
+        df_splitTimes.rename(columns={"pos":"roadPos"}, inplace=True)
         return df_splitTimes
 
     def get_splits_as_numeric(self, splits, regularise=True):
@@ -586,6 +595,7 @@ class WRCAPIClient:
             sw_actual.loc[1:, split_cols] = sw_actual[split_cols][1:].add(
                 sw_actual[split_cols].iloc[0]
             )
+            sw_actual[split_cols] = sw_actual[split_cols].round(1)
         return sw_actual
 
     def get_split_duration(self, df, split_cols, ret_id=True, id_col="carNo"):

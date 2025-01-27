@@ -98,7 +98,16 @@ def rally_id_var():
     rally_id = input.event()
     wrc.eventId = wrc.rallyId2eventId[rally_id]
     wrc.rallyId = rally_id
+    # Forcing the startlist sets the car2driver mapping
+    _ = wrc.getStartlist()
     return wrc.rallyId
+
+
+@reactive.calc
+@reactive.event(input.event)
+def carNum2name():
+    _ = wrc.getStartlist()
+    return wrc.carNum2name
 
 
 @reactive.calc
@@ -323,25 +332,6 @@ with ui.navset_card_underline():
             ),
             "Times are displayed relative to rebased driver. The 'Ultimate' time represents the quickest time in each split section."
 
-        with ui.tooltip(id="splits_reverse_palette_tt"):
-            ui.input_checkbox(
-                "splits_reverse_palette", "Reverse rebase palette", False
-            ),
-            "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
-
-        with ui.tooltip(id="splits_section_view_tt"):
-            ui.input_select(
-                "splits_section_view",
-                "Section report view",
-                {
-                    "time": "Time in section (s)",
-                    "pace": "Av. pace in section (s/km)",
-                    "speed": "Av. speed in section (km/s)",
-                },
-                selected="time",
-            ),
-            "View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)"
-
         with ui.card(class_="mt-3"):
             with ui.card_header():
                 with ui.tooltip(placement="right", id="splits_in_section_delta_tt"):
@@ -350,6 +340,12 @@ with ui.navset_card_underline():
                         question_circle_fill,
                     )
                     "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+            with ui.tooltip(id="splits_reverse_palette_tt"):
+                ui.input_checkbox(
+                    "splits_reverse_palette", "Reverse rebase palette", False
+                ),
+                "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
             @render.plot(alt="Heatmap of within split delta times.")
             @reactive.event(
@@ -363,6 +359,7 @@ with ui.navset_card_underline():
                 )
                 if split_times_wide_numeric.empty:
                     return
+                split_times_wide_numeric = split_times_wide_numeric.copy()
                 split_cols = [
                     c for c in split_times_wide_numeric.columns if c.startswith("round")
                 ]
@@ -401,6 +398,7 @@ with ui.navset_card_underline():
                 )
 
                 cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+                output_["carNo"] = output_["carNo"].map(carNum2name())
                 output_.set_index("carNo", inplace=True)
                 output_.columns = [
                     f"Split {i}" for i in range(1, output_.shape[1] + 1)
@@ -422,6 +420,7 @@ with ui.navset_card_underline():
                 )
                 if split_times_long.empty:
                     return
+                split_times_long = split_times_long.copy()
                 rebase_driver = input.splits_rebase_driver()
 
                 # TO DO - need a function to rebase a long df by group
@@ -441,13 +440,14 @@ with ui.navset_card_underline():
                 )
                 ll3["round"] = ll3["roundN"].str.replace("round", "").astype(int)
                 split_cumdists, split_dists = split_dists_for_stage()
+                ll3["carNo"] = ll3["carNo"].map(carNum2name())
                 if split_cumdists:
                     split_cumdists["round0"] = 0.0
                     ll3["dist"] = ll3["roundN"].map(split_cumdists)
                     g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
 
                 else:
-                    g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
+                    g = lineplot(data=ll3, x="round", y="timeInS", hue="name")
                 g.set_ylim(g.get_ylim()[::-1])
                 return g
 
@@ -458,7 +458,20 @@ with ui.navset_card_underline():
                         "Split section report ",
                         question_circle_fill,
                     )
-                    "Split section report, with viewed determined by ."
+                    "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
+
+            with ui.tooltip(id="splits_section_view_tt"):
+                ui.input_select(
+                    "splits_section_view",
+                    "Section report view",
+                    {
+                        "time": "Time in section (s)",
+                        "pace": "Av. pace in section (s/km)",
+                        "speed": "Av. speed in section (km/s)",
+                    },
+                    selected="time",
+                ),
+                "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
 
             @render.ui
             @reactive.event(input.splits_section_view)
@@ -484,6 +497,7 @@ with ui.navset_card_underline():
                 )
                 if split_times_wide_numeric.empty:
                     return
+                split_times_wide_numeric = split_times_wide_numeric.copy()
                 split_cols = [
                     c for c in split_times_wide_numeric.columns if c.startswith("round")
                 ]
@@ -507,6 +521,8 @@ with ui.navset_card_underline():
                             )
                         )
                 styles = {c: "{0:0.1f}" for c in split_cols}
+
+                output_["carNo"] = output_["carNo"].map(carNum2name())
                 return output_.style.format(styles)
 
             # Select view type
@@ -531,7 +547,7 @@ with ui.navset_card_underline():
 
             @render.table
             @reactive.event(input.stage)
-            def split_times_base():
+            def split_times_original():
                 split_times_wide, split_times_long, split_times_wide_numeric = (
                     split_times_data()
                 )
@@ -539,7 +555,7 @@ with ui.navset_card_underline():
                     return pd.DataFrame()
 
                 display_cols = [
-                    "pos",
+                    "roadPos",
                     "start",
                     "carNo",
                     "driver",
@@ -566,7 +582,8 @@ with ui.navset_card_underline():
                     )
                     "Accumulated time in seconds across the stage at each split."
 
-            @render.table
+            @render.data_frame
+            #@render.table
             @reactive.event(input.splits_section_view, input.stage)
             def split_times_numeric():
                 if input.stage() == "SHD":
@@ -576,6 +593,7 @@ with ui.navset_card_underline():
                 )
                 if split_times_wide_numeric.empty:
                     return
+                split_times_wide_numeric = split_times_wide_numeric.copy()
                 # Package version error in cmap?
                 # cm = sns.light_palette("green", as_cmap=True)
                 # html = split_times_wide_numeric.style.background_gradient(cmap=cm, subset=[c for c in split_times_wide_numeric.columns if c.startswith("round")]).to_html()
@@ -599,8 +617,22 @@ with ui.navset_card_underline():
 
                 # "{:.1f}".format},
 
-                styles = {c: "{0:0.1f}" for c in split_cols}
-                return split_times_wide_numeric.style.format(styles)
+                split_times_wide_numeric["carNo"] = split_times_wide_numeric[
+                    "carNo"
+                ].map(carNum2name())
+                # TO DO  precision number format formatting
+                # styles = {c: "{0:0.1f}" for c in split_cols}
+                # return split_times_wide_numeric.style.format(styles)
+                split_times_wide_numeric[split_cols] = split_times_wide_numeric[
+                    split_cols
+                ].round(1)
+                return render.DataGrid(
+                    split_times_wide_numeric,
+                    #styles={
+                    #    "cols": split_cols,
+                    #    "style": {"format": "{:.1f}"},
+                    #},
+                 )
 
             # @render.table
             # def split_times_rich2():
