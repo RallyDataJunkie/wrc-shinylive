@@ -8,7 +8,8 @@ from pathlib import Path
 # import requests_cache
 # from requests_cache.session import CachedSession
 
-from shiny import render, reactive
+from shiny import render, reactive, ui
+from shiny import ui as uis
 from shiny.express import ui, input
 
 from matplotlib import pyplot as plt
@@ -73,23 +74,73 @@ def split_dists_for_stage():
     return split_cumdists, split_dists
 
 
-# Create season selector
-# Currently offers a hard coded set of season year options
-ui.input_select(
-    "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
-)
+with ui.sidebar():
+    # Create season selector
+    # Currently offers a hard coded set of season year options
+    ui.input_select(
+        "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
+    )
 
-# Create event selector
-# Dynamically populated using a list of events
-# based on the season selection
-ui.input_select("event", "Event:", {}, selected=wrc.rallyId)
+    # Create event selector
+    # Dynamically populated using a list of events
+    # based on the season selection
+    ui.input_select("event", "Event:", {}, selected=wrc.rallyId)
 
-# Create stages selector
-ui.input_select(
-    "stage",
-    "Stages:",
-    {},
-)
+    # Create stages selector
+    ui.input_select(
+        "stage",
+        "Stages:",
+        {},
+    )
+
+
+@render.ui
+@reactive.event(input.stage, input.stage_rebase_driver)
+def stage_hero():
+    stage = input.stage()
+    if stage == "SHD":
+        return
+    stages = stages_data()
+    times = stage_times_data()
+
+    stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
+
+    def _get_hero_text(pos):
+        pos = pos - 1
+        return ui.markdown(
+            f"""
+    __{times.loc[pos, "driver"]}__
+
+    {times.loc[pos, "stageTime"]}
+    """
+        )
+
+    p1 = ui.value_box(
+        title=stage_name,
+        value=_get_hero_text(1),
+        theme="text-green",
+        showcase=f"Averaging  \n  \n{round(times.loc[0, 'speed (km/h)'],1)} km/h",
+        showcase_layout="left center",
+        full_screen=True,
+    )
+    p2 = ui.value_box(
+        value=times.loc[1, "diffFirst"],
+        title=_get_hero_text(2),
+        theme="text-blue",
+        showcase=f"(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)",
+        showcase_layout="bottom",
+        full_screen=True,
+    )
+    p3 = ui.value_box(
+        value=times.loc[3, "diffFirst"],
+        title=_get_hero_text(3),
+        theme="text-purple",
+        showcase=f"Pace: ({round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)",
+        showcase_layout="bottom",
+        full_screen=True,
+    )
+
+    return ui.TagList(p1, uis.layout_columns(p2, p3))
 
 
 @reactive.calc
@@ -242,31 +293,6 @@ with ui.navset_card_underline():
             return render.DataGrid(wrc.getStartlist())
 
     with ui.nav_panel("stagetimes"):
-
-        @render.ui
-        @reactive.event(input.stage, input.stage_rebase_driver)
-        def stage_hero():
-            stage = input.stage()
-            if stage == "SHD":
-                return
-            stages = stages_data()
-            times = stage_times_data()
-            stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
-            x = f"""
-            __{times.loc[0, "driver"]}__
-
-            {times.loc[0, "stageTime"]}
-            """
-            return ui.value_box(
-                title=stage_name,
-                value=ui.markdown(x),
-                showcase=stages.loc[stages["stageId"] == input.stage(), "STAGE"].iloc[
-                    0
-                ],
-                theme="text-green",
-                showcase_layout="left center",
-                full_screen=True,
-            )
 
         # Create stage driver rebase selector
         ui.input_select(
