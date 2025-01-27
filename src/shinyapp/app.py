@@ -93,9 +93,35 @@ with ui.sidebar():
         {},
     )
 
+    with ui.tooltip(id="splits_section_view_tt"):
+        ui.input_select(
+            "splits_section_view",
+            "Section report view",
+            {
+                "time": "Time in section (s)",
+                "pace": "Av. pace in section (s/km)",
+                "speed": "Av. speed in section (km/s)",
+                "time_acc": "Acc. time over sections (s)",
+            },
+            selected="time",
+        ),
+        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
+        # Scope the view if data available
+
+    # Create driver rebase selector
+    ui.input_select(
+        "rebase_driver",
+        "Driver rebase:",
+        {},
+    )
+
+    with ui.tooltip(id="rebase_reverse_palette_tt"):
+        ui.input_checkbox("rebase_reverse_palette", "Reverse rebase palette", False),
+        "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+
 
 @render.ui
-@reactive.event(input.stage, input.stage_rebase_driver)
+@reactive.event(input.stage)
 def stage_hero():
     stage = input.stage()
     if stage == "SHD":
@@ -141,6 +167,153 @@ def stage_hero():
     )
 
     return ui.TagList(p1, uis.layout_columns(p2, p3))
+
+
+with ui.card(class_="mt-3"):
+    with ui.card_header():
+        with ui.tooltip(placement="right", id="splits_section_report_tt"):
+            ui.span(
+                "Split section report ",
+                question_circle_fill,
+            )
+            "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
+
+    @render.ui
+    @reactive.event(input.splits_section_view)
+    def split_report_view():
+        view = input.splits_section_view()
+        if view == "time_acc":
+            return
+        typ = {
+            "time": ("(s)", "(*Lower* is better.)"),
+            "speed": ("(km/s)", "(*Higher* is better.)"),
+            "pace": ("(s/km)", "(*Lower* is better.)"),
+        }[view]
+        return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
+
+    # @render.table
+    @render.data_frame
+    @reactive.event(input.splits_section_view, input.stage)
+    def split_report():
+        view = input.splits_section_view()
+        if input.stage() == "SHD":
+            return
+        split_times_wide, split_times_long, split_times_wide_numeric = (
+            split_times_data()
+        )
+        if split_times_wide_numeric.empty:
+            return
+        split_times_wide_numeric = split_times_wide_numeric.copy()
+        split_cols = [
+            c for c in split_times_wide_numeric.columns if c.startswith("round")
+        ]
+        if view == "time_acc":
+            split_times_wide_numeric["carNo"] = split_times_wide_numeric["carNo"].map(
+                carNum2name()
+            )
+            # TO DO  precision number format formatting
+            # styles = {c: "{0:0.1f}" for c in split_cols}
+            # return split_times_wide_numeric.style.format(styles)
+            split_times_wide_numeric[split_cols] = split_times_wide_numeric[
+                split_cols
+            ].round(1)
+            return render.DataGrid(
+                split_times_wide_numeric,
+            )
+
+        output_ = wrc.get_split_duration(
+            split_times_wide_numeric,
+            split_cols,
+        )
+        # Scope the view if data available
+        split_cumdists, split_dists = split_dists_for_stage()
+        if split_dists:
+            if view == "pace":
+                output_.update(
+                    output_.loc[:, split_dists.keys()].apply(
+                        lambda s: s / split_dists[s.name]
+                    )
+                )
+            elif view == "speed":
+                output_.update(
+                    output_.loc[:, split_dists.keys()].apply(
+                        lambda s: 3600 * split_dists[s.name] / s
+                    )
+                )
+        # styles = {c: "{0:0.1f}" for c in split_cols}
+
+        output_["carNo"] = output_["carNo"].map(carNum2name())
+        output_[split_cols] = output_[split_cols].round(1)
+        return render.DataGrid(
+            output_,
+        )
+
+
+with ui.card(class_="mt-3"):
+    with ui.card_header():
+        with ui.tooltip(placement="right", id="splits_in_section_delta_tt"):
+            ui.span(
+                "Time gained / lost within each section in seconds relative to rebase driver ",
+                question_circle_fill,
+            )
+            "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+    @render.plot(alt="Heatmap of within split delta times.")
+    @reactive.event(input.stage, input.rebase_driver, input.rebase_reverse_palette)
+    def seaborn_heatmap_splits():
+        rebase_driver = input.rebase_driver()
+        # print(f"Rebasing on {rebase_driver}")
+        if input.stage() == "SHD" or not rebase_driver or rebase_driver == "NONE":
+            return
+        split_times_wide, split_times_long, split_times_wide_numeric = (
+            split_times_data()
+        )
+        if split_times_wide_numeric.empty:
+            return
+        split_times_wide_numeric = split_times_wide_numeric.copy()
+        split_cols = [
+            c for c in split_times_wide_numeric.columns if c.startswith("round")
+        ]
+        # output_ = split_times_wide_numeric
+        output_ = wrc.get_split_duration(
+            split_times_wide_numeric,
+            split_cols,
+        )
+
+        # output_ = wrc.subtract_from_rows(
+        #    output_, split_cols, ignore_first_row=False
+        # )
+        ult_row = {"carNo": "ult"}
+
+        # Find minimum non-zero values for each round column
+        for col in split_cols:
+            # Convert to numeric, filter non-zero, find minimum
+            min_val = pd.to_numeric(
+                output_[col][output_[col] > 0], errors="coerce"
+            ).min()
+            ult_row[col] = min_val
+
+        output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
+
+        output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+
+        output_ = output_[output_["carNo"] != "ult"]
+
+        colors = (
+            ["red", "white", "green"]
+            if input.rebase_reverse_palette()
+            else ["green", "white", "red"]
+        )
+
+        cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+        output_["carNo"] = output_["carNo"].map(carNum2name())
+
+        output_.set_index("carNo", inplace=True)
+        output_.columns = [
+            f"Split {i}" for i in range(1, output_.shape[1] + 1)
+        ]  # [:-1] + ["Finish"]
+
+        return heatmap(output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False)
 
 
 @reactive.calc
@@ -255,11 +428,23 @@ def update_stages_driver_rebase_select():
 
 @reactive.effect
 @reactive.event(input.stage)
+def update_driver_rebase_select():
+    rebase_drivers = {"NONE": ""}
+    rebase_drivers.update(
+        stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
+    )
+
+    rebase_drivers["ult"] = "ULTIMATE"
+    ui.update_select("rebase_driver", choices=rebase_drivers)
+
+
+@reactive.effect
+@reactive.event(input.stage)
 def update_splits_driver_rebase_select():
     rebase_drivers = (
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
-    rebase_drivers["ult"] = "Ultimate"
+    rebase_drivers["ult"] = "ULTIMATE"
     ui.update_select("splits_rebase_driver", choices=rebase_drivers)
 
 
@@ -384,220 +569,65 @@ with ui.navset_card_underline():
             ),
             "Times are displayed relative to rebased driver. The 'Ultimate' time represents the quickest time in each split section."
 
-        with ui.card(class_="mt-3"):
-            with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_in_section_delta_tt"):
-                    ui.span(
-                        "Time gained / lost within each section in seconds relative to rebase driver ",
-                        question_circle_fill,
-                    )
-                    "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
-
-            with ui.tooltip(id="splits_reverse_palette_tt"):
-                ui.input_checkbox(
-                    "splits_reverse_palette", "Reverse rebase palette", False
-                ),
-                "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
-
-            @render.plot(alt="Heatmap of within split delta times.")
-            @reactive.event(
-                input.stage, input.splits_rebase_driver, input.splits_reverse_palette
+        @render.plot(alt="Line chart of within split delta times.")
+        @reactive.event(
+            input.stage, input.splits_rebase_driver, input.splits_reverse_palette
+        )
+        def seaborn_linechart_splits():
+            rebase_driver = input.splits_rebase_driver()
+            if input.stage() == "SHD":
+                return
+            split_times_wide, split_times_long, split_times_wide_numeric = (
+                split_times_data()
             )
-            def seaborn_heatmap_splits():
-                if input.stage() == "SHD":
-                    return
-                split_times_wide, split_times_long, split_times_wide_numeric = (
-                    split_times_data()
-                )
-                if split_times_wide_numeric.empty:
-                    return
-                split_times_wide_numeric = split_times_wide_numeric.copy()
-                split_cols = [
-                    c for c in split_times_wide_numeric.columns if c.startswith("round")
-                ]
-                # output_ = split_times_wide_numeric
-                output_ = wrc.get_split_duration(
-                    split_times_wide_numeric,
-                    split_cols,
-                )
+            if split_times_long.empty:
+                return
+            split_times_long = split_times_long.copy()
 
-                # output_ = wrc.subtract_from_rows(
-                #    output_, split_cols, ignore_first_row=False
-                # )
-
-                ult_row = {"carNo": "ult"}
-
-                # Find minimum non-zero values for each round column
-                for col in split_cols:
-                    # Convert to numeric, filter non-zero, find minimum
-                    min_val = pd.to_numeric(
-                        output_[col][output_[col] > 0], errors="coerce"
-                    ).min()
-                    ult_row[col] = min_val
-                output_ = pd.concat(
-                    [output_, pd.DataFrame([ult_row])], ignore_index=True
-                )
-
-                rebase_driver = input.splits_rebase_driver()
-                output_ = wrc.rebaseManyTimes(
-                    output_, rebase_driver, "carNo", split_cols
-                )
-                output_ = output_[output_["carNo"] != "ult"]
-                colors = (
-                    ["red", "white", "green"]
-                    if input.splits_reverse_palette()
-                    else ["green", "white", "red"]
-                )
-
-                cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
-                output_["carNo"] = output_["carNo"].map(carNum2name())
-                output_.set_index("carNo", inplace=True)
-                output_.columns = [
-                    f"Split {i}" for i in range(1, output_.shape[1] + 1)
-                ]  # [:-1] + ["Finish"]
-
-                return heatmap(
-                    output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False
-                )
-
-            @render.plot(alt="Line chart of within split delta times.")
-            @reactive.event(
-                input.stage, input.splits_rebase_driver, input.splits_reverse_palette
+            # TO DO - need a function to rebase a long df by group
+            ll2 = split_times_long.pivot(
+                index="carNo", columns="roundN", values="timeInS"
+            ).reset_index()
+            cols = [c for c in ll2.columns if c.startswith("round")]
+            lw = wrc.rebaseManyTimes(ll2, rebase_driver, "carNo", cols)
+            lw["round0"] = 0.0
+            lw = lw[["carNo", "round0"] + cols]
+            ll3 = pd.melt(
+                lw,
+                id_vars=["carNo"],
+                value_vars=["round0"] + cols,
+                var_name="roundN",
+                value_name="timeInS",
             )
-            def seaborn_linechart_splits():
-                rebase_driver = input.splits_rebase_driver()
-                if input.stage() == "SHD":
-                    return
-                split_times_wide, split_times_long, split_times_wide_numeric = (
-                    split_times_data()
-                )
-                if split_times_long.empty:
-                    return
-                split_times_long = split_times_long.copy()
+            ll3["round"] = ll3["roundN"].str.replace("round", "").astype(int)
+            split_cumdists, split_dists = split_dists_for_stage()
+            ll3["carNo"] = ll3["carNo"].map(carNum2name())
+            if split_cumdists:
+                split_cumdists["round0"] = 0.0
+                ll3["dist"] = ll3["roundN"].map(split_cumdists)
+                g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
 
-                # TO DO - need a function to rebase a long df by group
-                ll2 = split_times_long.pivot(
-                    index="carNo", columns="roundN", values="timeInS"
-                ).reset_index()
-                cols = [c for c in ll2.columns if c.startswith("round")]
-                lw = wrc.rebaseManyTimes(ll2, rebase_driver, "carNo", cols)
-                lw["round0"] = 0.0
-                lw = lw[["carNo", "round0"] + cols]
-                ll3 = pd.melt(
-                    lw,
-                    id_vars=["carNo"],
-                    value_vars=["round0"] + cols,
-                    var_name="roundN",
-                    value_name="timeInS",
-                )
-                ll3["round"] = ll3["roundN"].str.replace("round", "").astype(int)
-                split_cumdists, split_dists = split_dists_for_stage()
-                ll3["carNo"] = ll3["carNo"].map(carNum2name())
-                if split_cumdists:
-                    split_cumdists["round0"] = 0.0
-                    ll3["dist"] = ll3["roundN"].map(split_cumdists)
-                    g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
+            else:
+                g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
+            g.set_ylim(g.get_ylim()[::-1])
+            return g
 
-                else:
-                    g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
-                g.set_ylim(g.get_ylim()[::-1])
-                return g
+        @render.ui
+        @reactive.event(input.stage)
+        def split_sections_details():
+            split_cumdists, split_dists = split_dists_for_stage()
+            return ui.markdown(f"Split section distances: {split_dists}")
 
-        with ui.card(class_="mt-3"):
-            with ui.card_header():
-                with ui.tooltip(placement="right", id="splits_section_report_tt"):
-                    ui.span(
-                        "Split section report ",
-                        question_circle_fill,
-                    )
-                    "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
-
-            with ui.tooltip(id="splits_section_view_tt"):
-                ui.input_select(
-                    "splits_section_view",
-                    "Section report view",
-                    {
-                        "time": "Time in section (s)",
-                        "pace": "Av. pace in section (s/km)",
-                        "speed": "Av. speed in section (km/s)",
-                    },
-                    selected="time",
-                ),
-                "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
-                # Scope the view if data available
-
-            @render.ui
-            @reactive.event(input.stage)
-            def split_sections_details():
-                split_cumdists, split_dists = split_dists_for_stage()
-                return ui.markdown(f"Split section distances: {split_dists}")
-
-            @render.ui
-            @reactive.event(input.splits_section_view)
-            def split_report_view():
-                view = input.splits_section_view()
-                typ = {
-                    "time": ("(s)", "(*Lower* is better.)"),
-                    "speed": ("(km/s)", "(*Higher* is better.)"),
-                    "pace": ("(s/km)", "(*Lower* is better.)"),
-                }[view]
-                return ui.markdown(
-                    f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
-                )
-
-            # @render.table
-            @render.data_frame
-            @reactive.event(input.splits_section_view, input.stage)
-            def split_report_in_section():
-                view = input.splits_section_view()
-                if input.stage() == "SHD":
-                    return
-                split_times_wide, split_times_long, split_times_wide_numeric = (
-                    split_times_data()
-                )
-                if split_times_wide_numeric.empty:
-                    return
-                split_times_wide_numeric = split_times_wide_numeric.copy()
-                split_cols = [
-                    c for c in split_times_wide_numeric.columns if c.startswith("round")
-                ]
-                output_ = wrc.get_split_duration(
-                    split_times_wide_numeric,
-                    split_cols,
-                )
-                # Scope the view if data available
-                split_cumdists, split_dists = split_dists_for_stage()
-                if split_dists:
-                    if view == "pace":
-                        output_.update(
-                            output_.loc[:, split_dists.keys()].apply(
-                                lambda s: s / split_dists[s.name]
-                            )
-                        )
-                    elif view == "speed":
-                        output_.update(
-                            output_.loc[:, split_dists.keys()].apply(
-                                lambda s: 3600 * split_dists[s.name] / s
-                            )
-                        )
-                # styles = {c: "{0:0.1f}" for c in split_cols}
-
-                output_["carNo"] = output_["carNo"].map(carNum2name())
-                output_[split_cols] = output_[split_cols].round(1)
-                return render.DataGrid(
-                    output_,
-                )
-
-            # Select view type
-            # Should we also have a radio button,
-            # e.g. for absolute or relative;
-            # And maybe accumulated or in-section
-            # TO DO
-            # ui.input_select(
-            #    "splits_view",
-            #    "Splits View (NOT WORKING YET):",
-            #    {},
-            # )
+        # Select view type
+        # Should we also have a radio button,
+        # e.g. for absolute or relative;
+        # And maybe accumulated or in-section
+        # TO DO
+        # ui.input_select(
+        #    "splits_view",
+        #    "Splits View (NOT WORKING YET):",
+        #    {},
+        # )
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
