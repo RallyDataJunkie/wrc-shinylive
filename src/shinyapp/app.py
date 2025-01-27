@@ -63,7 +63,7 @@ def split_dists_for_stage():
         prev = 0
 
         for k, v in split_cumdists.items():
-            split_dists[k] = v - prev
+            split_dists[k] = round(v - prev,1)
             prev = v  # Update the previous value for the next iteration
 
     except:
@@ -172,6 +172,7 @@ def split_times_data():
         return split_times_wide, split_times_long, split_times_wide_numeric
     except:
         return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+
 
 @reactive.effect
 @reactive.event(input.season)
@@ -413,6 +414,7 @@ with ui.navset_card_underline():
                 input.stage, input.splits_rebase_driver, input.splits_reverse_palette
             )
             def seaborn_linechart_splits():
+                rebase_driver = input.splits_rebase_driver()
                 if input.stage() == "SHD":
                     return
                 split_times_wide, split_times_long, split_times_wide_numeric = (
@@ -421,7 +423,6 @@ with ui.navset_card_underline():
                 if split_times_long.empty:
                     return
                 split_times_long = split_times_long.copy()
-                rebase_driver = input.splits_rebase_driver()
 
                 # TO DO - need a function to rebase a long df by group
                 ll2 = split_times_long.pivot(
@@ -447,7 +448,7 @@ with ui.navset_card_underline():
                     g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
 
                 else:
-                    g = lineplot(data=ll3, x="round", y="timeInS", hue="name")
+                    g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
                 g.set_ylim(g.get_ylim()[::-1])
                 return g
 
@@ -472,6 +473,13 @@ with ui.navset_card_underline():
                     selected="time",
                 ),
                 "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
+                # Scope the view if data available
+
+            @render.ui
+            @reactive.event(input.stage)
+            def split_sections_details():
+                split_cumdists, split_dists = split_dists_for_stage()
+                return ui.markdown(f"Split section distances: {split_dists}")
 
             @render.ui
             @reactive.event(input.splits_section_view)
@@ -486,7 +494,8 @@ with ui.navset_card_underline():
                     f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
                 )
 
-            @render.table
+            #@render.table
+            @render.data_frame
             @reactive.event(input.splits_section_view, input.stage)
             def split_report_in_section():
                 view = input.splits_section_view()
@@ -520,10 +529,13 @@ with ui.navset_card_underline():
                                 lambda s: 3600 * split_dists[s.name] / s
                             )
                         )
-                styles = {c: "{0:0.1f}" for c in split_cols}
+                # styles = {c: "{0:0.1f}" for c in split_cols}
 
                 output_["carNo"] = output_["carNo"].map(carNum2name())
-                return output_.style.format(styles)
+                output_[split_cols] = output_[split_cols].round(1)
+                return render.DataGrid(
+                    output_,
+                )
 
             # Select view type
             # Should we also have a radio button,
@@ -628,28 +640,7 @@ with ui.navset_card_underline():
                 ].round(1)
                 return render.DataGrid(
                     split_times_wide_numeric,
-                    #styles={
-                    #    "cols": split_cols,
-                    #    "style": {"format": "{:.1f}"},
-                    #},
-                 )
-
-            # @render.table
-            # def split_times_rich2():
-            #    split_times_wide, split_times_long, split_times_wide_numeric = (
-            #        split_times_data()
-            #    )
-            #    return split_times_wide
-            # @render.table
-            # def split_times_rich3():
-            #    split_times_wide, split_times_long, split_times_wide_numeric = (
-            #        split_times_data()
-            #    )
-            #    return split_times_long
-            # @render.data_frame
-            # def split_times_frame():
-            #    split_times_wide, split_times_long, split_times_wide_numeric = split_times_data()
-            #    return render.DataGrid(split_times_wide)
+                )
 
     with ui.nav_panel("penalties"):
 
