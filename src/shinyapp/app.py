@@ -134,7 +134,6 @@ def stage_hero():
     stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
 
     def _get_hero_text(pos):
-        pos = pos - 1
         return ui.markdown(
             f"""
     __{times.loc[pos, "driver"]}__
@@ -142,10 +141,10 @@ def stage_hero():
     {times.loc[pos, "stageTime"]}
     """
         )
-
+    # Positions are zero indexed, so first is pos=0
     p1 = ui.value_box(
         title=stage_name,
-        value=_get_hero_text(1),
+        value=_get_hero_text(0),
         theme="text-green",
         showcase=f"Averaging  \n  \n{round(times.loc[0, 'speed (km/h)'],1)} km/h",
         showcase_layout="left center",
@@ -153,7 +152,7 @@ def stage_hero():
     )
     p2 = ui.value_box(
         value=times.loc[1, "diffFirst"],
-        title=_get_hero_text(2),
+        title=_get_hero_text(1),
         theme="text-blue",
         showcase=f"(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)",
         showcase_layout="bottom",
@@ -161,7 +160,7 @@ def stage_hero():
     )
     p3 = ui.value_box(
         value=times.loc[2, "diffFirst"],
-        title=_get_hero_text(3),
+        title=_get_hero_text(2),
         theme="text-purple",
         showcase=f"Pace: ({round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)",
         showcase_layout="bottom",
