@@ -109,7 +109,7 @@ with ui.sidebar():
         # Scope the view if data available
 
     # Create driver rebase selector
-    with ui.tooltip(id="splits_section_view_tt"):
+    with ui.tooltip(id="rebase_driver_tt"):
         ui.input_select(
             "rebase_driver",
             "Driver rebase:",
