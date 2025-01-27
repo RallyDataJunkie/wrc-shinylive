@@ -1,5 +1,5 @@
 import pandas as pd
-from seaborn import heatmap, lineplot
+from seaborn import heatmap, lineplot, barplot
 import json
 from pathlib import Path
 
@@ -96,13 +96,23 @@ with ui.sidebar():
     with ui.tooltip(id="splits_section_view_tt"):
         ui.input_select(
             "splits_section_view",
-            "Split Section report view",
+            "Section report view",
             {
                 "time": "Time in section (s)",
                 "pace": "Av. pace in section (s/km)",
                 "speed": "Av. speed in section (km/s)",
                 "time_acc": "Acc. time over sections (s)",
             },
+            selected="time",
+        ),
+        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
+        # Scope the view if data available
+
+    with ui.tooltip(id="splits_section_plot_tt"):
+        ui.input_select(
+            "splits_section_plot",
+            "Section plot view",
+            {"bysplit": "Split section groups", "bydriver": "Driver groups"},
             selected="time",
         ),
         "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
@@ -115,7 +125,7 @@ with ui.sidebar():
             "Driver rebase:",
             {},
         ),
-        "\"Rebase\" times relative to a nominated driver. The \"ULTIMATE\" driver is derived from the quickest times within each split sector ."
+        '"Rebase" times relative to a nominated driver. The "ULTIMATE" driver is derived from the quickest times within each split sector .'
 
     with ui.tooltip(id="rebase_reverse_palette_tt"):
         ui.input_checkbox("rebase_reverse_palette", "Reverse rebase palette", False),
@@ -141,6 +151,7 @@ def stage_hero():
     {times.loc[pos, "stageTime"]}
     """
         )
+
     # Positions are zero indexed, so first is pos=0
     p1 = ui.value_box(
         title=stage_name,
@@ -174,7 +185,7 @@ with ui.card(class_="mt-3"):
     with ui.card_header():
         with ui.tooltip(placement="right", id="splits_section_report_tt"):
             ui.span(
-                "Split section report [select as required] ",
+                "Split section report ",
                 question_circle_fill,
             )
             "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
@@ -193,7 +204,9 @@ with ui.card(class_="mt-3"):
                 "speed": ("(km/s)", "(*Higher* is better.)"),
                 "pace": ("(s/km)", "(*Lower* is better.)"),
             }[view]
-            return ui.markdown(f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}")
+            return ui.markdown(
+                f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
+            )
         return ui.markdown(default)
 
     # @render.table
@@ -222,9 +235,12 @@ with ui.card(class_="mt-3"):
             split_times_wide_numeric[split_cols] = split_times_wide_numeric[
                 split_cols
             ].round(1)
-            split_times_wide_numeric.columns = [
-                "Driver"]+[f"Split {i}" for i in range(1, len(split_cols))]+["Finish"]
-            
+            split_times_wide_numeric.columns = (
+                ["Driver"]
+                + [f"Split {i}" for i in range(1, len(split_cols))]
+                + ["Finish"]
+            )
+
             return render.DataGrid(
                 split_times_wide_numeric,
             )
@@ -252,8 +268,9 @@ with ui.card(class_="mt-3"):
 
         output_["carNo"] = output_["carNo"].map(carNum2name())
         output_[split_cols] = output_[split_cols].round(1)
-        output_.columns = [
-                "Driver"]+[f"Split {i}" for i in range(1, len(split_cols))]+["Finish"]
+        output_.columns = (
+            ["Driver"] + [f"Split {i}" for i in range(1, len(split_cols))] + ["Finish"]
+        )
         return render.DataGrid(
             output_,
         )
@@ -261,9 +278,9 @@ with ui.card(class_="mt-3"):
 
 with ui.card(class_="mt-3"):
     with ui.card_header():
-        with ui.tooltip(placement="right", id="splits_in_section_delta_tt"):
+        with ui.tooltip(placement="right", id="splits_in_section_delta_heatmap_tt"):
             ui.span(
-                "Time gained / lost within each section in seconds relative to rebase driver ",
+                "Time gained / lost within each section in seconds relative to rebase driver (heatmap) ",
                 question_circle_fill,
             )
             "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
@@ -324,6 +341,112 @@ with ui.card(class_="mt-3"):
         ]  # [:-1] + ["Finish"]
 
         return heatmap(output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False)
+
+
+with ui.card(class_="mt-3"):
+    with ui.card_header():
+        with ui.tooltip(placement="right", id="splits_in_section_delta_barplot_tt"):
+            ui.span(
+                "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
+                question_circle_fill,
+            )
+            "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+    @render.plot(alt="barplot of within split delta times.")
+    @reactive.event(
+        input.stage,
+        input.rebase_driver,
+        input.splits_section_plot,
+        input.rebase_reverse_palette,
+    )
+    def seaborn_barplot_splits():
+        rebase_driver = input.rebase_driver()
+        # print(f"Rebasing on {rebase_driver}")
+        if input.stage() == "SHD" or not rebase_driver or rebase_driver == "NONE":
+            return
+        split_times_wide, split_times_long, split_times_wide_numeric = (
+            split_times_data()
+        )
+        if split_times_wide_numeric.empty:
+            return
+        split_times_wide_numeric = split_times_wide_numeric.copy()
+        split_cols = [
+            c for c in split_times_wide_numeric.columns if c.startswith("round")
+        ]
+        # output_ = split_times_wide_numeric
+        output_ = wrc.get_split_duration(
+            split_times_wide_numeric,
+            split_cols,
+        )
+
+        # output_ = wrc.subtract_from_rows(
+        #    output_, split_cols, ignore_first_row=False
+        # )
+        ult_row = {"carNo": "ult"}
+
+        # Find minimum non-zero values for each round column
+        for col in split_cols:
+            # Convert to numeric, filter non-zero, find minimum
+            min_val = pd.to_numeric(
+                output_[col][output_[col] > 0], errors="coerce"
+            ).min()
+            ult_row[col] = min_val
+
+        output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
+
+        output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+
+        output_ = output_[output_["carNo"] != "ult"]
+
+        colors = (
+            ["red", "white", "green"]
+            if input.rebase_reverse_palette()
+            else ["green", "white", "red"]
+        )
+
+        cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+        output_["carNo"] = output_["carNo"].map(carNum2name())
+
+        # output_.set_index("carNo", inplace=True)
+        # output_.columns = [
+        #    f"Split {i}" for i in range(1, output_.shape[1] + 1)
+        # ]  # [:-1] + ["Finish"]
+        long_df = pd.melt(
+            output_, id_vars=["carNo"], var_name="roundN", value_name="time"
+        )
+        colors = ["red" if val >= 0 else "green" for val in long_df["time"]]
+        if input.splits_section_plot() == "bydriver":
+            ax = barplot(
+                long_df,
+                orient="h",
+                hue="roundN",
+                x="time",
+                y="carNo",
+                palette=colors,
+                legend=False,
+            )
+        else:
+            ax = barplot(
+                long_df,
+                orient="h",
+                y="roundN",
+                x="time",
+                hue="carNo",
+                palette=colors,
+                legend=False,
+            )
+
+        # Get all the bars from the plot
+        bars = [patch for patch in ax.patches]
+
+        # Color each bar based on its height
+        for bar in bars:
+            if input.rebase_reverse_palette():
+                bar.set_color("#2ecc71" if bar.get_width() > 0 else "#e74c3c")
+            else:
+                bar.set_color("#2ecc71" if bar.get_width() <= 0 else "#e74c3c")
+        ax.invert_xaxis()
+        return ax
 
 
 @reactive.calc
@@ -439,7 +562,7 @@ def update_stages_driver_rebase_select():
 @reactive.effect
 @reactive.event(input.stage)
 def update_driver_rebase_select():
-    rebase_drivers = {"NONE": ""}
+    rebase_drivers = {}  # {"NONE": ""}
     rebase_drivers.update(
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
