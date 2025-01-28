@@ -107,6 +107,19 @@ with ui.sidebar():
         "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
     )
 
+    # Create championship selector
+    ui.input_select(
+        "championship",
+        "Championship:",
+        {v: k for k, v in wrc.CATEGORY_MAP.items()},
+        selected="wrc",
+    )
+
+    @reactive.effect
+    @reactive.event(input.championship)
+    def update_championship():
+        wrc.championship = input.championship()
+
     # Create event selector
     # Dynamically populated using a list of events
     # based on the season selection
@@ -227,7 +240,6 @@ with ui.card(class_="mt-3"):
             "time_acc": "Accumulated time (s) across all splits (*lower* is better.)",
         }
         return ui.markdown(typ[view])
-       
 
     # @render.table
     @render.data_frame
@@ -246,6 +258,9 @@ with ui.card(class_="mt-3"):
             c for c in split_times_wide_numeric.columns if c.startswith("round")
         ]
         if view == "time_acc":
+            split_times_wide_numeric = pd.merge(
+                split_times_wide[["carNo", "teamName", "roadPos"]], split_times_wide_numeric, on="carNo"
+            )
             split_times_wide_numeric["carNo"] = split_times_wide_numeric["carNo"].map(
                 carNum2name()
             )
@@ -255,8 +270,9 @@ with ui.card(class_="mt-3"):
             split_times_wide_numeric[split_cols] = split_times_wide_numeric[
                 split_cols
             ].round(1)
+
             split_times_wide_numeric.columns = (
-                ["Driver"]
+                ["Driver", "TeamName", "RoadPos"]
                 + [f"Split {i}" for i in range(1, len(split_cols))]
                 + ["Finish"]
             )
@@ -264,7 +280,7 @@ with ui.card(class_="mt-3"):
             return render.DataGrid(
                 split_times_wide_numeric,
             )
-
+        # We want within split times, not accumulated times
         output_ = wrc.get_split_duration(
             split_times_wide_numeric,
             split_cols,
@@ -286,10 +302,17 @@ with ui.card(class_="mt-3"):
                 )
         # styles = {c: "{0:0.1f}" for c in split_cols}
 
+        output_ = pd.merge(
+                    split_times_wide[["carNo", "teamName", "roadPos"]],
+                    output_,
+                    on="carNo",
+                )
         output_["carNo"] = output_["carNo"].map(carNum2name())
         output_[split_cols] = output_[split_cols].round(1)
         output_.columns = (
-            ["Driver"] + [f"Split {i}" for i in range(1, len(split_cols))] + ["Finish"]
+            ["Driver", "TeamName", "RoadPos"]
+            + [f"Split {i}" for i in range(1, len(split_cols))]
+            + ["Finish"]
         )
         return render.DataGrid(
             output_,
@@ -356,6 +379,7 @@ __P{pos+1}__ {diffFirst}
             full_screen=True,
         )
         return pr
+
 
 with ui.card(class_="mt-3"):
     with ui.card_header():
@@ -541,7 +565,7 @@ def stage_times_data():
 
 
 @reactive.calc
-@reactive.event(input.stage)
+@reactive.event(input.stage, input.championship)
 def split_times_data():
     wrc.stageId = input.stage()
     # WRC API data fetch
@@ -558,7 +582,7 @@ def split_times_data():
 
 
 @reactive.effect
-@reactive.event(input.season)
+@reactive.event(input.season, input.championship)
 def update_events_select():
     season = season_data()
     # events = season["EventName"].to_list()
@@ -569,7 +593,7 @@ def update_events_select():
 
 
 @reactive.effect
-@reactive.event(input.event)
+@reactive.event(input.event, input.championship)
 def update_stages_select():
     stages_df = stages_data()
     stages = stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
@@ -579,6 +603,8 @@ def update_stages_select():
 @reactive.effect
 @reactive.event(input.stage)
 def update_stages_driver_rebase_select():
+    if stage_times_data().empty:
+        return
     rebase_drivers = (
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
@@ -586,8 +612,10 @@ def update_stages_driver_rebase_select():
 
 
 @reactive.effect
-@reactive.event(input.stage)
+@reactive.event(input.championship, input.stage)
 def update_driver_rebase_select():
+    if input.stage() == "SHD" or stage_times_data().empty:
+        return
     rebase_drivers = {"NONE": ""}
     rebase_drivers.update(
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
@@ -631,10 +659,58 @@ with ui.navset_card_underline():
             return render.DataGrid(itinerary)
 
     with ui.nav_panel("startlist"):
-
+        # TO DO  - need a refresh button for days
+        # TO DO split into frames for day
         @render.data_frame
+        @reactive.event(input.stage)
         def startlist_frame():
             return render.DataGrid(wrc.getStartlist())
+
+    with ui.nav_panel("stagewinners"):
+
+        @render.data_frame
+        @reactive.event(input.stage)
+        def stage_winners_short():
+            retcols = [
+                "carNo",
+                "stageNo",
+                "stageName",
+                "stageType",
+                "driver",
+                "time",
+                "coDriver",
+                "team/car",
+                "teamName",
+                "eligibility",
+            ]
+            return render.DataGrid(wrc.getStageWinners(update=True)[retcols])
+
+    with ui.nav_panel("overall"):
+
+        @render.data_frame
+        @reactive.event(input.event, input.stage, input.championship)
+        def overall_short():
+            overall_df = wrc.getOverall(update=True)
+            retcols = [
+                k
+                for k in [
+                    "pos",
+                    "carNo",
+                    "driver",
+                    "stageTime",
+                    "penaltyTime",
+                    "totalTime",
+                    "diffFirst",
+                    "diffPrev",
+                    "coDriver",
+                    "team/car",
+                    "teamName",
+                    "groupClass",
+                    "eligibility",
+                ]
+                if k in overall_df.columns
+            ]
+            return render.DataGrid(overall_df[retcols])
 
     with ui.nav_panel("stagetimes"):
 
@@ -646,7 +722,7 @@ with ui.navset_card_underline():
         )
 
         @render.ui
-        @reactive.event(input.stage_rebase_driver)
+        @reactive.event(input.event, input.stage, input.championship)
         def stage_times_short_frame():
             stage_times = stage_times_data()
             core_cols = [

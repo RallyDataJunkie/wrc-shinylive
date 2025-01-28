@@ -8,6 +8,7 @@ from itertools import zip_longest
 import datetime
 from numpy import nan
 
+
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
     r = parse("{start_day} - {end_day} {month} {year}", date_range_str)
@@ -31,6 +32,8 @@ def timeify(df, col, typ=None):
 def tablify(json_data, subcolkey=None, addcols=None):
     """Generate table from separate colnames/values JSON."""
     # Note that the JSON may be a few rows short cf. provided keys
+    if "fields" not in json_data:
+        return pd.DataFrame()
     if subcolkey is None:
         fields = json_data["fields"]
         values = json_data["values"]
@@ -184,6 +187,7 @@ class WRCAPIClient:
         self.startlist_df = pd.DataFrame()
         self.itinerary_df = pd.DataFrame()
         self.overall_df = pd.DataFrame()
+        self.stagewinners_df = pd.DataFrame()
 
         self.seasonId = None
         self.eventId = None
@@ -215,8 +219,8 @@ class WRCAPIClient:
         if year:
             self.year = year
 
-        self.rallyId2eventId={}
-        self.stage_codes={}
+        self.rallyId2eventId = {}
+        self.stage_codes = {}
 
         self.results_calendar_df = pd.DataFrame()
         self.stage_details_df = pd.DataFrame()
@@ -230,7 +234,11 @@ class WRCAPIClient:
         self.stageId = None
 
         self.full_calendar = self.getFullCalendar()
-        self.rallyId2eventId = self.full_calendar[["rallyId", "eventId"]].set_index("rallyId")["eventId"].to_dict()
+        self.rallyId2eventId = (
+            self.full_calendar[["rallyId", "eventId"]]
+            .set_index("rallyId")["eventId"]
+            .to_dict()
+        )
 
         self.seasonId = int(self.full_calendar["season"][0]["seasonId"])
         self.setEvent(eventName=eventName)
@@ -259,7 +267,9 @@ class WRCAPIClient:
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
 
     @staticmethod
-    def rebaseManyTimes(times, rebaseId=None, idCol=None, rebaseCols=None, inplace=False):
+    def rebaseManyTimes(
+        times, rebaseId=None, idCol=None, rebaseCols=None, inplace=False
+    ):
         if not inplace:
             times = times.copy()
 
@@ -287,7 +297,7 @@ class WRCAPIClient:
         """
         if rebaseCols is None:
             return times
-        times=times.copy()
+        times = times.copy()
         # TO DO:
         # should we have a generic checker that rebase cols are available
         # or subset to the ones that are?
@@ -391,7 +401,9 @@ class WRCAPIClient:
                 .to_dict()
             )
             # Type mapping
-            df_stageDetails["distance"] = pd.to_numeric(df_stageDetails["distance"], errors="coerce")
+            df_stageDetails["distance"] = pd.to_numeric(
+                df_stageDetails["distance"], errors="coerce"
+            )
 
         return self.stage_details_df
 
@@ -415,7 +427,9 @@ class WRCAPIClient:
             if not json_data:
                 return pd.DataFrame()
             # We
-            df_startlist = tablify(json_data, "startListItems", addcols=["date", "startDateTimeLocal"])
+            df_startlist = tablify(
+                json_data, "startListItems", addcols=["date", "startDateTimeLocal"]
+            )
             self.startlist_df = df_startlist
             self.carNum2name = (
                 self.startlist_df[["carNo", "driver"]]
@@ -426,7 +440,15 @@ class WRCAPIClient:
             )
         return self.startlist_df
 
-    def getOverall(self, eventId=None, rallyId=None, stageId=None, championship=None, group=None, update=False):
+    def getOverall(
+        self,
+        eventId=None,
+        rallyId=None,
+        stageId=None,
+        championship=None,
+        group=None,
+        update=False,
+    ):
         group = self.group if group is None else group
         if self.overall_df.empty or update:
             eventId = self.eventId if eventId is None else eventId
@@ -478,9 +500,9 @@ class WRCAPIClient:
             group.loc[group.index[0], "timeInS"] = first_time
             return group
 
-        splits_long_df = (
-            splits_long_df.groupby("round").apply(process_time)#.reset_index(drop=True)
-        )
+        splits_long_df = splits_long_df.groupby("round").apply(
+            process_time
+        )  # .reset_index(drop=True)
 
         return splits_long_df
 
@@ -531,7 +553,9 @@ class WRCAPIClient:
             # Pace annotations
             df_stageDetails = self.getStageDetails()
             stage_dist = float(
-                df_stageDetails.loc[df_stageDetails["stageId"] == stageId, "distance"].iloc[0]
+                df_stageDetails.loc[
+                    df_stageDetails["stageId"] == stageId, "distance"
+                ].iloc[0]
             )
             df_stageTimes["speed (km/h)"] = stage_dist / (df_stageTimes["Time"] / 3600)
             # Use .loc[] to modify the original DataFrame in place
@@ -564,14 +588,16 @@ class WRCAPIClient:
         df_splitTimes = tablify(json_data)
         self.stage_id_annotations(df_splitTimes, eventId, rallyId, stageId)
         df_splitTimes.dropna(how="all", axis=1, inplace=True)
-        df_splitTimes.rename(columns={"pos":"roadPos"}, inplace=True)
+        df_splitTimes.rename(columns={"pos": "roadPos"}, inplace=True)
         return df_splitTimes
 
     def get_splits_as_numeric(self, splits, regularise=True):
         """Convert the original split data to numerics."""
 
         split_cols = [c for c in splits.columns if c.startswith("round")]
-        base_cols = list({"carNo", "stageTime", "diffFirst"}.intersection(splits.columns))
+        base_cols = list(
+            {"carNo", "stageTime", "diffFirst"}.intersection(splits.columns)
+        )
         sw_actual = splits[base_cols + split_cols].copy()
         # Convert string relative times to numeric relative times
         for c in split_cols:
@@ -581,13 +607,11 @@ class WRCAPIClient:
         # and the delta for the other rows
         # Recreate the actual times
 
-        if len(split_cols)>1 and regularise:
+        if len(split_cols) > 1 and regularise:
             if "stageTime" in sw_actual.columns:
                 sw_actual["stageTime"] = sw_actual["stageTime"].apply(time_to_seconds)
                 sw_actual[f"round{len(split_cols)+1}"] = sw_actual.apply(
-                    lambda row: (
-                        row["stageTime"]
-                    ),
+                    lambda row: (row["stageTime"]),
                     axis=1,
                 )
                 sw_actual.drop(columns=["stageTime", "diffFirst"], inplace=True)
@@ -625,15 +649,17 @@ class WRCAPIClient:
 
         return diff_df
 
-    def getStageWinners(self, eventId=None, championship=None):
-        eventId = self.eventId if eventId is None else eventId
-        championship = self.championship if championship is None else championship
-        stub = f"result/stageWinners?eventId={eventId}&championshipId={self.getChampionshipId(championship)}"
-        json_data = self._WRC_json(stub)
-        if not json_data:
-            return pd.DataFrame()
-        df_stageWinners = tablify(json_data)
-        return df_stageWinners
+    def getStageWinners(self, eventId=None, championship=None, update=False):
+        if self.stagewinners_df.empty or update:
+            eventId = self.eventId if eventId is None else eventId
+            championship = self.championship if championship is None else championship
+            stub = f"result/stageWinners?eventId={eventId}&championshipId={self.getChampionshipId(championship)}"
+            json_data = self._WRC_json(stub)
+            if not json_data:
+                return pd.DataFrame()
+            df_stageWinners = tablify(json_data)
+            self.stagewinners_df = df_stageWinners
+        return self.stagewinners_df
 
     def getPenalties(self, eventId=None):
         eventId = self.eventId if eventId is None else eventId
@@ -655,8 +681,8 @@ class WRCAPIClient:
         df_retirements = tablify(json_data)
         return df_retirements
 
-    def getChampionship(self, 
-        seasonId=None, championship_type="driver", championship=None, retUrl=False
+    def getChampionship(
+        self, seasonId=None, championship_type="driver", championship=None, retUrl=False
     ):
         seasonId = self.seasonId if seasonId is None else seasonId
         championship = self.championship if championship is None else championship
