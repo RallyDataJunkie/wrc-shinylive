@@ -357,17 +357,6 @@ __P{pos+1}__ {diffFirst}
         )
         return pr
 
-        pr = ui.value_box(
-            title=stage_name,
-            value=_get_hero_text(pos),
-            theme="text-black",
-            showcase=_get_showcase(pos),
-            showcase_layout="left center",
-            full_screen=True,
-        )
-        return pr
-
-
 with ui.card(class_="mt-3"):
     with ui.card_header():
         with ui.tooltip(placement="right", id="splits_in_section_delta_heatmap_tt"):
