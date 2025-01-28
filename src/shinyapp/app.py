@@ -259,7 +259,9 @@ with ui.card(class_="mt-3"):
         ]
         if view == "time_acc":
             split_times_wide_numeric = pd.merge(
-                split_times_wide[["carNo", "teamName", "roadPos"]], split_times_wide_numeric, on="carNo"
+                split_times_wide[["carNo", "teamName", "roadPos"]],
+                split_times_wide_numeric,
+                on="carNo",
             )
             split_times_wide_numeric["carNo"] = split_times_wide_numeric["carNo"].map(
                 carNum2name()
@@ -303,10 +305,10 @@ with ui.card(class_="mt-3"):
         # styles = {c: "{0:0.1f}" for c in split_cols}
 
         output_ = pd.merge(
-                    split_times_wide[["carNo", "teamName", "roadPos"]],
-                    output_,
-                    on="carNo",
-                )
+            split_times_wide[["carNo", "teamName", "roadPos"]],
+            output_,
+            on="carNo",
+        )
         output_["carNo"] = output_["carNo"].map(carNum2name())
         output_[split_cols] = output_[split_cols].round(1)
         output_.columns = (
@@ -642,21 +644,43 @@ with ui.navset_card_underline():
         @render.data_frame
         def season_frame():
             season = season_data()
-            return render.DataGrid(season)
+            retcols = [
+                "ROUND",
+                "rallyTitle",
+                "rallyCountry",
+                "date",
+                "driver",
+                "coDriver",
+                "teamName",
+                "manufacturer",
+            ]
+            return render.DataGrid(season[retcols])
 
     with ui.nav_panel("stages"):
 
         @render.data_frame
         def stages_frame():
             stages = stages_data()
-            return render.DataGrid(stages)
+            retcols = ["STAGE", "name", "day", "distance", "STAGE TYPE", "STATUS"]
+            return render.DataGrid(stages[retcols])
 
     with ui.nav_panel("itinerary"):
 
         @render.data_frame
         def itinerary_frame():
             itinerary = itinerary_data()
-            return render.DataGrid(itinerary)
+            retcols = [
+                "stage",
+                "type",
+                "status",
+                "distance",
+                "firstCarDueDateTimeMs",
+                "location",
+                "targetDuration",
+                "timingPrecision",
+                "controlPenalties",
+            ]
+            return render.DataGrid(itinerary[retcols])
 
     with ui.nav_panel("startlist"):
         # TO DO  - need a refresh button for days
@@ -664,7 +688,19 @@ with ui.navset_card_underline():
         @render.data_frame
         @reactive.event(input.stage)
         def startlist_frame():
-            return render.DataGrid(wrc.getStartlist())
+            retcols = [
+                "order",
+                "startDateTimeLocal",
+                "priority",
+                "carNo",
+                "driver",
+                "coDriver",
+                "teamName",
+                "team/car",
+                "eligibility",
+                "groupClass",
+            ]
+            return render.DataGrid(wrc.getStartlist()[retcols])
 
     with ui.nav_panel("stagewinners"):
 
@@ -672,14 +708,13 @@ with ui.navset_card_underline():
         @reactive.event(input.stage)
         def stage_winners_short():
             retcols = [
-                "carNo",
-                "stageNo",
-                "stageName",
                 "stageType",
+                "stageName",
+                "stageNo",
+                "carNo",
                 "driver",
-                "time",
                 "coDriver",
-                "team/car",
+                "time",
                 "teamName",
                 "eligibility",
             ]
@@ -697,14 +732,13 @@ with ui.navset_card_underline():
                     "pos",
                     "carNo",
                     "driver",
+                    "coDriver",
+                    "teamName",
                     "stageTime",
-                    "penaltyTime",
-                    "totalTime",
                     "diffFirst",
                     "diffPrev",
-                    "coDriver",
-                    "team/car",
-                    "teamName",
+                    "penaltyTime",
+                    "totalTime",
                     "groupClass",
                     "eligibility",
                 ]
