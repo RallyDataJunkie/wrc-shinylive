@@ -126,12 +126,12 @@ with ui.sidebar():
             {
                 "time": "Time in section (s)",
                 "pace": "Av. pace in section (s/km)",
-                "speed": "Av. speed in section (km/s)",
+                "speed": "Av. speed in section (km/h)",
                 "time_acc": "Acc. time over sections (s)",
             },
             selected="time",
         ),
-        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
+        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/h)."
         # Scope the view if data available
 
     with ui.tooltip(id="splits_section_plot_tt"):
@@ -141,7 +141,7 @@ with ui.sidebar():
             {"bysplit": "Split section groups", "bydriver": "Driver groups"},
             selected="time",
         ),
-        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/s)."
+        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/h)."
         # Scope the view if data available
 
     # Create driver rebase selector
@@ -172,9 +172,8 @@ def stage_hero():
     def _get_hero_text(pos):
         return ui.markdown(
             f"""
-    __{times.loc[pos, "driver"]}__
-
-    {times.loc[pos, "stageTime"]}
+    __{times.loc[pos, "driver"]}__  
+    {times.loc[pos, "stageTime"]}  
     """
         )
 
@@ -214,7 +213,7 @@ with ui.card(class_="mt-3"):
                 "Split section report ",
                 question_circle_fill,
             )
-            "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/s)."
+            "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
 
     @render.ui
     @reactive.event(input.splits_section_view)
@@ -227,7 +226,7 @@ with ui.card(class_="mt-3"):
         if split_dists:
             typ = {
                 "time": ("(s)", "(*Lower* is better.)"),
-                "speed": ("(km/s)", "(*Higher* is better.)"),
+                "speed": ("(km/h)", "(*Higher* is better.)"),
                 "pace": ("(s/km)", "(*Lower* is better.)"),
             }[view]
             return ui.markdown(
@@ -300,6 +299,66 @@ with ui.card(class_="mt-3"):
         return render.DataGrid(
             output_,
         )
+
+
+with ui.card(class_="mt-3"):
+    with ui.card_header():
+        with ui.tooltip(placement="right", id="rebase_info_tt"):
+            ui.span(
+                "Rebased driver performace ",
+                question_circle_fill,
+            )
+            "Summary card for rebased driver."
+
+    @render.ui
+    @reactive.event(input.stage, input.rebase_driver)
+    def rebase_info():
+        stage = input.stage()
+        rebase_driver = input.rebase_driver()
+        if (
+            stage == "SHD"
+            or not rebase_driver
+            or rebase_driver == "NONE"
+            and rebase_driver != "ult"
+        ):
+            return
+        stages = stages_data()
+        times = stage_times_data()
+
+        stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
+        # pos is zero indexed
+        pos = int(times.loc[times["carNo"] == rebase_driver, "pos"].values[0]) - 1
+
+        def _get_hero_text(pos):
+            return ui.markdown(
+                f"""
+        __{times.loc[pos, "driver"]}__  
+        {times.loc[pos, "stageTime"]}  
+        """
+            )
+
+        def _get_showcase(pos):
+            diffFirst = times.loc[pos, "diffFirst"]
+            speed = times.loc[pos, "speed (km/h)"]
+            pace = times.loc[pos, "pace diff (s/km)"]
+            return ui.markdown(
+                f"""
+            __P{pos+1}__  
+            {diffFirst}s  
+            {round(speed,1)} km/h  
+            {round(pace, 2)} s/km off-pace  
+            """
+            )
+
+        pr = ui.value_box(
+            title=stage_name,
+            value=_get_hero_text(pos),
+            theme="text-black",
+            showcase=_get_showcase(pos),
+            showcase_layout="left center",
+            full_screen=True,
+        )
+        return pr
 
 
 with ui.card(class_="mt-3"):
@@ -533,7 +592,7 @@ def update_stages_driver_rebase_select():
 @reactive.effect
 @reactive.event(input.stage)
 def update_driver_rebase_select():
-    rebase_drivers = {}  # {"NONE": ""}
+    rebase_drivers = {"NONE": ""}
     rebase_drivers.update(
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
