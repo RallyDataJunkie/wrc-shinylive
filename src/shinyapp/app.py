@@ -334,10 +334,10 @@ with ui.card(class_="mt-3"):
 
         def _get_showcase(pos):
             diffFirst = times.loc[pos, "diffFirst"]
-            diffFirst = "" if pos == 0 else f"*{diffFirst}s*"
+            diffFirst = "" if pos == 0 else f"__*{diffFirst}s*__"
             speed = times.loc[pos, "speed (km/h)"]
             pace = times.loc[pos, "pace diff (s/km)"]
-            pace = "" if pos == 0 else f"{round(pace, 2)} s/km off-pace"
+            pace = "" if pos == 0 else f"*{round(pace, 2)} s/km off-pace*"
             return ui.markdown(
                 f"""
 __P{pos+1}__ {diffFirst}  
