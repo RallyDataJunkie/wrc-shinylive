@@ -141,7 +141,7 @@ with ui.sidebar():
             {"bysplit": "Split section groups", "bydriver": "Driver groups"},
             selected="time",
         ),
-        "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/h)."
+        "Select split section report group; view split section difference by split sections group or driver group. Split section group is good for showing strong/weak sections; driver grouping is good for showing split section comparisons relative to each other driver."
         # Scope the view if data available
 
     # Create driver rebase selector
