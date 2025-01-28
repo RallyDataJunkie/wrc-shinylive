@@ -334,16 +334,28 @@ with ui.card(class_="mt-3"):
 
         def _get_showcase(pos):
             diffFirst = times.loc[pos, "diffFirst"]
+            diffFirst = "" if pos == 0 else f"*{diffFirst}s*"
             speed = times.loc[pos, "speed (km/h)"]
             pace = times.loc[pos, "pace diff (s/km)"]
+            pace = "" if pos == 0 else f"{round(pace, 2)} s/km off-pace"
             return ui.markdown(
                 f"""
-            __P{pos+1}__  
-            {diffFirst}s  
-            {round(speed,1)} km/h  
-            {round(pace, 2)} s/km off-pace  
-            """
+__P{pos+1}__ {diffFirst}  
+  
+{round(speed,1)} km/h  
+{pace}
+"""
             )
+
+        pr = ui.value_box(
+            title=stage_name,
+            value=_get_hero_text(pos),
+            theme="text-black",
+            showcase=_get_showcase(pos),
+            showcase_layout="left center",
+            full_screen=True,
+        )
+        return pr
 
         pr = ui.value_box(
             title=stage_name,
