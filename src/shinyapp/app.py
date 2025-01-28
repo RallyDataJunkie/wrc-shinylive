@@ -179,7 +179,9 @@ def stage_hero():
         return
     stages = stages_data()
     times = stage_times_data()
-
+    if times.empty:
+        print(f"No stage times in stage_hero() for {stage}")
+        return
     stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
 
     def _get_hero_text(pos):
