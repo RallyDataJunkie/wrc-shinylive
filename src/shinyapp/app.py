@@ -718,7 +718,45 @@ with ui.navset_card_underline():
                 "teamName",
                 "eligibility",
             ]
+            # TO DO have a reactive  data type for stagewinners?
             return render.DataGrid(wrc.getStageWinners(update=True)[retcols])
+
+        @render.plot(alt="Bar chart of stage wins.")
+        @reactive.event(input.stage)
+        def plot_driver_stagewins():
+            df = wrc.getStageWinners()
+
+            df["_stagenum"] = df["stageNo"].str.replace("SS", "")
+            df["_stagenum"] = df["_stagenum"].astype(int)
+
+            idx = df[df["stageId"] == input.stage()].index
+            if len(idx) == 0:
+                return
+            # Drop empty rows
+            df = df[df["carNo"].str.strip() != ""]
+            # Get value counts and reset index to create a plotting dataframe
+            stage_counts = (
+                df.iloc[: idx[0] + 1]
+                .groupby("driver")["stageNo"]
+                .count()
+                .sort_values(ascending=False)
+                .reset_index()
+            )
+
+            # Create figure with larger size for better readability
+            plt.figure(figsize=(10, 6))
+
+            # Create horizontal bar plot
+            ax = barplot(
+                data=stage_counts,
+                y="driver",
+                x="stageNo",
+                orient="h",
+                color="steelblue",
+            )
+            ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+            ax.set(xlabel=None, ylabel=None)
+            return ax
 
     with ui.nav_panel("overall"):
 
