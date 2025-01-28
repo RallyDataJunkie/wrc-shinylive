@@ -216,23 +216,18 @@ with ui.card(class_="mt-3"):
             "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
 
     @render.ui
-    @reactive.event(input.splits_section_view)
+    @reactive.event(input.stage, input.splits_section_view)
     def split_report_view():
         view = input.splits_section_view()
-        default = "Time (s) for each split. (Lower is better.)"
-        if view == "time_acc":
-            return ui.markdown(default)
         split_cumdists, split_dists = split_dists_for_stage()
-        if split_dists:
-            typ = {
-                "time": ("(s)", "(*Lower* is better.)"),
-                "speed": ("(km/h)", "(*Higher* is better.)"),
-                "pace": ("(s/km)", "(*Lower* is better.)"),
-            }[view]
-            return ui.markdown(
-                f"*{view.capitalize()}* {typ[0]} for each split. {typ[1]}"
-            )
-        return ui.markdown(default)
+        typ = {
+            "time": "Time (s) within each split (*lower* is better.)",
+            "speed": "Speed (km/h) within each split (*higher* is better.)",
+            "pace": "Pace (s/km) within each split (*lower* is better.)",
+            "time_acc": "Accumulated time (s) across all splits (*lower* is better.)",
+        }
+        return ui.markdown(typ[view])
+       
 
     # @render.table
     @render.data_frame
