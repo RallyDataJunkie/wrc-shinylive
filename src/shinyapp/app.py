@@ -908,6 +908,7 @@ with ui.navset_card_underline():
                     )
                     newcol="Speed (km/h)"
                 output_.rename(columns={"timeInS": newcol})
+
             output_long = pd.melt(
                 output_,
                 id_vars=["carNo"],
@@ -915,8 +916,9 @@ with ui.navset_card_underline():
                 var_name="roundN",
                 value_name=newcol,
             )
-
+            output_long["roundN"] = output_long["roundN"].str.replace("round","Split ")
             ax = boxplot(data=output_long, x="roundN", y=newcol)
+            ax.set(xlabel=None)
             return ax
 
         with ui.tooltip(id="splits_rebase_tt"):
