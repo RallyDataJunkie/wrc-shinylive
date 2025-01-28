@@ -1,5 +1,5 @@
 import pandas as pd
-from seaborn import heatmap, lineplot, barplot
+from seaborn import heatmap, lineplot, barplot, boxplot
 import json
 from pathlib import Path
 
@@ -719,6 +719,7 @@ with ui.navset_card_underline():
                 "eligibility",
             ]
             # TO DO have a reactive  data type for stagewinners?
+            # TO DO have option to limit view of stages up to and including selected stage
             return render.DataGrid(wrc.getStageWinners(update=True)[retcols])
 
         @render.plot(alt="Bar chart of stage wins.")
@@ -867,6 +868,54 @@ with ui.navset_card_underline():
         # @render.text
         # def display_split_dists():
         #    return f"{split_dists_for_stage()}"
+
+        @render.plot(alt="Bar chart of stage wins.")
+        @reactive.event(input.stage, input.splits_section_view)
+        def plot_split_dists():
+            view = input.splits_section_view()
+            if input.stage() == "SHD":
+                return
+            split_times_wide, split_times_long, split_times_wide_numeric = (
+                split_times_data()
+            )
+            if split_times_wide_numeric.empty:
+                return
+            split_cols = [
+                c for c in split_times_wide_numeric.columns if c.startswith("round")
+            ]
+            # We want within split times, not accumulated times
+            output_ = wrc.get_split_duration(
+            split_times_wide_numeric,
+            split_cols,
+            )
+            split_cumdists, split_dists = split_dists_for_stage()
+            newcol = "Time in section (s)"
+            if split_dists:
+                if view == "pace":
+                    output_.update(
+                        output_.loc[:, split_dists.keys()].apply(
+                            lambda s: s / split_dists[s.name]
+                        )
+                    )
+                    newcol = "Pace (s/km)"
+                elif view == "speed":
+                    output_.update(
+                        output_.loc[:, split_dists.keys()].apply(
+                            lambda s: 3600 * split_dists[s.name] / s
+                        )
+                    )
+                    newcol="Speed (km/h)"
+                output_.rename(columns={"timeInS": newcol})
+            output_long = pd.melt(
+                output_,
+                id_vars=["carNo"],
+                value_vars=split_cols,
+                var_name="roundN",
+                value_name=newcol,
+            )
+
+            ax = boxplot(data=output_long, x="roundN", y=newcol)
+            return ax
 
         with ui.tooltip(id="splits_rebase_tt"):
             ui.input_select(
