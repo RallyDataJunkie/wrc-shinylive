@@ -171,8 +171,8 @@ class WRCAPIClient:
         """
         self.year = year
         self.championshipId = None
-        # We will auto aupdate the championship based on
-        # chanpionshipId set separately as a class property
+        # We will auto update the championship based on
+        # championshipId set separately as a class property
         self._championship = championship
         self.group = group
         self.full_calendar = pd.DataFrame()
