@@ -325,7 +325,7 @@ with ui.card(class_="mt-3"):
     with ui.card_header():
         with ui.tooltip(placement="right", id="rebase_info_tt"):
             ui.span(
-                "Rebased driver performace ",
+                "Rebased driver performance ",
                 question_circle_fill,
             )
             "Summary card for rebased driver."
