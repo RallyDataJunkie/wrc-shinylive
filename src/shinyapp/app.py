@@ -296,7 +296,7 @@ with ui.accordion(open=False):
                     value=times.loc[1, "diffFirst"],
                     title=_get_hero_text(1),
                     theme="text-blue",
-                    showcase=f"(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)",
+                    showcase=f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)',
                     showcase_layout="bottom",
                     full_screen=True,
                 )
@@ -304,7 +304,7 @@ with ui.accordion(open=False):
                     value=times.loc[2, "diffFirst"],
                     title=_get_hero_text(2),
                     theme="text-purple",
-                    showcase=f"(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)",
+                    showcase=f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)',
                     showcase_layout="bottom",
                     full_screen=True,
                 )
