@@ -346,7 +346,12 @@ with ui.accordion(open=False):
                     )
 
                     @render.ui
-                    @reactive.event(input.event, input.stage, input.championship)
+                    @reactive.event(
+                        input.event,
+                        input.stage,
+                        input.championship,
+                        input.stage_rebase_driver,
+                    )
                     def stage_times_short_frame():
                         stage_times = stage_times_data()
                         core_cols = [
@@ -631,7 +636,7 @@ with ui.accordion(open=False):
                                 "Rebased driver report ",
                                 question_circle_fill,
                             )
-                            "Rebased delta times and pace are calculated relative to the selected \rebase\" driver."
+                            "Rebased delta times and pace are calculated relative to the selected \"rebase\" driver."
                         with ui.tooltip(id="rebase_reverse_palette_tt"):
                             ui.input_checkbox(
                                 "rebase_reverse_palette",
