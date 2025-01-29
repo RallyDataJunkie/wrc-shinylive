@@ -59,7 +59,7 @@ with ui.sidebar(open="desktop"):
     # Create stages selector
     ui.input_select(
         "stage",
-        "Stages:",
+        "Stage:",
         {},
     )
 
