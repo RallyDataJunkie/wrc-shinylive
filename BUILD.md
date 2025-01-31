@@ -2,5 +2,5 @@
 
 To try out the shimnylive app:
 
-- `shinylive export shinyapp  shinysite   --subdir app1`
+- `shinylive export shinyapp  shinysite   --subdir app1 --full-shinylive`
 - `python3 -m http.server --directory shinysite`
