@@ -112,10 +112,10 @@ def apply_time_delta(base_time_str, delta_str):
         return round(base_seconds + delta_seconds, 1)
 
 
-class WRCAPIClient:
-    """Client for accessing Dakar Rally API data."""
+class WRCLiveTimingAPIClient:
+    """Client for accessing WRC live timing and results API data."""
 
-    WRC_API_BASE = "https://api.wrc.com/content/{path}"
+    WRC_LIVETIMING_API_BASE = "https://api.wrc.com/content/{path}"
 
     CATEGORY_MAP = {
         "ALL": "all",
@@ -159,7 +159,7 @@ class WRCAPIClient:
         **cache_kwargs,
     ):
         """
-        Initialize the WRC API client.
+        Initialize the WRC Live Timing and Results API client.
 
         Args:
             year: Default year for API requests
@@ -336,7 +336,7 @@ class WRCAPIClient:
 
     def _WRC_json(self, path, base=None, retUrl=False):
         """Return JSON from API."""
-        base = self.WRC_API_BASE if base is None else base
+        base = self.WRC_LIVETIMING_API_BASE if base is None else base
         url = urljoin(base, path)
         if retUrl:
             return url

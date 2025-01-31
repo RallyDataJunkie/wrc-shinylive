@@ -15,7 +15,7 @@ from shiny.express import ui, input
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-from wrc_rallydj.wrc_api import WRCAPIClient, time_to_seconds
+from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
 from icons import question_circle_fill
 
 pd.set_option("display.colheader_justify", "left")
@@ -24,7 +24,7 @@ pd.set_option("display.colheader_justify", "left")
 # - we want to be able to force updates for live stages etc
 # There is internal state in the class, which stores
 # the last requested data unless we force an update
-wrc = WRCAPIClient(use_cache=True, backend="memory", expire_after=600)
+wrc = WRCLiveTimingAPIClient(use_cache=True, backend="memory", expire_after=600)
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
@@ -99,13 +99,9 @@ with ui.accordion(open=False):
                 def rally_overview_hero():
                     season = season_data()
                     event = input.event()
-                    round = season.loc[
-                            season["rallyId"] == event, "ROUND"
-                        ].iloc[0]
+                    round = season.loc[season["rallyId"] == event, "ROUND"].iloc[0]
                     so = ui.value_box(
-                        title=season.loc[season["rallyId"] == event, "date"].iloc[
-                            0
-                        ],
+                        title=season.loc[season["rallyId"] == event, "date"].iloc[0],
                         value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[
                             0
                         ],
@@ -118,11 +114,19 @@ with ui.accordion(open=False):
 
             with ui.accordion(open=False):
                 with ui.accordion_panel("Stages info"):
+
                     @render.data_frame
                     @reactive.event(input.event)
                     def stages_frame():
                         stages = stages_data()
-                        retcols = ["STAGE", "name", "day", "distance", "STAGE TYPE", "STATUS"]
+                        retcols = [
+                            "STAGE",
+                            "name",
+                            "day",
+                            "distance",
+                            "STAGE TYPE",
+                            "STATUS",
+                        ]
                         return render.DataGrid(stages[retcols])
 
                 with ui.accordion_panel(title="Itinerary"):
@@ -144,6 +148,7 @@ with ui.accordion(open=False):
                         return render.DataGrid(itinerary[retcols])
 
                 with ui.accordion_panel("Startlist"):
+
                     @render.data_frame
                     @reactive.event(input.stage)
                     def startlist_frame():
@@ -160,7 +165,9 @@ with ui.accordion(open=False):
                             "groupClass",
                         ]
                         return render.DataGrid(wrc.getStartlist()[retcols])
+
                 with ui.accordion_panel("Stage winners"):
+
                     @render.data_frame
                     @reactive.event(input.stage)
                     def stage_winners_short():
@@ -177,7 +184,9 @@ with ui.accordion(open=False):
                         ]
                         # TO DO have a reactive  data type for stagewinners?
                         # TO DO have option to limit view of stages up to and including selected stage
-                        return render.DataGrid(wrc.getStageWinners(update=True)[retcols])
+                        return render.DataGrid(
+                            wrc.getStageWinners(update=True)[retcols]
+                        )
 
                     @render.plot(alt="Bar chart of stage wins.")
                     @reactive.event(input.stage)
@@ -196,7 +205,7 @@ with ui.accordion(open=False):
                         df = df[df["carNo"].str.strip() != ""]
                         # Get value counts and reset index to create a plotting dataframe
                         stage_counts = (
-                            #df.iloc[: idx[0] + 1]
+                            # df.iloc[: idx[0] + 1]
                             df.groupby("driver")["stageNo"]
                             .count()
                             .sort_values(ascending=False)
@@ -273,7 +282,9 @@ with ui.accordion(open=False):
                 if times.empty:
                     print(f"No stage times in stage_hero() for {stage}")
                     return
-                stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
+                stage_name = stages.loc[
+                    stages["stageId"] == input.stage(), "name"
+                ].iloc[0]
 
                 def _get_hero_text(pos):
                     return ui.markdown(
@@ -313,6 +324,7 @@ with ui.accordion(open=False):
 
             with ui.accordion(open=False):
                 with ui.accordion_panel("Overall position"):
+
                     @render.data_frame
                     @reactive.event(input.event, input.stage, input.championship)
                     def overall_short():
@@ -366,15 +378,17 @@ with ui.accordion(open=False):
                             "pace diff (s/km)",
                         ]
                         if input.stage() == "SHD":
-                            core_cols += [c for c in stage_times.columns if c.startswith("round")]
+                            core_cols += [
+                                c for c in stage_times.columns if c.startswith("round")
+                            ]
                         stage_times = stage_times[
                             list(set(core_cols).intersection(stage_times.columns))
                         ]
                         if "diffFirst" in stage_times.columns:
                             rebase_gap_col = "Rebase Gap (s)"
-                            stage_times[rebase_gap_col] = stage_times["diffFirst"].apply(
-                                time_to_seconds, retzero=True
-                            )
+                            stage_times[rebase_gap_col] = stage_times[
+                                "diffFirst"
+                            ].apply(time_to_seconds, retzero=True)
 
                             rebase_driver = input.stage_rebase_driver()
                             stage_times.loc[:, rebase_gap_col] = wrc.rebaseTimes(
@@ -393,7 +407,9 @@ with ui.accordion(open=False):
                                 "pace diff (s/km)",
                             ]
                             html = (
-                                stage_times[[c for c in cols_order if c in stage_times.columns]]
+                                stage_times[
+                                    [c for c in cols_order if c in stage_times.columns]
+                                ]
                                 .style.format(precision=1)
                                 .bar(
                                     subset=[rebase_gap_col],
@@ -404,7 +420,9 @@ with ui.accordion(open=False):
                             )
                         else:
                             html = (
-                                stage_times[[c for c in core_cols if c in stage_times.columns]]
+                                stage_times[
+                                    [c for c in core_cols if c in stage_times.columns]
+                                ]
                                 .style.format(precision=1)
                                 .to_html()
                             )
@@ -418,7 +436,9 @@ with ui.accordion(open=False):
 
                         with ui.card(class_="mt-3"):
                             with ui.card_header():
-                                with ui.tooltip(placement="right", id="splits_times_original_tt"):
+                                with ui.tooltip(
+                                    placement="right", id="splits_times_original_tt"
+                                ):
                                     ui.span(
                                         "WRC split times data ",
                                         question_circle_fill,
@@ -428,9 +448,11 @@ with ui.accordion(open=False):
                             @render.table
                             @reactive.event(input.stage)
                             def split_times_original():
-                                split_times_wide, split_times_long, split_times_wide_numeric = (
-                                    split_times_data()
-                                )
+                                (
+                                    split_times_wide,
+                                    split_times_long,
+                                    split_times_wide_numeric,
+                                ) = split_times_data()
                                 if split_times_wide.empty:
                                     return pd.DataFrame()
 
@@ -448,8 +470,14 @@ with ui.accordion(open=False):
                                 ]
                                 # A set intersection does not preserve order?
                                 display_cols = [
-                                    c for c in display_cols if c in split_times_wide.columns
-                                ] + [c for c in split_times_wide.columns if c.startswith("round")]
+                                    c
+                                    for c in display_cols
+                                    if c in split_times_wide.columns
+                                ] + [
+                                    c
+                                    for c in split_times_wide.columns
+                                    if c.startswith("round")
+                                ]
 
                                 return split_times_wide[display_cols]
 
@@ -459,14 +487,19 @@ with ui.accordion(open=False):
                         @reactive.event(input.stage)
                         def split_sections_details():
                             split_cumdists, split_dists = split_dists_for_stage()
-                            return ui.markdown(f"Split section distances: {split_dists}")
+                            return ui.markdown(
+                                f"Split section distances: {split_dists}"
+                            )
 
                         with ui.card(class_="mt-3"):
                             with ui.card_header():
-                                with ui.tooltip(placement="right", id="splits_section_report_tt"):
-                                    ui.span("Split section report ",
+                                with ui.tooltip(
+                                    placement="right", id="splits_section_report_tt"
+                                ):
+                                    ui.span(
+                                        "Split section report ",
                                         question_circle_fill,
-                                        )
+                                    )
                                     "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
 
                             @render.ui
@@ -504,34 +537,47 @@ with ui.accordion(open=False):
                                 view = input.splits_section_view()
                                 if input.stage() == "SHD":
                                     return
-                                split_times_wide, split_times_long, split_times_wide_numeric = (
-                                    split_times_data()
-                                )
+                                (
+                                    split_times_wide,
+                                    split_times_long,
+                                    split_times_wide_numeric,
+                                ) = split_times_data()
                                 if split_times_wide_numeric.empty:
                                     return
-                                split_times_wide_numeric = split_times_wide_numeric.copy()
+                                split_times_wide_numeric = (
+                                    split_times_wide_numeric.copy()
+                                )
                                 split_cols = [
-                                    c for c in split_times_wide_numeric.columns if c.startswith("round")
+                                    c
+                                    for c in split_times_wide_numeric.columns
+                                    if c.startswith("round")
                                 ]
                                 if view == "time_acc":
                                     split_times_wide_numeric = pd.merge(
-                                        split_times_wide[["carNo", "teamName", "roadPos"]],
+                                        split_times_wide[
+                                            ["carNo", "teamName", "roadPos"]
+                                        ],
                                         split_times_wide_numeric,
                                         on="carNo",
                                     )
-                                    split_times_wide_numeric["carNo"] = split_times_wide_numeric["carNo"].map(
-                                        carNum2name()
+                                    split_times_wide_numeric["carNo"] = (
+                                        split_times_wide_numeric["carNo"].map(
+                                            carNum2name()
+                                        )
                                     )
                                     # TO DO  precision number format formatting
                                     # styles = {c: "{0:0.1f}" for c in split_cols}
                                     # return split_times_wide_numeric.style.format(styles)
-                                    split_times_wide_numeric[split_cols] = split_times_wide_numeric[
-                                        split_cols
-                                    ].round(1)
+                                    split_times_wide_numeric[split_cols] = (
+                                        split_times_wide_numeric[split_cols].round(1)
+                                    )
 
                                     split_times_wide_numeric.columns = (
                                         ["Driver", "TeamName", "RoadPos"]
-                                        + [f"Split {i}" for i in range(1, len(split_cols))]
+                                        + [
+                                            f"Split {i}"
+                                            for i in range(1, len(split_cols))
+                                        ]
                                         + ["Finish"]
                                     )
 
@@ -577,40 +623,60 @@ with ui.accordion(open=False):
                                 )
 
                             with ui.accordion(open=False):
-                                with ui.accordion_panel("Split section speed/pace distributions"):
-                                    @render.plot(alt="Box plot of split section speed/pace distributions.")
-                                    @reactive.event(input.stage, input.splits_section_view)
+                                with ui.accordion_panel(
+                                    "Split section speed/pace distributions"
+                                ):
+
+                                    @render.plot(
+                                        alt="Box plot of split section speed/pace distributions."
+                                    )
+                                    @reactive.event(
+                                        input.stage, input.splits_section_view
+                                    )
                                     def plot_split_dists():
                                         view = input.splits_section_view()
                                         if input.stage() == "SHD":
                                             return
-                                        split_times_wide, split_times_long, split_times_wide_numeric = (
-                                            split_times_data()
-                                        )
+                                        (
+                                            split_times_wide,
+                                            split_times_long,
+                                            split_times_wide_numeric,
+                                        ) = split_times_data()
                                         if split_times_wide_numeric.empty:
                                             return
                                         split_cols = [
-                                            c for c in split_times_wide_numeric.columns if c.startswith("round")
+                                            c
+                                            for c in split_times_wide_numeric.columns
+                                            if c.startswith("round")
                                         ]
                                         # We want within split times, not accumulated times
                                         output_ = wrc.get_split_duration(
                                             split_times_wide_numeric,
                                             split_cols,
                                         )
-                                        split_cumdists, split_dists = split_dists_for_stage()
+                                        split_cumdists, split_dists = (
+                                            split_dists_for_stage()
+                                        )
                                         newcol = "Time in section (s)"
                                         if split_dists:
                                             if view == "pace":
                                                 output_.update(
-                                                    output_.loc[:, split_dists.keys()].apply(
-                                                        lambda s: s / split_dists[s.name]
+                                                    output_.loc[
+                                                        :, split_dists.keys()
+                                                    ].apply(
+                                                        lambda s: s
+                                                        / split_dists[s.name]
                                                     )
                                                 )
                                                 newcol = "Pace (s/km)"
                                             elif view == "speed":
                                                 output_.update(
-                                                    output_.loc[:, split_dists.keys()].apply(
-                                                        lambda s: 3600 * split_dists[s.name] / s
+                                                    output_.loc[
+                                                        :, split_dists.keys()
+                                                    ].apply(
+                                                        lambda s: 3600
+                                                        * split_dists[s.name]
+                                                        / s
                                                     )
                                                 )
                                                 newcol = "Speed (km/h)"
@@ -623,20 +689,26 @@ with ui.accordion(open=False):
                                             var_name="roundN",
                                             value_name=newcol,
                                         )
-                                        output_long["roundN"] = output_long["roundN"].str.replace("round", "Split ")
-                                        ax = boxplot(data=output_long, x="roundN", y=newcol)
+                                        output_long["roundN"] = output_long[
+                                            "roundN"
+                                        ].str.replace("round", "Split ")
+                                        ax = boxplot(
+                                            data=output_long, x="roundN", y=newcol
+                                        )
                                         ax.set(xlabel=None)
                                         return ax
 
             with ui.accordion_panel("Rebased driver reports"):
                 with ui.card(class_="mt-3"):
                     with ui.card_header():
-                        with ui.tooltip(placement="right", id="rebased_driver_report_tt"):
+                        with ui.tooltip(
+                            placement="right", id="rebased_driver_report_tt"
+                        ):
                             ui.span(
                                 "Rebased driver report ",
                                 question_circle_fill,
                             )
-                            "Rebased delta times and pace are calculated relative to the selected \"rebase\" driver."
+                            'Rebased delta times and pace are calculated relative to the selected "rebase" driver.'
                         with ui.tooltip(id="rebase_reverse_palette_tt"):
                             ui.input_checkbox(
                                 "rebase_reverse_palette",
@@ -668,9 +740,18 @@ with ui.accordion(open=False):
                         stages = stages_data()
                         times = stage_times_data()
 
-                        stage_name = stages.loc[stages["stageId"] == input.stage(), "name"].iloc[0]
+                        stage_name = stages.loc[
+                            stages["stageId"] == input.stage(), "name"
+                        ].iloc[0]
                         # pos is zero indexed
-                        pos = int(times.loc[times["carNo"] == rebase_driver, "pos"].values[0]) - 1
+                        pos = (
+                            int(
+                                times.loc[
+                                    times["carNo"] == rebase_driver, "pos"
+                                ].values[0]
+                            )
+                            - 1
+                        )
 
                         def _get_hero_text(pos):
                             return ui.markdown(
@@ -685,7 +766,9 @@ with ui.accordion(open=False):
                             diffFirst = "" if pos == 0 else f"__*{diffFirst}s*__"
                             speed = times.loc[pos, "speed (km/h)"]
                             pace = times.loc[pos, "pace diff (s/km)"]
-                            pace = "" if pos == 0 else f"*{round(pace, 2)} s/km off-pace*"
+                            pace = (
+                                "" if pos == 0 else f"*{round(pace, 2)} s/km off-pace*"
+                            )
                             return ui.markdown(
                                 f"""
                 __P{pos+1}__ {diffFirst}  
@@ -710,7 +793,10 @@ with ui.accordion(open=False):
 
                             with ui.card(class_="mt-3"):
                                 with ui.card_header():
-                                    with ui.tooltip(placement="right", id="splits_in_section_delta_heatmap_tt"):
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_section_delta_heatmap_tt",
+                                    ):
                                         ui.span(
                                             "Time gained / lost within each section in seconds relative to rebase driver (heatmap) ",
                                             question_circle_fill,
@@ -718,18 +804,30 @@ with ui.accordion(open=False):
                                         "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
                                 @render.plot(alt="Heatmap of within split delta times.")
-                                @reactive.event(input.stage, input.rebase_driver, input.rebase_reverse_palette)
+                                @reactive.event(
+                                    input.stage,
+                                    input.rebase_driver,
+                                    input.rebase_reverse_palette,
+                                )
                                 def seaborn_heatmap_splits():
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
-                                    if input.stage() == "SHD" or not rebase_driver or rebase_driver == "NONE":
+                                    if (
+                                        input.stage() == "SHD"
+                                        or not rebase_driver
+                                        or rebase_driver == "NONE"
+                                    ):
                                         return
-                                    split_times_wide, split_times_long, split_times_wide_numeric = (
-                                        split_times_data()
-                                    )
+                                    (
+                                        split_times_wide,
+                                        split_times_long,
+                                        split_times_wide_numeric,
+                                    ) = split_times_data()
                                     if split_times_wide_numeric.empty:
                                         return
-                                    split_times_wide_numeric = split_times_wide_numeric.copy()
+                                    split_times_wide_numeric = (
+                                        split_times_wide_numeric.copy()
+                                    )
 
                                     output_, split_cols = _reshape_splits_wide_with_ult(
                                         split_times_wide_numeric, rebase_driver
@@ -740,28 +838,45 @@ with ui.accordion(open=False):
                                         if input.rebase_reverse_palette()
                                         else ["green", "white", "red"]
                                     )
-                                    cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+                                    cmap = LinearSegmentedColormap.from_list(
+                                        "custom_cmap", colors
+                                    )
 
                                     output_.set_index("carNo", inplace=True)
                                     output_.columns = [
-                                        f"Split {i}" for i in range(1, output_.shape[1] + 1)
+                                        f"Split {i}"
+                                        for i in range(1, output_.shape[1] + 1)
                                     ]  # [:-1] + ["Finish"]
 
-                                    return heatmap(output_, cmap=cmap, fmt=".1f", center=0, annot=True, cbar=False)
+                                    return heatmap(
+                                        output_,
+                                        cmap=cmap,
+                                        fmt=".1f",
+                                        center=0,
+                                        annot=True,
+                                        cbar=False,
+                                    )
 
                         with ui.accordion_panel("Split times group barplots"):
                             with ui.tooltip(id="splits_section_plot_tt"):
                                 ui.input_select(
                                     "splits_section_plot",
                                     "Section plot view",
-                                    {"bysplit": "Split section groups", "bydriver": "Driver groups"},
-                                    selected="time",),
+                                    {
+                                        "bysplit": "Split section groups",
+                                        "bydriver": "Driver groups",
+                                    },
+                                    selected="time",
+                                ),
                                 "Select split section report group; view split section difference by split sections group or driver group. Split section group is good for showing strong/weak sections; driver grouping is good for showing split section comparisons relative to each other driver."
                                 # Scope the view if data available
 
                             with ui.card(class_="mt-3"):
                                 with ui.card_header():
-                                    with ui.tooltip(placement="right", id="splits_in_section_delta_barplot_tt"):
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_section_delta_barplot_tt",
+                                    ):
                                         ui.span(
                                             "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
                                             question_circle_fill,
@@ -778,14 +893,22 @@ with ui.accordion(open=False):
                                 def seaborn_barplot_splits():
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
-                                    if input.stage() == "SHD" or not rebase_driver or rebase_driver == "NONE":
+                                    if (
+                                        input.stage() == "SHD"
+                                        or not rebase_driver
+                                        or rebase_driver == "NONE"
+                                    ):
                                         return
-                                    split_times_wide, split_times_long, split_times_wide_numeric = (
-                                        split_times_data()
-                                    )
+                                    (
+                                        split_times_wide,
+                                        split_times_long,
+                                        split_times_wide_numeric,
+                                    ) = split_times_data()
                                     if split_times_wide_numeric.empty:
                                         return
-                                    split_times_wide_numeric = split_times_wide_numeric.copy()
+                                    split_times_wide_numeric = (
+                                        split_times_wide_numeric.copy()
+                                    )
 
                                     output_, split_cols = _reshape_splits_wide_with_ult(
                                         split_times_wide_numeric, rebase_driver
@@ -798,9 +921,15 @@ with ui.accordion(open=False):
                                     )
 
                                     long_df = pd.melt(
-                                        output_, id_vars=["carNo"], var_name="roundN", value_name="time"
+                                        output_,
+                                        id_vars=["carNo"],
+                                        var_name="roundN",
+                                        value_name="time",
                                     )
-                                    colors = ["red" if val >= 0 else "green" for val in long_df["time"]]
+                                    colors = [
+                                        "red" if val >= 0 else "green"
+                                        for val in long_df["time"]
+                                    ]
                                     if input.splits_section_plot() == "bydriver":
                                         ax = barplot(
                                             long_df,
@@ -828,16 +957,27 @@ with ui.accordion(open=False):
                                     # Color each bar based on its height
                                     for bar in bars:
                                         if input.rebase_reverse_palette():
-                                            bar.set_color("#2ecc71" if bar.get_width() > 0 else "#e74c3c")
+                                            bar.set_color(
+                                                "#2ecc71"
+                                                if bar.get_width() > 0
+                                                else "#e74c3c"
+                                            )
                                         else:
-                                            bar.set_color("#2ecc71" if bar.get_width() <= 0 else "#e74c3c")
+                                            bar.set_color(
+                                                "#2ecc71"
+                                                if bar.get_width() <= 0
+                                                else "#e74c3c"
+                                            )
                                     ax.invert_xaxis()
                                     return ax
 
                         with ui.accordion_panel("Split times linecharts"):
                             with ui.card(class_="mt-3"):
                                 with ui.card_header():
-                                    with ui.tooltip(placement="right", id="splits_in_sectionlineplot_tt"):
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_sectionlineplot_tt",
+                                    ):
                                         ui.span(
                                             "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
                                             question_circle_fill,
@@ -855,19 +995,27 @@ with ui.accordion(open=False):
                                     rebase_driver = input.rebase_driver()
                                     if input.stage() == "SHD":
                                         return
-                                    split_times_wide, split_times_long, split_times_wide_numeric = (
-                                        split_times_data()
-                                    )
+                                    (
+                                        split_times_wide,
+                                        split_times_long,
+                                        split_times_wide_numeric,
+                                    ) = split_times_data()
                                     if split_times_long.empty:
                                         return
                                     split_times_long = split_times_long.copy()
 
                                     # TO DO - need a function to rebase a long df by group
                                     ll2 = split_times_long.pivot(
-                                        index="carNo", columns="roundN", values="timeInS"
+                                        index="carNo",
+                                        columns="roundN",
+                                        values="timeInS",
                                     ).reset_index()
-                                    cols = [c for c in ll2.columns if c.startswith("round")]
-                                    lw = wrc.rebaseManyTimes(ll2, rebase_driver, "carNo", cols)
+                                    cols = [
+                                        c for c in ll2.columns if c.startswith("round")
+                                    ]
+                                    lw = wrc.rebaseManyTimes(
+                                        ll2, rebase_driver, "carNo", cols
+                                    )
                                     lw["round0"] = 0.0
                                     lw = lw[["carNo", "round0"] + cols]
                                     ll3 = pd.melt(
@@ -877,20 +1025,35 @@ with ui.accordion(open=False):
                                         var_name="roundN",
                                         value_name="timeInS",
                                     )
-                                    ll3["round"] = ll3["roundN"].str.replace("round", "").astype(int)
-                                    split_cumdists, split_dists = split_dists_for_stage()
+                                    ll3["round"] = (
+                                        ll3["roundN"]
+                                        .str.replace("round", "")
+                                        .astype(int)
+                                    )
+                                    split_cumdists, split_dists = (
+                                        split_dists_for_stage()
+                                    )
                                     ll3["carNo"] = ll3["carNo"].map(carNum2name())
                                     if split_cumdists:
                                         split_cumdists["round0"] = 0.0
                                         ll3["dist"] = ll3["roundN"].map(split_cumdists)
-                                        g = lineplot(data=ll3, x="dist", y="timeInS", hue="carNo")
+                                        g = lineplot(
+                                            data=ll3, x="dist", y="timeInS", hue="carNo"
+                                        )
 
                                     else:
-                                        g = lineplot(data=ll3, x="round", y="timeInS", hue="carNo")
+                                        g = lineplot(
+                                            data=ll3,
+                                            x="round",
+                                            y="timeInS",
+                                            hue="carNo",
+                                        )
                                     g.set_ylim(g.get_ylim()[::-1])
                                     return g
 
+
 ## Utility functions
+
 
 def _reshape_splits_wide_with_ult(split_times_wide_numeric, rebase_driver):
     split_cols = [c for c in split_times_wide_numeric.columns if c.startswith("round")]
