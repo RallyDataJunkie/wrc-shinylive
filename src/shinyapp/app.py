@@ -1,4 +1,5 @@
-import pandas as pd
+# import pandas as pd
+from pandas import set_option, DataFrame, merge, melt, to_numeric, concat
 from seaborn import heatmap, lineplot, barplot, boxplot
 import json
 from pathlib import Path
@@ -18,7 +19,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
 from icons import question_circle_fill
 
-pd.set_option("display.colheader_justify", "left")
+set_option("display.colheader_justify", "left")
 
 # The cacheing is tricky:
 # - we want to be able to force updates for live stages etc
@@ -71,6 +72,8 @@ with ui.accordion(open=False):
         @render.data_frame
         def season_frame():
             season = season_data()
+            if season.empty:
+                return
             retcols = [
                 "ROUND",
                 "rallyTitle",
@@ -84,6 +87,23 @@ with ui.accordion(open=False):
             return render.DataGrid(season[retcols])
 
     with ui.accordion_panel("Event overview"):
+        @render.ui
+        @reactive.event(input.event)
+        def rally_overview_hero():
+            season = season_data()
+            event = input.event()
+            round = season.loc[season["rallyId"] == event, "ROUND"].iloc[0]
+            so = ui.value_box(
+                title=season.loc[season["rallyId"] == event, "date"].iloc[0],
+                value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[
+                    0
+                ],
+                theme="text-black",
+                showcase=ui.markdown(f"__ROUND {round}__"),
+                showcase_layout="left center",
+                full_screen=True,
+            )
+            return so
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
@@ -94,24 +114,6 @@ with ui.accordion(open=False):
                     )
                     "Summary card for rally event."
 
-                @render.ui
-                @reactive.event(input.stage)
-                def rally_overview_hero():
-                    season = season_data()
-                    event = input.event()
-                    round = season.loc[season["rallyId"] == event, "ROUND"].iloc[0]
-                    so = ui.value_box(
-                        title=season.loc[season["rallyId"] == event, "date"].iloc[0],
-                        value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[
-                            0
-                        ],
-                        theme="text-black",
-                        showcase=ui.markdown(f"__ROUND {round}__"),
-                        showcase_layout="left center",
-                        full_screen=True,
-                    )
-                    return so
-
             with ui.accordion(open=False):
                 with ui.accordion_panel("Stages info"):
 
@@ -119,6 +121,8 @@ with ui.accordion(open=False):
                     @reactive.event(input.event)
                     def stages_frame():
                         stages = stages_data()
+                        if stages.empty:
+                            return
                         retcols = [
                             "STAGE",
                             "name",
@@ -134,6 +138,8 @@ with ui.accordion(open=False):
                     @render.data_frame
                     def itinerary_frame():
                         itinerary = itinerary_data()
+                        if itinerary.empty:
+                            return
                         retcols = [
                             "stage",
                             "type",
@@ -152,6 +158,9 @@ with ui.accordion(open=False):
                     @render.data_frame
                     @reactive.event(input.stage)
                     def startlist_frame():
+                        startlist = wrc.getStartlist()
+                        if startlist.empty:
+                            return
                         retcols = [
                             "order",
                             "startDateTimeLocal",
@@ -164,13 +173,16 @@ with ui.accordion(open=False):
                             "eligibility",
                             "groupClass",
                         ]
-                        return render.DataGrid(wrc.getStartlist()[retcols])
+                        return render.DataGrid(startlist[retcols])
 
                 with ui.accordion_panel("Stage winners"):
 
                     @render.data_frame
                     @reactive.event(input.stage)
                     def stage_winners_short():
+                        stagewinners = wrc.getStageWinners(update=True)
+                        if stagewinners.empty:
+                            return
                         retcols = [
                             "stageType",
                             "stageName",
@@ -185,7 +197,7 @@ with ui.accordion(open=False):
                         # TO DO have a reactive  data type for stagewinners?
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(
-                            wrc.getStageWinners(update=True)[retcols]
+                            stagewinners[retcols]
                         )
 
                     @render.plot(alt="Bar chart of stage wins.")
@@ -232,40 +244,42 @@ with ui.accordion(open=False):
                     @render.data_frame
                     @reactive.event(input.event)
                     def retirements_frame():
-                        retirements = wrc.getRetirements()[
-                            [
-                                "carNo",
-                                "driver",
-                                "team/car",
-                                "teamName",
-                                "eligibility",
-                                "groupClass",
-                                "control",
-                                "reason",
-                            ]
+                        retirements = wrc.getRetirements()
+                        if retirements.empty:
+                            return
+                        retcols = [
+                            "carNo",
+                            "driver",
+                            "team/car",
+                            "teamName",
+                            "eligibility",
+                            "groupClass",
+                            "control",
+                            "reason",
                         ]
-                        return render.DataGrid(retirements)
+                        return render.DataGrid(retirements[retcols])
 
                 with ui.accordion_panel("Penalties"):
 
                     @render.data_frame
                     @reactive.event(input.event)
                     def penalties_frame():
-                        penalties = wrc.getPenalties()[
-                            [
-                                "carNo",
-                                "driver",
-                                "team/car",
-                                "teamName",
-                                "eligibility",
-                                "groupClass",
-                                "control",
-                                "reason",
-                                "penaltyTime",
-                                "penaltyDuration",
-                            ]
+                        penalties = wrc.getPenalties()
+                        if penalties.empty:
+                            return
+                        retcols = [
+                            "carNo",
+                            "driver",
+                            "team/car",
+                            "teamName",
+                            "eligibility",
+                            "groupClass",
+                            "control",
+                            "reason",
+                            "penaltyTime",
+                            "penaltyDuration",
                         ]
-                        return render.DataGrid(penalties)
+                        return render.DataGrid(penalties[retcols])
 
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
@@ -329,6 +343,8 @@ with ui.accordion(open=False):
                     @reactive.event(input.event, input.stage, input.championship)
                     def overall_short():
                         overall_df = wrc.getOverall(update=True)
+                        if overall_df.empty:
+                            return
                         retcols = [
                             k
                             for k in [
@@ -454,7 +470,7 @@ with ui.accordion(open=False):
                                     split_times_wide_numeric,
                                 ) = split_times_data()
                                 if split_times_wide.empty:
-                                    return pd.DataFrame()
+                                    return DataFrame()
 
                                 display_cols = [
                                     "roadPos",
@@ -553,7 +569,7 @@ with ui.accordion(open=False):
                                     if c.startswith("round")
                                 ]
                                 if view == "time_acc":
-                                    split_times_wide_numeric = pd.merge(
+                                    split_times_wide_numeric = merge(
                                         split_times_wide[
                                             ["carNo", "teamName", "roadPos"]
                                         ],
@@ -606,7 +622,7 @@ with ui.accordion(open=False):
                                         )
                                 # styles = {c: "{0:0.1f}" for c in split_cols}
 
-                                output_ = pd.merge(
+                                output_ = merge(
                                     split_times_wide[["carNo", "teamName", "roadPos"]],
                                     output_,
                                     on="carNo",
@@ -682,7 +698,7 @@ with ui.accordion(open=False):
                                                 newcol = "Speed (km/h)"
                                             output_.rename(columns={"timeInS": newcol})
 
-                                        output_long = pd.melt(
+                                        output_long = melt(
                                             output_,
                                             id_vars=["carNo"],
                                             value_vars=split_cols,
@@ -920,7 +936,7 @@ with ui.accordion(open=False):
                                         else ["green", "white", "red"]
                                     )
 
-                                    long_df = pd.melt(
+                                    long_df = melt(
                                         output_,
                                         id_vars=["carNo"],
                                         var_name="roundN",
@@ -1018,7 +1034,7 @@ with ui.accordion(open=False):
                                     )
                                     lw["round0"] = 0.0
                                     lw = lw[["carNo", "round0"] + cols]
-                                    ll3 = pd.melt(
+                                    ll3 = melt(
                                         lw,
                                         id_vars=["carNo"],
                                         value_vars=["round0"] + cols,
@@ -1071,10 +1087,10 @@ def _reshape_splits_wide_with_ult(split_times_wide_numeric, rebase_driver):
     # Find minimum non-zero values for each round column
     for col in split_cols:
         # Convert to numeric, filter non-zero, find minimum
-        min_val = pd.to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
+        min_val = to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
         ult_row[col] = min_val
 
-    output_ = pd.concat([output_, pd.DataFrame([ult_row])], ignore_index=True)
+    output_ = concat([output_, DataFrame([ult_row])], ignore_index=True)
     output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
     output_ = output_[output_["carNo"] != "ult"]
     output_["carNo"] = output_["carNo"].map(carNum2name())
@@ -1163,7 +1179,7 @@ def split_times_data():
         )
         return split_times_wide, split_times_long, split_times_wide_numeric
     except:
-        return (pd.DataFrame(), pd.DataFrame(), pd.DataFrame())
+        return (DataFrame(), DataFrame(), DataFrame())
 
 
 @reactive.effect
@@ -1181,8 +1197,11 @@ def update_events_select():
 @reactive.event(input.event, input.championship)
 def update_stages_select():
     stages_df = stages_data()
-    stages = stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
-    ui.update_select("stage", choices=stages)
+    if stages_df.empty:
+        ui.update_select("stage", choices={})
+    else:
+        stages = stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
+        ui.update_select("stage", choices=stages)
 
 
 @reactive.effect
@@ -1229,10 +1248,10 @@ def getSplitDists():
         patches_json = json.load(file)
         try:
             splits = patches_json["split_distances"][year][rallyId]
-            splits = pd.DataFrame.from_dict(splits, orient="index")
+            splits = DataFrame.from_dict(splits, orient="index")
             splits.columns = [f"round{i}" for i in range(1, splits.shape[1] + 1)]
         except:
-            splits = pd.DataFrame()
+            splits = DataFrame()
     return splits
 
 

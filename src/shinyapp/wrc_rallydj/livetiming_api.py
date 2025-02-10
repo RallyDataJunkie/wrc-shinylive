@@ -2,7 +2,8 @@ from urllib.parse import urljoin
 from parse import parse
 import pathlib
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
-import pandas as pd
+# import pandas as pd
+from pandas import to_datetime, date_range, to_numeric, DataFrame, concat, melt
 import requests
 from itertools import zip_longest
 import datetime
@@ -12,13 +13,13 @@ from numpy import nan
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
     r = parse("{start_day} - {end_day} {month} {year}", date_range_str)
-    start_date = pd.to_datetime(
+    start_date = to_datetime(
         f"{r['start_day']} {r['month']} {r['year']}", format="%d %b %Y"
     )
-    end_date = pd.to_datetime(
+    end_date = to_datetime(
         f"{r['end_day']} {r['month']} {r['year']}", format="%d %b %Y"
     )
-    return pd.date_range(start=start_date, end=end_date)
+    return date_range(start=start_date, end=end_date)
 
 
 def timeify(df, col, typ=None):
@@ -26,25 +27,25 @@ def timeify(df, col, typ=None):
     if typ == "daterange":
         df[col] = df[col].apply(convert_date_range)
     else:
-        df[col] = pd.to_datetime(df[col].astype(int), unit="ms")
+        df[col] = to_datetime(df[col].astype(int), unit="ms")
 
 
 def tablify(json_data, subcolkey=None, addcols=None):
     """Generate table from separate colnames/values JSON."""
     # Note that the JSON may be a few rows short cf. provided keys
     if "fields" not in json_data:
-        return pd.DataFrame()
+        return DataFrame()
     if subcolkey is None:
         fields = json_data["fields"]
         values = json_data["values"]
 
         # Create a DataFrame
-        df = pd.DataFrame(values, columns=fields)
+        df = DataFrame(values, columns=fields)
     else:
-        df = pd.DataFrame(columns=json_data["fields"])
+        df = DataFrame(columns=json_data["fields"])
         if "values" in json_data:
             for value in json_data["values"]:
-                _df = pd.DataFrame(value[subcolkey])
+                _df = DataFrame(value[subcolkey])
                 if len(_df.columns) < len(json_data["fields"]):
                     _df[[json_data["fields"][len(_df.columns) :]]] = None
                 _df.columns = json_data["fields"]
@@ -53,7 +54,7 @@ def tablify(json_data, subcolkey=None, addcols=None):
                         _df[c] = value[c]
                 for c in [k for k in value.keys() if k != subcolkey]:
                     _df[c] = value[c]
-                    df = pd.concat([df, _df])
+                    df = concat([df, _df])
     return df
 
 
@@ -175,19 +176,19 @@ class WRCLiveTimingAPIClient:
         # championshipId set separately as a class property
         self._championship = championship
         self.group = group
-        self.full_calendar = pd.DataFrame()
+        self.full_calendar = DataFrame()
 
         self.rallyId2eventId = {}
         self.stage_codes = {}
         self.carNum2name = {}
 
         # These should really be set reactively depending on other values
-        self.results_calendar_df = pd.DataFrame()
-        self.stage_details_df = pd.DataFrame()
-        self.startlist_df = pd.DataFrame()
-        self.itinerary_df = pd.DataFrame()
-        self.overall_df = pd.DataFrame()
-        self.stagewinners_df = pd.DataFrame()
+        self.results_calendar_df = DataFrame()
+        self.stage_details_df = DataFrame()
+        self.startlist_df = DataFrame()
+        self.itinerary_df = DataFrame()
+        self.overall_df = DataFrame()
+        self.stagewinners_df = DataFrame()
 
         self.seasonId = None
         self.eventId = None
@@ -222,11 +223,11 @@ class WRCLiveTimingAPIClient:
         self.rallyId2eventId = {}
         self.stage_codes = {}
 
-        self.results_calendar_df = pd.DataFrame()
-        self.stage_details_df = pd.DataFrame()
-        self.startlist_df = pd.DataFrame()
-        self.itinerary_df = pd.DataFrame()
-        self.overall_df = pd.DataFrame()
+        self.results_calendar_df = DataFrame()
+        self.stage_details_df = DataFrame()
+        self.startlist_df = DataFrame()
+        self.itinerary_df = DataFrame()
+        self.overall_df = DataFrame()
 
         self.seasonId = None
         self.eventId = None
@@ -250,7 +251,7 @@ class WRCLiveTimingAPIClient:
         Modifies the DataFrame in place.
 
         Parameters:
-        df (pd.DataFrame): The DataFrame to modify.
+        df (DataFrame): The DataFrame to modify.
         colsList (list): List of column names to subtract.
         """
         df = df.copy()
@@ -364,9 +365,9 @@ class WRCLiveTimingAPIClient:
         stub = f"filters/calendar?language=en&size={size}&championship={championship}&origin=vcms&year={year}"
         json_data = self._WRC_json(stub)
         if not json_data:
-            return pd.dataFrame()
+            return DataFrame()
         # return json_data
-        return pd.DataFrame(json_data["content"])
+        return DataFrame(json_data["content"])
 
     def getResultsCalendar(self, year=None, seasonId=None, retUrl=False, update=False):
         """Get the WRC Calendar for a given season ID as a JSON result."""
@@ -392,8 +393,10 @@ class WRCLiveTimingAPIClient:
             stub = f"result/stages?eventId={eventId}&rallyId={rallyId}&championship=wrc"
             json_data = self._WRC_json(stub)
             if not json_data:
-                return pd.dataFrame()
+                return DataFrame()
             df_stageDetails = tablify(json_data)
+            if df_stageDetails.empty:
+                return DataFrame()
             self.stage_details_df = df_stageDetails
             self.stage_codes = (
                 df_stageDetails[["STAGE", "stageId"]]
@@ -401,7 +404,7 @@ class WRCLiveTimingAPIClient:
                 .to_dict()
             )
             # Type mapping
-            df_stageDetails["distance"] = pd.to_numeric(
+            df_stageDetails["distance"] = to_numeric(
                 df_stageDetails["distance"], errors="coerce"
             )
 
@@ -414,7 +417,7 @@ class WRCLiveTimingAPIClient:
             stub = f"result/itinerary?eventId={eventId}&extended=true"
             json_data = self._WRC_json(stub)
             if not json_data:
-                return pd.DataFrame()
+                return DataFrame()
             df_itinerary = tablify(json_data, "values")
             self.itinerary_df = df_itinerary
         return self.itinerary_df
@@ -425,7 +428,7 @@ class WRCLiveTimingAPIClient:
             stub = f"result/startLists?eventId={eventId}"
             json_data = self._WRC_json(stub)
             if not json_data:
-                return pd.DataFrame()
+                return DataFrame()
             # We
             df_startlist = tablify(
                 json_data, "startListItems", addcols=["date", "startDateTimeLocal"]
@@ -459,7 +462,7 @@ class WRCLiveTimingAPIClient:
             stub = f"result/stageResult?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championshipId={self.getChampionshipId(championship)}&championship={championship}"
             json_data = self._WRC_json(stub)
             if not json_data:
-                return pd.DataFrame()
+                return DataFrame()
             df_overall = tablify(json_data)
             self.stage_id_annotations(df_overall, eventId, rallyId, stageId)
             self.overall_df = df_overall
@@ -471,8 +474,8 @@ class WRCLiveTimingAPIClient:
 
     def getSplitsLong(self, splits_wide__df):
         if splits_wide__df.empty:
-            return pd.DataFrame()
-        splits_long_df = pd.melt(
+            return DataFrame()
+        splits_long_df = melt(
             splits_wide__df,
             id_vars={
                 "carNo",
@@ -531,7 +534,7 @@ class WRCLiveTimingAPIClient:
         stub = f"result/stageTimes?eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championshipId={self.getChampionshipId(championship)}&championship={championship}"
         json_data = self._WRC_json(stub)
         if not json_data:
-            return pd.DataFrame()
+            return DataFrame()
         df_stageTimes = tablify(json_data)
         if df_stageTimes.empty:
             return df_stageTimes
@@ -584,7 +587,7 @@ class WRCLiveTimingAPIClient:
 
         json_data = self._WRC_json(stub)
         if not json_data:
-            return pd.DataFrame()
+            return DataFrame()
         df_splitTimes = tablify(json_data)
         self.stage_id_annotations(df_splitTimes, eventId, rallyId, stageId)
         df_splitTimes.dropna(how="all", axis=1, inplace=True)
@@ -634,7 +637,7 @@ class WRCLiveTimingAPIClient:
         diff_df = df_[split_cols[1:]].values - df_[split_cols[:-1]].values
 
         # Convert back to dataframe
-        diff_df = pd.DataFrame(diff_df, columns=split_cols[1:], index=df_.index)
+        diff_df = DataFrame(diff_df, columns=split_cols[1:], index=df_.index)
 
         # Add first split column back
         diff_df[split_cols[0]] = df_[split_cols[0]]
@@ -656,7 +659,7 @@ class WRCLiveTimingAPIClient:
             stub = f"result/stageWinners?eventId={eventId}&championshipId={self.getChampionshipId(championship)}"
             json_data = self._WRC_json(stub)
             if not json_data:
-                return pd.DataFrame()
+                return DataFrame()
             df_stageWinners = tablify(json_data)
             self.stagewinners_df = df_stageWinners
         return self.stagewinners_df
@@ -667,7 +670,7 @@ class WRCLiveTimingAPIClient:
         stub = f"result/penalty?eventId={eventId}"
         json_data = self._WRC_json(stub)
         if not json_data:
-            return pd.DataFrame()
+            return DataFrame()
         df_penalties = tablify(json_data)
         return df_penalties
 
@@ -677,7 +680,7 @@ class WRCLiveTimingAPIClient:
         stub = f"result/retirements?eventId={eventId}"
         json_data = self._WRC_json(stub)
         if not json_data:
-            return pd.DataFrame()
+            return DataFrame()
         df_retirements = tablify(json_data)
         return df_retirements
 
@@ -697,7 +700,7 @@ class WRCLiveTimingAPIClient:
             or "message" in json_data
             and "championship standing unavailble" in json_data["message"]
         ):
-            return pd.DataFrame()
+            return DataFrame()
 
         df_splitTimes = tablify(json_data)
         return df_splitTimes
