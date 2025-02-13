@@ -272,19 +272,22 @@ class WRCLiveTimingAPIClient:
         times, rebaseId=None, idCol=None, rebaseCols=None, inplace=False
     ):
         if not inplace:
+            if not rebaseId or rebaseId == "NONE":
+                return times
             times = times.copy()
 
-        # Ensure rebaseCols is a list
-        rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
+        if rebaseId and rebaseId != "NONE":
+            # Ensure rebaseCols is a list
+            rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
-        # Fetch the reference values for the specified 'rebaseId'
-        reference_values = times.loc[times[idCol] == rebaseId, rebaseCols].iloc[0]
+            # Fetch the reference values for the specified 'rebaseId'
+            reference_values = times.loc[times[idCol] == rebaseId, rebaseCols].iloc[0]
 
-        # Subtract only the specified columns
-        times[rebaseCols] = times[rebaseCols].subtract(reference_values)
+            # Subtract only the specified columns
+            times[rebaseCols] = times[rebaseCols].subtract(reference_values)
 
-        if not inplace:
-            return times
+            if not inplace:
+                return times
 
     @staticmethod
     def rebaseWithDummyValues(times, replacementVals, rebaseCols=None):
