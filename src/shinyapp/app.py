@@ -291,7 +291,7 @@ with ui.accordion(open=False):
 
             @render.ui
             @reactive.event(input.stage)
-            def stageresult__hero():
+            def stageresult_hero():
                 stage = input.stage()
                 stages = stages_data()
                 if stage == "SHD":
@@ -299,7 +299,7 @@ with ui.accordion(open=False):
 
                 times = stage_times_data()
                 if times.empty:
-                    print(f"No stage times in stage_hero() for {stage}")
+                    print(f"No stage times in stage_times_data() for {stage}")
                     return
                 stage_name = stages.loc[
                     stages["stageId"] == input.stage(), "name"
@@ -322,24 +322,27 @@ with ui.accordion(open=False):
                     showcase_layout="left center",
                     full_screen=True,
                 )
-                p2 = ui.value_box(
-                    value=times.loc[1, "diffFirst"],
-                    title=_get_hero_text(1),
-                    theme="text-blue",
-                    showcase=f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)',
-                    showcase_layout="bottom",
-                    full_screen=True,
-                )
-                p3 = ui.value_box(
-                    value=times.loc[2, "diffFirst"],
-                    title=_get_hero_text(2),
-                    theme="text-purple",
-                    showcase=f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)',
-                    showcase_layout="bottom",
-                    full_screen=True,
-                )
-
-                return ui.TagList(p1, uis.layout_columns(p2, p3))
+                if len(times)>1:
+                    p2 = ui.value_box(
+                        value=times.loc[1, "diffFirst"],
+                        title=_get_hero_text(1),
+                        theme="text-blue",
+                        showcase=f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)',
+                        showcase_layout="bottom",
+                        full_screen=True,
+                    )
+                    if len(times)>2:
+                        p3 = ui.value_box(
+                            value=times.loc[2, "diffFirst"],
+                            title=_get_hero_text(2),
+                            theme="text-purple",
+                            showcase=f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)',
+                            showcase_layout="bottom",
+                            full_screen=True,
+                        )
+                        return ui.TagList(p1, uis.layout_columns(p2, p3))
+                    return ui.TagList(p1, p2)
+                return p1
 
             with ui.accordion(open=False):
                 with ui.accordion_panel("Overall position"):
