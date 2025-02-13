@@ -185,7 +185,7 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Stage winners"):
 
                     @render.data_frame
-                    @reactive.event(input.stage)
+                    @reactive.event(input.event, input.championship, input.stage)
                     def stage_winners_short():
                         stagewinners = wrc.getStageWinners(update=True)
                         if stagewinners.empty:
@@ -206,7 +206,7 @@ with ui.accordion(open=False):
                         return render.DataGrid(stagewinners[retcols])
 
                     @render.plot(alt="Bar chart of stage wins.")
-                    @reactive.event(input.stage)
+                    @reactive.event(input.championship, input.event, input.stage)
                     def plot_driver_stagewins():
                         df = wrc.getStageWinners()
                         # TO DO - make use ofcommented out elements
