@@ -1162,7 +1162,7 @@ def startlist_data():
 
 
 @reactive.calc
-@reactive.event(input.stage)
+@reactive.event(input.event, input.stage)
 def stage_times_data():
     wrc.stageId = input.stage()
     # WRC API data fetch
@@ -1171,7 +1171,7 @@ def stage_times_data():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.championship)
+@reactive.event(input.stage, input.event, input.championship)
 def split_times_data():
     wrc.stageId = input.stage()
     # WRC API data fetch
@@ -1210,7 +1210,7 @@ def update_stages_select():
 
 
 @reactive.effect
-@reactive.event(input.stage)
+@reactive.event(input.event, input.stage)
 def update_stages_driver_rebase_select():
     if stage_times_data().empty:
         return
@@ -1221,7 +1221,7 @@ def update_stages_driver_rebase_select():
 
 
 @reactive.effect
-@reactive.event(input.championship, input.stage)
+@reactive.event(input.championship, input.event, input.stage)
 def update_driver_rebase_select():
     if input.stage() == "SHD" or stage_times_data().empty:
         return
@@ -1235,7 +1235,7 @@ def update_driver_rebase_select():
 
 
 @reactive.effect
-@reactive.event(input.stage)
+@reactive.event(input.event, input.stage)
 def update_splits_driver_rebase_select():
     if stage_times_data().empty:
         rebase_drivers = {}
@@ -1266,7 +1266,7 @@ def getSplitDists():
 
 
 @reactive.calc
-@reactive.event(input.stage)
+@reactive.event(input.event, input.stage)
 def split_dists_for_stage():
     split_dists = getSplitDists()
     stageIdFromCode = {v: k for k, v in wrc.stage_codes.items()}
