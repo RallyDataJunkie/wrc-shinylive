@@ -21,6 +21,14 @@ from icons import question_circle_fill
 
 set_option("display.colheader_justify", "left")
 
+ui.tags.script(
+    src="//gc.zgo.at/count.js",
+    **{
+        "data-goatcounter": "https://rallydatajunkie.goatcounter.com/count",
+        "async": "",
+    },
+)
+
 # The cacheing is tricky:
 # - we want to be able to force updates for live stages etc
 # There is internal state in the class, which stores
