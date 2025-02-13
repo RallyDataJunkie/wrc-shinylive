@@ -1072,7 +1072,9 @@ with ui.accordion(open=False):
                                             y="timeInS",
                                             hue="carNo",
                                         )
-                                    g.set_ylim(g.get_ylim()[::-1])
+                                    if rebase_driver and rebase_driver!="NONE":
+                                        g.set_ylim(g.get_ylim()[::-1])
+                                        
                                     return g
 
 
