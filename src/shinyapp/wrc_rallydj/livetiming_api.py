@@ -263,7 +263,7 @@ class WRCLiveTimingAPIClient:
     @staticmethod
     def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
         """Rebase times based on the time for a particular vehicle."""
-        if rebaseId is None or idCol is None or rebaseCol is None:
+        if not rebaseId or rebaseId=="NONE" or idCol is None or rebaseCol is None:
             return times
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
 
