@@ -87,6 +87,7 @@ with ui.accordion(open=False):
             return render.DataGrid(season[retcols])
 
     with ui.accordion_panel("Event overview"):
+
         @render.ui
         @reactive.event(input.event)
         def rally_overview_hero():
@@ -95,9 +96,7 @@ with ui.accordion(open=False):
             round = season.loc[season["rallyId"] == event, "ROUND"].iloc[0]
             so = ui.value_box(
                 title=season.loc[season["rallyId"] == event, "date"].iloc[0],
-                value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[
-                    0
-                ],
+                value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[0],
                 theme="text-black",
                 showcase=ui.markdown(f"__ROUND {round}__"),
                 showcase_layout="left center",
@@ -196,9 +195,7 @@ with ui.accordion(open=False):
                         ]
                         # TO DO have a reactive  data type for stagewinners?
                         # TO DO have option to limit view of stages up to and including selected stage
-                        return render.DataGrid(
-                            stagewinners[retcols]
-                        )
+                        return render.DataGrid(stagewinners[retcols])
 
                     @render.plot(alt="Bar chart of stage wins.")
                     @reactive.event(input.stage)
@@ -1232,10 +1229,15 @@ def update_driver_rebase_select():
 @reactive.effect
 @reactive.event(input.stage)
 def update_splits_driver_rebase_select():
-    rebase_drivers = (
-        stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
-    )
-    rebase_drivers["ult"] = "ULTIMATE"
+    if stage_times_data().empty:
+        rebase_drivers = {}
+    else:
+        rebase_drivers = (
+            stage_times_data()[["carNo", "driver"]]
+            .set_index("carNo")["driver"]
+            .to_dict()
+        )
+        rebase_drivers["ult"] = "ULTIMATE"
     ui.update_select("splits_rebase_driver", choices=rebase_drivers)
 
 
