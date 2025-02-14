@@ -1230,7 +1230,8 @@ def update_stages_driver_rebase_select():
 def update_driver_rebase_select():
     if input.stage() == "SHD" or stage_times_data().empty:
         return
-    rebase_drivers = {"NONE": ""}
+    # rebase_drivers = {"NONE": ""}
+    rebase_drivers = {}
     rebase_drivers.update(
         stage_times_data()[["carNo", "driver"]].set_index("carNo")["driver"].to_dict()
     )
@@ -1239,19 +1240,19 @@ def update_driver_rebase_select():
     ui.update_select("rebase_driver", choices=rebase_drivers)
 
 
-@reactive.effect
-@reactive.event(input.event, input.stage)
-def update_splits_driver_rebase_select():
-    if stage_times_data().empty:
-        rebase_drivers = {}
-    else:
-        rebase_drivers = (
-            stage_times_data()[["carNo", "driver"]]
-            .set_index("carNo")["driver"]
-            .to_dict()
-        )
-        rebase_drivers["ult"] = "ULTIMATE"
-    ui.update_select("splits_rebase_driver", choices=rebase_drivers)
+# @reactive.effect
+# @reactive.event(input.event, input.stage)
+# def update_splits_driver_rebase_select():
+#     if stage_times_data().empty:
+#         rebase_drivers = {}
+#     else:
+#         rebase_drivers = (
+#             stage_times_data()[["carNo", "driver"]]
+#             .set_index("carNo")["driver"]
+#             .to_dict()
+#         )
+#         rebase_drivers["ult"] = "ULTIMATE"
+#     ui.update_select("splits_rebase_driver", choices=rebase_drivers)
 
 
 @reactive.calc
