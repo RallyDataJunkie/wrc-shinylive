@@ -1196,6 +1196,8 @@ def split_times_data():
 @reactive.event(input.season, input.championship)
 def update_events_select():
     season = season_data()
+    if season_data().empty:
+        return
     # events = season["EventName"].to_list()
     events = (
         season[["rallyId", "rallyTitle"]].set_index("rallyId")["rallyTitle"].to_dict()
