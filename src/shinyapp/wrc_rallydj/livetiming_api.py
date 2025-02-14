@@ -613,7 +613,7 @@ class WRCLiveTimingAPIClient:
         # and the delta for the other rows
         # Recreate the actual times
 
-        if len(split_cols) > 1 and regularise:
+        if len(split_cols) > 0 and regularise:
             if "stageTime" in sw_actual.columns:
                 sw_actual["stageTime"] = sw_actual["stageTime"].apply(time_to_seconds)
                 sw_actual[f"round{len(split_cols)+1}"] = sw_actual.apply(
