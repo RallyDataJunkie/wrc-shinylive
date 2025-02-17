@@ -19,6 +19,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
 from icons import question_circle_fill
 from rules_processor import Nth
+import re
 
 set_option("display.colheader_justify", "left")
 
@@ -386,7 +387,13 @@ with ui.accordion(open=False):
                         stage_info_row = stage_info.loc[
                             stage_info["stageNo"] == wrc.stage_ids[input.stage()]
                         ]
-                        _md = stage_info_row.iloc[0]["name"]
+                        stage_name = stage_info_row.iloc[0]["name"]
+                        _md = stage_name
+
+                        # Remark on, or imply, the repeated run nature of this stage
+                        repeated_run = re.match(r'.*\s(\d+)\s+\(.*', stage_name)
+                        if repeated_run:
+                            _md = f"{_md}, the {Nth(int(repeated_run.group(1)))} run of this stage"
 
                         # Remark on being the Nth stage of the day
                         _md = f"{_md}, the {Nth(stage_info_row.iloc[0]["stageInDay"])}"
