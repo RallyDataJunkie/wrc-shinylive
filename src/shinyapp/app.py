@@ -387,6 +387,19 @@ with ui.accordion(open=False):
                             stage_info["stageNo"] == wrc.stage_ids[input.stage()]
                         ]
                         _md = stage_info_row.iloc[0]["name"]
+
+                        # Remark on being the Nth stage of the day
+                        _md = f"{_md}, the {Nth(stage_info_row.iloc[0]["stageInDay"])}"
+                        if (
+                            stage_info_row.iloc[0]["stageInDay"]
+                            == stage_info[
+                                stage_info["day"] == stage_info_row.iloc[0]["day"]
+                            ]["stageInDay"].max()
+                        ):
+                            _md = f"{_md}, and last,"
+                        _md = f"{_md} stage of the day ({stage_info_row.iloc[0]["day"]})"
+
+                        # Remark on being the longest stage of the rally
                         if (
                             stage_info_row.iloc[0]["distance"]
                             == stage_info["distance"].max()
@@ -715,7 +728,7 @@ with ui.accordion(open=False):
                                                 method="min", na_option="keep"
                                             )
                                         )
-                                        
+
                                     split_times_wide_numeric.columns = (
                                         ["Driver", "TeamName", "RoadPos"]
                                         + [
@@ -1286,6 +1299,7 @@ def stage_winners_data():
         stagewinners["pace (s/km)"] = round(
             stagewinners["timeInS"] / stagewinners["distance"], 2
         )
+
     return stagewinners
 
 
@@ -1297,6 +1311,7 @@ def stages_data():
     wrc.eventId = wrc.rallyId2eventId[wrc.rallyId]
     # WRC API data fetch
     stages = wrc.getStageDetails(update=True)
+    stages["stageInDay"] = stages.groupby(["day"]).cumcount() + 1
     return stages
 
 
