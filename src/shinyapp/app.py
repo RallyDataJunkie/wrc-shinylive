@@ -415,7 +415,7 @@ with ui.accordion(open=False):
                             md.append(_md + ".")
 
                         if (
-                            not leader_row.empty and not leader_text
+                            not leader_row.empty and not leader_handled
                         ):  # Check if leader exists in times
                             leaderPos = leader_row.iloc[0]["pos"]
                             leaderDiff = leader_row.iloc[0]["diffPrev"]
