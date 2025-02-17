@@ -957,6 +957,8 @@ with ui.accordion(open=False):
                                         for i in range(1, output_.shape[1] + 1)
                                     ]  # [:-1] + ["Finish"]
 
+                                    output_.rename(columns = {s: s.replace("Split ", "s") for s in output_.columns}, inplace=True)
+
                                     return heatmap(
                                         output_,
                                         cmap=cmap,
