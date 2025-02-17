@@ -11,3 +11,5 @@ parse
 seaborn
 
 sqlite_utils
+
+inflect

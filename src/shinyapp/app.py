@@ -18,6 +18,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
 from icons import question_circle_fill
+from rules_processor import Nth
 
 set_option("display.colheader_justify", "left")
 
@@ -249,7 +250,7 @@ with ui.accordion(open=False):
                     # Try to be sensible about how often we call
                     # getReiterments and getPenalties
                     # If the event has completed
-                    # we need only do this one 
+                    # we need only do this one
                     @render.data_frame
                     @reactive.event(input.event, input.stage, input.stage_accordion)
                     def retirements_frame():
@@ -299,7 +300,6 @@ with ui.accordion(open=False):
         with ui.card(class_="mt-3"):
 
             @render.ui
-            @reactive.event(input.stage)
             def stageresult_hero():
                 stage = input.stage()
                 stages = stages_data()
@@ -356,12 +356,42 @@ with ui.accordion(open=False):
                 return p1
 
             with ui.accordion(open=False):
+
+                with ui.accordion_panel("Stage notes"):
+
+                    @render.ui
+                    def stage_text_intro():
+                        times = stage_times_data()
+                        overall_df = overall_data()
+                        if times.empty or overall_df.empty:
+                            return
+                        overall_pos = overall_df.loc[
+                            overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
+                        ].iloc[0]
+
+                        md = [
+                            f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and is {Nth(overall_pos)} overall.
+                        """
+                        ]
+
+                        if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
+                            leader_row = times.loc[
+                                times["carNo"] == overall_df.iloc[0]["carNo"]
+                            ]
+
+                            if not leader_row.empty:  # Check if leader exists in times
+                                leaderPos = leader_row.iloc[0]["pos"]
+                                leaderDiff = leader_row.iloc[0]["diffPrev"]
+                                _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
+                                md.append(_md)  # Properly append the string
+
+                        return ui.markdown("\n\n".join(md))
+                    
                 with ui.accordion_panel("Overall position"):
 
                     @render.data_frame
-                    @reactive.event(input.event, input.stage, input.championship)
                     def overall_short():
-                        overall_df = wrc.getOverall(update=True)
+                        overall_df = overall_data()
                         if overall_df.empty:
                             return
                         retcols = [
@@ -1143,6 +1173,10 @@ def season_data():
     season = wrc.getResultsCalendar()
     return season
 
+@reactive.calc
+@reactive.event(input.event, input.stage, input.championship)
+def overall_data():
+    return wrc.getOverall(update=True)
 
 @reactive.calc
 @reactive.event(input.event, input.championship, input.stage)
