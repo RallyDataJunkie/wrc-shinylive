@@ -386,6 +386,16 @@ with ui.accordion(open=False):
 
                             md.append(_md)
 
+                        on_the_pace = times[times["pace diff (s/km)"] <= 0.05]
+                        if len(on_the_pace) > 1:
+                            _md = "Also on the pace"
+                            for _, r in on_the_pace[1:].iterrows():
+                                _md = (
+                                    _md
+                                    + f""", {r["driver"]} was just {r["diffFirst"]}s behind ({r["pace diff (s/km)"].round(2)} s/km)"""
+                                )
+                            md.append(_md + ".")
+
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
                                 times["carNo"] == overall_df.iloc[0]["carNo"]
