@@ -217,6 +217,7 @@ class WRCLiveTimingAPIClient:
 
         self.rallyId2eventId = {}
         self.stage_codes = {}
+        self.stage_ids = {}
         self.carNum2name = {}
 
         # These should really be set reactively depending on other values
@@ -309,6 +310,7 @@ class WRCLiveTimingAPIClient:
 
         self.rallyId2eventId = {}
         self.stage_codes = {}
+        self.stage_ids = {}
 
         # self.results_calendar_df = DataFrame()
         self.stage_details_df = DataFrame()
@@ -503,6 +505,7 @@ class WRCLiveTimingAPIClient:
                 .set_index("stageNo")["stageId"]
                 .to_dict()
             )
+            self.stage_ids = {v: k for k, v in self.stage_codes.items()}
             # Type mapping
             df_stageDetails["distance"] = to_numeric(
                 df_stageDetails["distance"], errors="coerce"

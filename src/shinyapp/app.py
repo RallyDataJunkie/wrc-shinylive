@@ -1338,10 +1338,9 @@ def getSplitDists():
 @reactive.event(input.event, input.stage)
 def split_dists_for_stage():
     split_dists = getSplitDists()
-    stageIdFromCode = {v: k for k, v in wrc.stage_codes.items()}
     try:
         split_cumdists = (
-            split_dists.loc[stageIdFromCode[input.stage()]].dropna().to_dict()
+            split_dists.loc[wrc.stage_ids[input.stage()]].dropna().to_dict()
         )
         split_cumdists = {k: split_cumdists[k] for k in sorted(split_cumdists)}
 
