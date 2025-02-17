@@ -843,11 +843,6 @@ with ui.accordion(open=False):
                                         "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
                                 @render.plot(alt="Heatmap of within split delta times.")
-                                @reactive.event(
-                                    input.stage,
-                                    input.rebase_driver,
-                                    input.rebase_reverse_palette,
-                                )
                                 def seaborn_heatmap_splits():
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
@@ -923,12 +918,6 @@ with ui.accordion(open=False):
                                         "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
 
                                 @render.plot(alt="Barplot of within split delta times.")
-                                @reactive.event(
-                                    input.stage,
-                                    input.rebase_driver,
-                                    input.splits_section_plot,
-                                    input.rebase_reverse_palette,
-                                )
                                 def seaborn_barplot_splits():
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
@@ -1025,10 +1014,6 @@ with ui.accordion(open=False):
 
                                 @render.plot(
                                     alt="Line chart of within split delta times."
-                                )
-                                @reactive.event(
-                                    input.stage,
-                                    input.rebase_driver,
                                 )
                                 def seaborn_linechart_splits():
                                     rebase_driver = input.rebase_driver()
