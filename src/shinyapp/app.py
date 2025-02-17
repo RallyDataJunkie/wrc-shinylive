@@ -361,6 +361,9 @@ with ui.accordion(open=False):
 
                     @render.ui
                     def stage_text_intro():
+                        # TO DO - there will likely be errors if there are joint stage winners
+                        # TO DO - cope with two or more winners
+                        # TO DO - find an example of a joint stage win for debugging purposes
                         times = stage_times_data()
                         overall_df = overall_data()
                         if times.empty or overall_df.empty:
@@ -373,6 +376,15 @@ with ui.accordion(open=False):
                             f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and is {Nth(overall_pos)} overall.
                         """
                         ]
+                        stagewinners = stage_winners_data()
+                        if not stagewinners.empty:
+                            winner_row = stagewinners.loc[
+                                stagewinners["stageNo"] == wrc.stage_ids[input.stage()]
+                            ]
+
+                            _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
+
+                            md.append(_md)
 
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
@@ -386,7 +398,7 @@ with ui.accordion(open=False):
                                 md.append(_md)  # Properly append the string
 
                         return ui.markdown("\n\n".join(md))
-                    
+
                 with ui.accordion_panel("Overall position"):
 
                     @render.data_frame
