@@ -727,7 +727,7 @@ with ui.accordion(open=False):
                                         )
                                         output_long["roundN"] = output_long[
                                             "roundN"
-                                        ].str.replace("round", "Split ")
+                                        ].str.replace("round", "s")
                                         ax = boxplot(
                                             data=output_long, x="roundN", y=newcol
                                         )
