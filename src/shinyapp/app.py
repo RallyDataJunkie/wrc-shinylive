@@ -207,7 +207,7 @@ with ui.accordion(open=False):
                             "timeInS",
                             "distance",
                             "pace (s/km)",
-                            "speed (km/h)"
+                            "speed (km/h)",
                         ]
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
@@ -387,7 +387,10 @@ with ui.accordion(open=False):
                             stage_info["stageNo"] == wrc.stage_ids[input.stage()]
                         ]
                         _md = stage_info_row.iloc[0]["name"]
-                        if stage_info_row.iloc[0]["distance"] == stage_info["distance"].max():
+                        if (
+                            stage_info_row.iloc[0]["distance"]
+                            == stage_info["distance"].max()
+                        ):
                             _md = f"{_md}, the longest stage on the rally"
                         md.append(f"{_md}.\n\n")
 
@@ -637,10 +640,12 @@ with ui.accordion(open=False):
                                 view = input.splits_section_view()
                                 split_cumdists, split_dists = split_dists_for_stage()
                                 typ = {
-                                    "time": "Time (s) within each split (*lower* is better.)",
-                                    "speed": "Speed (km/h) within each split (*higher* is better.)",
+                                    "time": "Time (s) within each split (*lower* is better).",
+                                    "speed": "Speed (km/h) within each split (*higher* is better).",
                                     "pace": "Pace (s/km) within each split (*lower* is better.)",
-                                    "time_acc": "Accumulated time (s) across all splits (*lower* is better.)",
+                                    "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
+                                    "pos_within": "Rank position within split (* is better).",
+                                    "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
                                 }
                                 return ui.markdown(typ[view])
 
@@ -649,14 +654,16 @@ with ui.accordion(open=False):
                                     "splits_section_view",
                                     "Section report view",
                                     {
-                                        "time": "Time in section (s)",
+                                        "time": "Section time (s)",
                                         "pace": "Av. pace in section (s/km)",
                                         "speed": "Av. speed in section (km/h)",
                                         "time_acc": "Acc. time over sections (s)",
+                                        "pos_within": "Section time rank",
+                                        "pos_acc": "Acc. time rank",
                                     },
                                     selected="time",
                                 ),
-                                "Select split section report type; Time (s), or, if available, average Pace (s/km) or average Speed (km/h)."
+                                "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
                                 # Scope the view if data available
 
                             # @render.table
@@ -681,7 +688,8 @@ with ui.accordion(open=False):
                                     for c in split_times_wide_numeric.columns
                                     if c.startswith("round")
                                 ]
-                                if view == "time_acc":
+
+                                if view in ["time_acc", "pos_acc"]:
                                     split_times_wide_numeric = merge(
                                         split_times_wide[
                                             ["carNo", "teamName", "roadPos"]
@@ -697,10 +705,17 @@ with ui.accordion(open=False):
                                     # TO DO  precision number format formatting
                                     # styles = {c: "{0:0.1f}" for c in split_cols}
                                     # return split_times_wide_numeric.style.format(styles)
-                                    split_times_wide_numeric[split_cols] = (
+                                    split_times_wide_numeric.loc[:, split_cols] = (
                                         split_times_wide_numeric[split_cols].round(1)
                                     )
 
+                                    if view == "pos_acc":
+                                        split_times_wide_numeric.loc[:, split_cols] = (
+                                            split_times_wide_numeric[split_cols].rank(
+                                                method="min", na_option="keep"
+                                            )
+                                        )
+                                        
                                     split_times_wide_numeric.columns = (
                                         ["Driver", "TeamName", "RoadPos"]
                                         + [
@@ -709,7 +724,6 @@ with ui.accordion(open=False):
                                         ]
                                         + ["Finish"]
                                     )
-
                                     return render.DataGrid(
                                         split_times_wide_numeric,
                                     )
@@ -721,7 +735,11 @@ with ui.accordion(open=False):
                                 # Scope the view if data available
                                 split_cumdists, split_dists = split_dists_for_stage()
                                 if split_dists:
-                                    if view == "pace":
+                                    if view == "pos_within":
+                                        output_.loc[:, split_cols] = output_[split_cols].rank(
+                                            method="min", na_option="keep"
+                                        )
+                                    elif view == "pace":
                                         output_.update(
                                             output_.loc[:, split_dists.keys()].apply(
                                                 lambda s: s / split_dists[s.name]
@@ -733,7 +751,13 @@ with ui.accordion(open=False):
                                                 lambda s: 3600 * split_dists[s.name] / s
                                             )
                                         )
+
                                 # styles = {c: "{0:0.1f}" for c in split_cols}
+
+                                if not view.startswith("pos_"):
+                                    output_.loc[:, split_cols] = output_[
+                                        split_cols
+                                    ].round(1)
 
                                 output_ = merge(
                                     split_times_wide[["carNo", "teamName", "roadPos"]],
@@ -741,7 +765,7 @@ with ui.accordion(open=False):
                                     on="carNo",
                                 )
                                 output_["carNo"] = output_["carNo"].map(carNum2name())
-                                output_[split_cols] = output_[split_cols].round(1)
+
                                 output_.columns = (
                                     ["Driver", "TeamName", "RoadPos"]
                                     + [f"Split {i}" for i in range(1, len(split_cols))]
@@ -972,7 +996,13 @@ with ui.accordion(open=False):
                                         for i in range(1, output_.shape[1] + 1)
                                     ]  # [:-1] + ["Finish"]
 
-                                    output_.rename(columns = {s: s.replace("Split ", "s") for s in output_.columns}, inplace=True)
+                                    output_.rename(
+                                        columns={
+                                            s: s.replace("Split ", "s")
+                                            for s in output_.columns
+                                        },
+                                        inplace=True,
+                                    )
 
                                     return heatmap(
                                         output_,
@@ -1241,15 +1271,21 @@ def stage_winners_data():
     stagewinners = wrc.getStageWinners(update=True)
     stages = stages_data()
     if not stages.empty:
-        stagewinners = merge(stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo")
+        stagewinners = merge(
+            stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo"
+        )
         stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
 
         stagewinners["daily_wins"] = (
             stagewinners.groupby(["day", "carNo"]).cumcount() + 1
         )
 
-        stagewinners["speed (km/h)"] = round(stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2)
-        stagewinners["pace (s/km)"] = round(stagewinners["timeInS"] / stagewinners["distance"], 2)
+        stagewinners["speed (km/h)"] = round(
+            stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2
+        )
+        stagewinners["pace (s/km)"] = round(
+            stagewinners["timeInS"] / stagewinners["distance"], 2
+        )
     return stagewinners
 
 
