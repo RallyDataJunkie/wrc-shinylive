@@ -40,12 +40,12 @@ SCHEMA_FULL_CALENDAR = {
     "endDateLocal": str,
     "finishDate": str,
     "championship": str,
-    "championshipLogo": str,
+    "championshipLogo": str
 }
 SCHEMA_RESULTS_CALENDAR = {'id': str, 'rallyTitle':str, 'ROUND':str, 'rallyCountry':str, 'rallyCountryImage':str,
        'rallyId':str, 'date':str, 'startDate':str, 'finishDate':str, 'driverId':str,
        'driverCountryImage':str, 'driver':str, 'coDriverId':str, 'coDriverCountryImage':str,
-       'coDriver':str, 'teamId':str, 'teamLogo':str, 'teamName':str, 'manufacturer':str}
+       'coDriver':str, 'teamId':str, 'teamLogo':str, 'teamName':str, 'manufacturer':str, 'year': int}
 
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
@@ -291,7 +291,7 @@ class WRCLiveTimingAPIClient:
     @property
     def results_calendar_df(self):
         """Dynamically fetches the latest data from the 'results_calendar' table."""
-        return DataFrame(self.db.query("SELECT * FROM results_calendar"))
+        return DataFrame(self.db.query(f"SELECT * FROM results_calendar WHERE year='{self.year}'"))
 
     @championship.setter
     def championship(self, value):
@@ -481,11 +481,16 @@ class WRCLiveTimingAPIClient:
                 return stub
             json_data = self._WRC_json(stub)
             df_calendar = tablify(json_data)
+            df_calendar["year"] = (
+                df_calendar["date"].str.extract(r"(\d{4})").astype(int)
+            )
             # timeify(df_calendar, "date", "daterange")
             # timeify(df_calendar, "startDate")
             # timeify(df_calendar, "finishDate")
             # df_calendar.set_index("id", inplace=True)
             # self.results_calendar_df = df_calendar
+            # TO DO - we don't need to update if the data is
+            # already in the db?
             self.db_upsert("results_calendar", df_calendar, pk="rallyId")
 
         return self.results_calendar_df
