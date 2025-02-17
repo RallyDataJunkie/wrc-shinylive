@@ -185,23 +185,11 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Stage winners"):
 
                     @render.data_frame
-                    @reactive.event(input.event, input.championship, input.stage)
                     def stage_winners_short():
-                        stagewinners = wrc.getStageWinners(update=True)
+                        stagewinners = stage_winners_data()
                         if stagewinners.empty:
                             return
-                        stages = stages_data()
-                        stagewinners = merge(
-                            stagewinners, stages[["stageNo", "day"]], on="stageNo"
-                        )
 
-                        stagewinners["wins_overall"] = (
-                            stagewinners.groupby("carNo").cumcount() + 1
-                        )
-
-                        stagewinners["daily_wins"] = (
-                            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
-                        )
                         retcols = [
                             "stageType",
                             "stageName",
@@ -221,9 +209,8 @@ with ui.accordion(open=False):
                         return render.DataGrid(stagewinners[retcols])
 
                     @render.plot(alt="Bar chart of stage wins.")
-                    @reactive.event(input.championship, input.event, input.stage)
                     def plot_driver_stagewins():
-                        df = wrc.getStageWinners()
+                        df = stage_winners_data()
                         # TO DO - make use ofcommented out elements
                         # which limit counts  up to and including current stage
                         # df["_stagenum"] = df["stageNo"].str.replace("SS", "")
@@ -1164,6 +1151,24 @@ def season_data():
     season = wrc.getResultsCalendar()
     return season
 
+
+@reactive.calc
+@reactive.event(input.event, input.championship, input.stage)
+def stage_winners_data():
+    stagewinners = wrc.getStageWinners(update=True)
+    stages = stages_data()
+    if not stages.empty:
+        stagewinners = merge(
+                            stagewinners, stages[["stageNo", "day"]], on="stageNo"
+                        )
+        stagewinners["wins_overall"] = (
+            stagewinners.groupby("carNo").cumcount() + 1
+                        )
+
+        stagewinners["daily_wins"] = (
+                            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
+                        )
+    return stagewinners
 
 # TO DO - we whould have a single reactive value for wrc.rallyId
 @reactive.calc
