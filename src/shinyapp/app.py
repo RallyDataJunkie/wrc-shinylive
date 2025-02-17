@@ -204,6 +204,10 @@ with ui.accordion(open=False):
                             "eligibility",
                             "wins_overall",
                             "daily_wins",
+                            "timeInS",
+                            "distance",
+                            "pace (s/km)",
+                            "speed (km/h)"
                         ]
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
@@ -1226,12 +1230,15 @@ def stage_winners_data():
     stagewinners = wrc.getStageWinners(update=True)
     stages = stages_data()
     if not stages.empty:
-        stagewinners = merge(stagewinners, stages[["stageNo", "day"]], on="stageNo")
+        stagewinners = merge(stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo")
         stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
 
         stagewinners["daily_wins"] = (
             stagewinners.groupby(["day", "carNo"]).cumcount() + 1
         )
+
+        stagewinners["speed (km/h)"] = round(stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2)
+        stagewinners["pace (s/km)"] = round(stagewinners["timeInS"] / stagewinners["distance"], 2)
     return stagewinners
 
 

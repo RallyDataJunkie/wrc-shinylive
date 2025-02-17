@@ -772,6 +772,7 @@ class WRCLiveTimingAPIClient:
             if not json_data:
                 return DataFrame()
             df_stageWinners = tablify(json_data)
+            df_stageWinners["timeInS"] = df_stageWinners["time"].apply(time_to_seconds)
             self.stagewinners_df = df_stageWinners
         return self.stagewinners_df
 
