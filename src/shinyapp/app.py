@@ -203,7 +203,7 @@ with ui.accordion(open=False):
                             "teamName",
                             "eligibility",
                             "wins_overall",
-                            "daily_wins"
+                            "daily_wins",
                         ]
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
@@ -373,7 +373,7 @@ with ui.accordion(open=False):
                         ].iloc[0]
 
                         md = [
-                            f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and is {Nth(overall_pos)} overall.
+                            f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
                         """
                         ]
                         stagewinners = stage_winners_data()
@@ -385,27 +385,35 @@ with ui.accordion(open=False):
                             _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
 
                             md.append(_md)
-
-                        on_the_pace = times[times["pace diff (s/km)"] <= 0.05]
-                        if len(on_the_pace) > 1:
-                            _md = "Also on the pace"
-                            for _, r in on_the_pace[1:].iterrows():
-                                _md = (
-                                    _md
-                                    + f""", {r["driver"]} was just {r["diffFirst"]}s behind ({r["pace diff (s/km)"].round(2)} s/km)"""
-                                )
-                            md.append(_md + ".")
-
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
                                 times["carNo"] == overall_df.iloc[0]["carNo"]
                             ]
+                            leader = leader_row.iloc[0]["driver"]
+                        else:
+                            leader = ""
+                            leader_row = DataFrame()
 
-                            if not leader_row.empty:  # Check if leader exists in times
-                                leaderPos = leader_row.iloc[0]["pos"]
-                                leaderDiff = leader_row.iloc[0]["diffPrev"]
-                                _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
-                                md.append(_md)  # Properly append the string
+                        on_the_pace = times[times["pace diff (s/km)"] <= 0.05]
+                        leader_text = ""
+                        if len(on_the_pace) > 1:
+                            _md = "Also on the pace"
+                            for _, r in on_the_pace[1:].iterrows():
+                                if leader == r["driver"]:
+                                    leader_text = "rally leader "
+                                _md = (
+                                    _md
+                                    + f""", {leader_text}{r["driver"]} was just {r["diffFirst"]}s behind ({round(r["pace diff (s/km)"], 2)} s/km)"""
+                                )
+                            md.append(_md + ".")
+
+                        if (
+                            not leader_row.empty and not leader_text
+                        ):  # Check if leader exists in times
+                            leaderPos = leader_row.iloc[0]["pos"]
+                            leaderDiff = leader_row.iloc[0]["diffPrev"]
+                            _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
+                            md.append(_md)  # Properly append the string
 
                         return ui.markdown("\n\n".join(md))
 
@@ -1195,10 +1203,12 @@ def season_data():
     season = wrc.getResultsCalendar()
     return season
 
+
 @reactive.calc
 @reactive.event(input.event, input.stage, input.championship)
 def overall_data():
     return wrc.getOverall(update=True)
+
 
 @reactive.calc
 @reactive.event(input.event, input.championship, input.stage)
@@ -1206,17 +1216,14 @@ def stage_winners_data():
     stagewinners = wrc.getStageWinners(update=True)
     stages = stages_data()
     if not stages.empty:
-        stagewinners = merge(
-                            stagewinners, stages[["stageNo", "day"]], on="stageNo"
-                        )
-        stagewinners["wins_overall"] = (
-            stagewinners.groupby("carNo").cumcount() + 1
-                        )
+        stagewinners = merge(stagewinners, stages[["stageNo", "day"]], on="stageNo")
+        stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
 
         stagewinners["daily_wins"] = (
-                            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
-                        )
+            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
+        )
     return stagewinners
+
 
 # TO DO - we whould have a single reactive value for wrc.rallyId
 @reactive.calc
