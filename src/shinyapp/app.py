@@ -380,10 +380,21 @@ with ui.accordion(open=False):
                             overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
                         ].iloc[0]
 
-                        md = [
-                            f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
-                        """
+                        md = []
+
+                        stage_info = stages_data()
+                        stage_info_row = stage_info.loc[
+                            stage_info["stageNo"] == wrc.stage_ids[input.stage()]
                         ]
+                        _md = stage_info_row.iloc[0]["name"]
+                        if stage_info_row.iloc[0]["distance"] == stage_info["distance"].max():
+                            _md = f"{_md}, the longest stage on the rally"
+                        md.append(f"{_md}.\n\n")
+
+                        _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
+                        """
+                        md.append(_md)
+
                         stagewinners = stage_winners_data()
                         if not stagewinners.empty:
                             winner_row = stagewinners.loc[
