@@ -397,13 +397,17 @@ with ui.accordion(open=False):
                             leader = ""
                             leader_row = DataFrame()
 
-                        on_the_pace = times[times["pace diff (s/km)"] <= 0.05]
-                        leader_text = ""
+                        CLOSE_PACE = 0.1  # 0.05
+                        on_the_pace = times[times["pace diff (s/km)"] < CLOSE_PACE]
+                        leader_handled = False
                         if len(on_the_pace) > 1:
                             _md = "Also on the pace"
                             for _, r in on_the_pace[1:].iterrows():
                                 if leader == r["driver"]:
+                                    leader_handled = True
                                     leader_text = "rally leader "
+                                else:
+                                    leader_text = ""
                                 _md = (
                                     _md
                                     + f""", {leader_text}{r["driver"]} was just {r["diffFirst"]}s behind ({round(r["pace diff (s/km)"], 2)} s/km)"""
