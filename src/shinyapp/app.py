@@ -323,20 +323,22 @@ with ui.accordion(open=False):
                     full_screen=True,
                 )
                 if len(times)>1:
+                    p2pace = f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)'
                     p2 = ui.value_box(
                         value=times.loc[1, "diffFirst"],
                         title=_get_hero_text(1),
                         theme="text-blue",
-                        showcase=f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)',
+                        showcase=p2pace,
                         showcase_layout="bottom",
                         full_screen=True,
                     )
                     if len(times)>2:
+                        p3pace = f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)'
                         p3 = ui.value_box(
                             value=times.loc[2, "diffFirst"],
                             title=_get_hero_text(2),
                             theme="text-purple",
-                            showcase=f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)',
+                            showcase=p3pace,
                             showcase_layout="bottom",
                             full_screen=True,
                         )
@@ -389,6 +391,8 @@ with ui.accordion(open=False):
                         input.stage_rebase_driver,
                     )
                     def stage_times_short_frame():
+                        # We are rebasing the data here so we should copy.
+                        # TO DO: would it be worth also having a rebased times reacttive?
                         stage_times = stage_times_data()
                         core_cols = [
                             "pos",
@@ -405,19 +409,26 @@ with ui.accordion(open=False):
                             core_cols += [
                                 c for c in stage_times.columns if c.startswith("round")
                             ]
-                        stage_times = stage_times[
-                            list(set(core_cols).intersection(stage_times.columns))
-                        ]
                         if "diffFirst" in stage_times.columns:
+                            rebase_driver = input.stage_rebase_driver()
+
+                            # Add percentage time column using rebase driver time basis
+                            stage_times["percent"] = ( 100 *
+                                stage_times["Time"]
+                                / stage_times.loc[
+                                    stage_times["carNo"] == rebase_driver, "Time"
+                                ].iloc[0]
+                            ).round(1)
+
                             rebase_gap_col = "Rebase Gap (s)"
                             stage_times[rebase_gap_col] = stage_times[
                                 "diffFirst"
                             ].apply(time_to_seconds, retzero=True)
 
-                            rebase_driver = input.stage_rebase_driver()
                             stage_times.loc[:, rebase_gap_col] = wrc.rebaseTimes(
                                 stage_times, rebase_driver, "carNo", rebase_gap_col
                             )
+
                             cols_order = [
                                 "pos",
                                 "carNo",
@@ -429,6 +440,7 @@ with ui.accordion(open=False):
                                 "speed (km/h)",
                                 "pace (s/km)",
                                 "pace diff (s/km)",
+                                "percent"
                             ]
                             html = (
                                 stage_times[
@@ -1074,7 +1086,7 @@ with ui.accordion(open=False):
                                         )
                                     if rebase_driver and rebase_driver!="NONE":
                                         g.set_ylim(g.get_ylim()[::-1])
-                                        
+
                                     return g
 
 

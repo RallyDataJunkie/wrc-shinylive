@@ -569,6 +569,10 @@ class WRCLiveTimingAPIClient:
             df_stageTimes["pace diff (s/km)"] = (
                 df_stageTimes["pace (s/km)"] - df_stageTimes.loc[0, "pace (s/km)"]
             )
+            # A percent diff is always relative to something
+            # In rebasing, we need to work with the actual times
+            # so handle percentage diffs in the display logic for now?
+            # df_stageTimes["percent"] = 100 * df_stageTimes["Time"] / df_stageTimes.loc[0,"Time"]
 
         return df_stageTimes
 
