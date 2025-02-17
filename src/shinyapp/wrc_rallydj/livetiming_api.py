@@ -436,7 +436,11 @@ class WRCLiveTimingAPIClient:
         if retUrl:
             return url
         # print(f"Fetching: {url}")
-        r = self.proxy.cors_proxy_get(url)
+        try:
+            r = self.proxy.cors_proxy_get(url)
+        except:
+            print("Error trying to load data.")
+            return {}
         # r = requests.get(url)
         rj = r.json()
         if "status" in rj and rj["status"] == "Not Found":
