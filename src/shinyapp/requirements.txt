@@ -9,3 +9,5 @@ platformdirs
 url-normalize
 parse
 seaborn
+
+sqlite_utils

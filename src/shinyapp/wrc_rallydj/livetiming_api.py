@@ -9,7 +9,43 @@ import requests
 from itertools import zip_longest
 import datetime
 from numpy import nan
+from sqlite_utils import Database
 
+SCHEMA_FULL_CALENDAR = {
+    "id": str,
+    "guid": str,
+    "title": str,
+    "location": str,
+    "startDate": str,
+    "endDate": str,
+    "eventId": str,
+    "rallyId": str,
+    "description": str,
+    "round": str,
+    "cvpSeriesLink": str,
+    "sponsor": str,
+    "images": str,
+    "season": str,
+    "competition": str,
+    "country": str,
+    "asset": str,
+    "__typename": str,
+    "type": str,
+    "uid": str,
+    "seriesUid": str,
+    "releaseYear": str,
+    "availableOn": str,
+    "availableTill": str,
+    "startDateLocal": str,
+    "endDateLocal": str,
+    "finishDate": str,
+    "championship": str,
+    "championshipLogo": str,
+}
+SCHEMA_RESULTS_CALENDAR = {'id': str, 'rallyTitle':str, 'ROUND':str, 'rallyCountry':str, 'rallyCountryImage':str,
+       'rallyId':str, 'date':str, 'startDate':str, 'finishDate':str, 'driverId':str,
+       'driverCountryImage':str, 'driver':str, 'coDriverId':str, 'coDriverCountryImage':str,
+       'coDriver':str, 'teamId':str, 'teamLogo':str, 'teamName':str, 'manufacturer':str}
 
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
@@ -184,7 +220,8 @@ class WRCLiveTimingAPIClient:
         self.carNum2name = {}
 
         # These should really be set reactively depending on other values
-        self.results_calendar_df = DataFrame()
+        # self.results_calendar_df = DataFrame()
+
         self.stage_details_df = DataFrame()
         self.startlist_df = DataFrame()
         self.itinerary_df = DataFrame()
@@ -202,9 +239,57 @@ class WRCLiveTimingAPIClient:
         else:
             self.proxy = CorsProxy()
 
+        # DB utils
+        self._db_filepath = f"wrc_TEST_results.db"
+        self.db = Database(self._db_filepath)
+        # TO DO - if we can persist the db, do not replace it
+        self.db.create_table("full_calendar",SCHEMA_FULL_CALENDAR,pk="rallyId", replace=True)
+        self.db.create_table("results_calendar", SCHEMA_RESULTS_CALENDAR, pk="rallyId", replace=True)
+
+
+    def db_insert(self, table, df, pk=None):
+        if not df.empty:
+            self.db[table].insert_all(df.to_dict("records"), alter=True, pk=pk)
+
+    def db_upsert(self, table, df, pk=None):
+        if not df.empty:
+            self.db[table].upsert_all(df.to_dict("records"), alter=True, pk=pk)
+
+    @staticmethod
+    def drop_ephemera_cols(df, keep=None, inplace=True):
+        """We are working with unnormalised tables; this tidies them slightly."""
+        if keep is None:
+            keep = []
+        else:
+            keep = [keep] if isinstance(keep, str) else keep
+
+        try:
+            cols = [
+                "driverCountry",
+                "driverCountryImage",
+                "coDriver",
+                "coDriverId",
+                "coDriverCountry",
+                "coDriverCountryImage",
+                "teamId",
+                "team/car",
+                "teamLogo",
+            ]
+            dropcols = [col for col in cols if col in df.columns and col not in keep]
+            df.drop(columns=dropcols, inplace=True)
+        except:
+            print("Can't drop cols...")
+        if not inplace:
+            return df
+
     @property
     def championship(self):
         return self._championship
+
+    @property
+    def results_calendar_df(self):
+        """Dynamically fetches the latest data from the 'results_calendar' table."""
+        return DataFrame(self.db.query("SELECT * FROM results_calendar"))
 
     @championship.setter
     def championship(self, value):
@@ -224,7 +309,7 @@ class WRCLiveTimingAPIClient:
         self.rallyId2eventId = {}
         self.stage_codes = {}
 
-        self.results_calendar_df = DataFrame()
+        # self.results_calendar_df = DataFrame()
         self.stage_details_df = DataFrame()
         self.startlist_df = DataFrame()
         self.itinerary_df = DataFrame()
@@ -371,13 +456,18 @@ class WRCLiveTimingAPIClient:
         if not json_data:
             return DataFrame()
         # return json_data
-        return DataFrame(json_data["content"])
 
-    def getResultsCalendar(self, year=None, seasonId=None, retUrl=False, update=False):
+        df_full_calendar = DataFrame(json_data["content"])
+
+        self.db_upsert("full_calendar", df_full_calendar, pk="rallyId")
+
+        return df_full_calendar
+
+    def getResultsCalendar(self, year=None, seasonId=None, championship="wrc", retUrl=False, update=False):
         """Get the WRC Calendar for a given season ID as a JSON result."""
         if self.results_calendar_df.empty or update:
             seasonId = self.seasonId if seasonId is None else seasonId
-            stub = f"result/calendar?season={seasonId}&championship=wrc"
+            stub = f"result/calendar?season={seasonId}&championship={championship.lower()}"
             if retUrl:
                 return stub
             json_data = self._WRC_json(stub)
@@ -386,7 +476,8 @@ class WRCLiveTimingAPIClient:
             # timeify(df_calendar, "startDate")
             # timeify(df_calendar, "finishDate")
             # df_calendar.set_index("id", inplace=True)
-            self.results_calendar_df = df_calendar
+            # self.results_calendar_df = df_calendar
+            self.db_upsert("results_calendar", df_calendar, pk="rallyId")
 
         return self.results_calendar_df
 
