@@ -227,6 +227,8 @@ class WRCLiveTimingAPIClient:
         self.itinerary_df = DataFrame()
         self.overall_df = DataFrame()
         self.stagewinners_df = DataFrame()
+        self.retirements_df = DataFrame()
+        self.penalties_df = DataFrame()
 
         self.seasonId = None
         self.eventId = None
@@ -245,7 +247,6 @@ class WRCLiveTimingAPIClient:
         # TO DO - if we can persist the db, do not replace it
         self.db.create_table("full_calendar",SCHEMA_FULL_CALENDAR,pk="rallyId", replace=True)
         self.db.create_table("results_calendar", SCHEMA_RESULTS_CALENDAR, pk="rallyId", replace=True)
-
 
     def db_insert(self, table, df, pk=None):
         if not df.empty:
@@ -314,6 +315,8 @@ class WRCLiveTimingAPIClient:
         self.startlist_df = DataFrame()
         self.itinerary_df = DataFrame()
         self.overall_df = DataFrame()
+        self.retirements_df = DataFrame()
+        self.penalties_df = DataFrame()
 
         self.seasonId = None
         self.eventId = None
@@ -765,25 +768,30 @@ class WRCLiveTimingAPIClient:
             self.stagewinners_df = df_stageWinners
         return self.stagewinners_df
 
-    def getPenalties(self, eventId=None):
-        eventId = self.eventId if eventId is None else eventId
+    def getPenalties(self, eventId=None, update=False):
+        if self.penalties_df.empty or update:
+            eventId = self.eventId if eventId is None else eventId
 
-        stub = f"result/penalty?eventId={eventId}"
-        json_data = self._WRC_json(stub)
-        if not json_data:
-            return DataFrame()
-        df_penalties = tablify(json_data)
-        return df_penalties
+            stub = f"result/penalty?eventId={eventId}"
+            json_data = self._WRC_json(stub)
+            if not json_data:
+                return DataFrame()
+            df_penalties = tablify(json_data)
+            self.penalties_df = df_penalties
+        return self.penalties_df
 
-    def getRetirements(self, eventId=None):
-        eventId = self.eventId if eventId is None else eventId
+    def getRetirements(self, eventId=None, update=False):
+        if self.penalties_df.empty or update:
+            eventId = self.eventId if eventId is None else eventId
 
-        stub = f"result/retirements?eventId={eventId}"
-        json_data = self._WRC_json(stub)
-        if not json_data:
-            return DataFrame()
-        df_retirements = tablify(json_data)
-        return df_retirements
+            stub = f"result/retirements?eventId={eventId}"
+            json_data = self._WRC_json(stub)
+            if not json_data:
+                return DataFrame()
+            df_retirements = tablify(json_data)
+            self.retirements_df = df_retirements
+
+        return self.retirements_df
 
     def getChampionship(
         self, seasonId=None, championship_type="driver", championship=None, retUrl=False

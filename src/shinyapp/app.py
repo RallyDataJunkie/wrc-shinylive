@@ -121,7 +121,7 @@ with ui.accordion(open=False):
                     )
                     "Summary card for rally event."
 
-            with ui.accordion(open=False):
+            with ui.accordion(open=False, id="stage_accordion"):
                 with ui.accordion_panel("Stages info"):
 
                     @render.data_frame
@@ -204,14 +204,13 @@ with ui.accordion(open=False):
                             "wins_overall",
                             "daily_wins"
                         ]
-                        # TO DO have a reactive  data type for stagewinners?
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
 
                     @render.plot(alt="Bar chart of stage wins.")
                     def plot_driver_stagewins():
                         df = stage_winners_data()
-                        # TO DO - make use ofcommented out elements
+                        # TO DO - make use of commented out elements
                         # which limit counts  up to and including current stage
                         # df["_stagenum"] = df["stageNo"].str.replace("SS", "")
                         # df["_stagenum"] = df["_stagenum"].astype(int)
@@ -247,10 +246,15 @@ with ui.accordion(open=False):
                         return ax
 
                 with ui.accordion_panel("Retirements"):
-
+                    # Try to be sensible about how often we call
+                    # getReiterments and getPenalties
+                    # If the event has completed
+                    # we need only do this one 
                     @render.data_frame
-                    @reactive.event(input.event)
+                    @reactive.event(input.event, input.stage, input.stage_accordion)
                     def retirements_frame():
+                        if "Retirements" not in input.stage_accordion():
+                            return
                         retirements = wrc.getRetirements()
                         if retirements.empty:
                             return
@@ -267,10 +271,13 @@ with ui.accordion(open=False):
                         return render.DataGrid(retirements[retcols])
 
                 with ui.accordion_panel("Penalties"):
-
+                    # TO DO - ideally, this and retirements
+                    # would only react when the accordion is opened?
                     @render.data_frame
-                    @reactive.event(input.event)
+                    @reactive.event(input.event, input.stage, input.stage_accordion)
                     def penalties_frame():
+                        if "Penalties" not in input.stage_accordion():
+                            return
                         penalties = wrc.getPenalties()
                         if penalties.empty:
                             return
@@ -394,7 +401,7 @@ with ui.accordion(open=False):
                     )
                     def stage_times_short_frame():
                         # We are rebasing the data here so we should copy.
-                        # TO DO: would it be worth also having a rebased times reacttive?
+                        # TO DO: would it be worth also having a rebased times reactive?
                         stage_times = stage_times_data()
                         core_cols = [
                             "pos",
