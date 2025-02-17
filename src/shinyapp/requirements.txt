@@ -10,6 +10,7 @@ url-normalize
 parse
 seaborn
 
+sqlite3
 sqlite_utils
 
 inflect
