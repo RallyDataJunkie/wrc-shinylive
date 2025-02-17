@@ -2,6 +2,7 @@ from urllib.parse import urljoin
 from parse import parse
 import pathlib
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
+
 # import pandas as pd
 from pandas import to_datetime, date_range, to_numeric, DataFrame, concat, melt
 import requests
@@ -263,7 +264,7 @@ class WRCLiveTimingAPIClient:
     @staticmethod
     def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
         """Rebase times based on the time for a particular vehicle."""
-        if not rebaseId or rebaseId=="NONE" or idCol is None or rebaseCol is None:
+        if not rebaseId or rebaseId == "NONE" or idCol is None or rebaseCol is None:
             return times
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
 
@@ -398,12 +399,14 @@ class WRCLiveTimingAPIClient:
             if not json_data:
                 return DataFrame()
             df_stageDetails = tablify(json_data)
+            if "STAGE" in df_stageDetails.columns:
+                df_stageDetails.rename(columns={"STAGE": "stageNo"}, inplace=True)
             if df_stageDetails.empty:
                 return DataFrame()
             self.stage_details_df = df_stageDetails
             self.stage_codes = (
-                df_stageDetails[["STAGE", "stageId"]]
-                .set_index("STAGE")["stageId"]
+                df_stageDetails[["stageNo", "stageId"]]
+                .set_index("stageNo")["stageId"]
                 .to_dict()
             )
             # Type mapping

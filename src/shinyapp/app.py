@@ -131,7 +131,7 @@ with ui.accordion(open=False):
                         if stages.empty:
                             return
                         retcols = [
-                            "STAGE",
+                            "stageNo",
                             "name",
                             "day",
                             "distance",
@@ -190,16 +190,31 @@ with ui.accordion(open=False):
                         stagewinners = wrc.getStageWinners(update=True)
                         if stagewinners.empty:
                             return
+                        stages = stages_data()
+                        stagewinners = merge(
+                            stagewinners, stages[["stageNo", "day"]], on="stageNo"
+                        )
+
+                        stagewinners["wins_overall"] = (
+                            stagewinners.groupby("carNo").cumcount() + 1
+                        )
+
+                        stagewinners["daily_wins"] = (
+                            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
+                        )
                         retcols = [
                             "stageType",
                             "stageName",
                             "stageNo",
+                            "day",
                             "carNo",
                             "driver",
                             "coDriver",
                             "time",
                             "teamName",
                             "eligibility",
+                            "wins_overall",
+                            "daily_wins"
                         ]
                         # TO DO have a reactive  data type for stagewinners?
                         # TO DO have option to limit view of stages up to and including selected stage
@@ -322,7 +337,7 @@ with ui.accordion(open=False):
                     showcase_layout="left center",
                     full_screen=True,
                 )
-                if len(times)>1:
+                if len(times) > 1:
                     p2pace = f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)'
                     p2 = ui.value_box(
                         value=times.loc[1, "diffFirst"],
@@ -332,7 +347,7 @@ with ui.accordion(open=False):
                         showcase_layout="bottom",
                         full_screen=True,
                     )
-                    if len(times)>2:
+                    if len(times) > 2:
                         p3pace = f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)'
                         p3 = ui.value_box(
                             value=times.loc[2, "diffFirst"],
@@ -413,8 +428,9 @@ with ui.accordion(open=False):
                             rebase_driver = input.stage_rebase_driver()
 
                             # Add percentage time column using rebase driver time basis
-                            stage_times["percent"] = ( 100 *
-                                stage_times["Time"]
+                            stage_times["percent"] = (
+                                100
+                                * stage_times["Time"]
                                 / stage_times.loc[
                                     stage_times["carNo"] == rebase_driver, "Time"
                                 ].iloc[0]
@@ -440,7 +456,7 @@ with ui.accordion(open=False):
                                 "speed (km/h)",
                                 "pace (s/km)",
                                 "pace diff (s/km)",
-                                "percent"
+                                "percent",
                             ]
                             html = (
                                 stage_times[
@@ -1084,7 +1100,7 @@ with ui.accordion(open=False):
                                             y="timeInS",
                                             hue="carNo",
                                         )
-                                    if rebase_driver and rebase_driver!="NONE":
+                                    if rebase_driver and rebase_driver != "NONE":
                                         g.set_ylim(g.get_ylim()[::-1])
 
                                     return g
@@ -1224,7 +1240,9 @@ def update_stages_select():
     if stages_df.empty:
         ui.update_select("stage", choices={})
     else:
-        stages = stages_df[["STAGE", "stageId"]].set_index("stageId")["STAGE"].to_dict()
+        stages = (
+            stages_df[["stageNo", "stageId"]].set_index("stageId")["stageNo"].to_dict()
+        )
         ui.update_select("stage", choices=stages)
 
 
