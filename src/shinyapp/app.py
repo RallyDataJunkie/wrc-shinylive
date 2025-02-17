@@ -361,6 +361,9 @@ with ui.accordion(open=False):
 
                     @render.ui
                     def stage_text_intro():
+                        if input.stage() == "SHD":
+                            return ui.markdown("Shakedown...")
+
                         # TO DO - there will likely be errors if there are joint stage winners
                         # TO DO - cope with two or more winners
                         # TO DO - find an example of a joint stage win for debugging purposes
