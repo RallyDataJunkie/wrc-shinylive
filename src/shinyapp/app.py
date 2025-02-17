@@ -370,7 +370,8 @@ with ui.accordion(open=False):
                         times = stage_times_data()
                         overall_df = overall_data()
                         if times.empty or overall_df.empty:
-                            return
+                            return ui.markdown("No stage results / times available...")
+
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
                         ].iloc[0]
