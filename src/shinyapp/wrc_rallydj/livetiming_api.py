@@ -720,6 +720,7 @@ class WRCLiveTimingAPIClient:
         update=False,
     ):
         group = self.group if group is None else group
+        # We need to invalidate update if we have changed the stageId
         if self.overall_df.empty or update:
             eventId = self.eventId if eventId is None else eventId
             rallyId = self.rallyId if rallyId is None else rallyId
@@ -731,6 +732,20 @@ class WRCLiveTimingAPIClient:
             if not json_data:
                 return DataFrame()
             df_overall = tablify(json_data)
+            if "pos" in df_overall:
+                df_overall["pos"] = df_overall["pos"].astype("Int64")
+            df_overall["totalTimeInS"] = df_overall["totalTime"].apply(
+                time_to_seconds, retzero=True
+            )
+            df_overall["timeToCarBehind"] = abs(df_overall["totalTimeInS"].diff(-1))
+            if "diffFirst" in df_overall:
+                df_overall["overallGap"] = df_overall["diffFirst"].apply(
+                    time_to_seconds, retzero=True
+                )
+            if "diffPrev" in df_overall:
+                df_overall["overallDiff"] = df_overall["diffPrev"].apply(
+                    time_to_seconds, retzero=True
+                )
             self.stage_id_annotations(df_overall, eventId, rallyId, stageId)
             self.overall_df = df_overall
 
@@ -808,6 +823,9 @@ class WRCLiveTimingAPIClient:
 
         self.stage_id_annotations(df_stageTimes, eventId, rallyId, stageId)
 
+        if "pos" in df_stageTimes:
+            df_stageTimes["pos"] = df_stageTimes["pos"].astype("Int64")
+
         if "diffFirst" in df_stageTimes:
             df_stageTimes["Gap"] = df_stageTimes["diffFirst"].apply(
                 time_to_seconds, retzero=True
@@ -820,6 +838,7 @@ class WRCLiveTimingAPIClient:
             df_stageTimes["timeInS"] = df_stageTimes["stageTime"].apply(
                 time_to_seconds, retzero=True
             )
+            df_stageTimes["timeToCarBehind"] = df_stageTimes["timeInS"].diff(-1)
             # Pace annotations
             df_stageDetails = self.getStageDetails()
             stage_dist = float(
