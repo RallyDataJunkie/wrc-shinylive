@@ -167,9 +167,6 @@ with ui.accordion(open=False):
                             "timingPrecision",
                             "controlPenalties",
                         ]
-                        # Get latest itinerary
-                        itinerary = itinerary[retcols].copy()
-                        itinerary.drop_duplicates(keep="last", inplace=True)
                         return render.DataGrid(itinerary)
 
                 with ui.accordion_panel("Startlist"):
@@ -1314,6 +1311,9 @@ def itinerary_data():
     wrc.eventId = wrc.rallyId2eventId[wrc.rallyId]
     # WRC API data fetch
     itinerary = wrc.getItinerary(update=True)
+    # Get latest itinerary
+    itinerary.drop_duplicates(subset=["stage"], keep="last", inplace=True)
+    itinerary.reset_index(drop=True, inplace=True)
     return itinerary
 
 
