@@ -68,7 +68,7 @@ SCHEMA_RESULTS_CALENDAR = {
 def enrich_stage_winners(stagewinners, stages, inplace=True):
     if not inplace:
         stagewinners = stagewinners.copy()
-        
+
     if not stages.empty:
         stagewinners = merge(
             stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo"
@@ -87,6 +87,100 @@ def enrich_stage_winners(stagewinners, stages, inplace=True):
         )
 
         return stagewinners
+
+
+def scaled_splits(
+    split_times_wide_numeric,
+    split_times_wide,
+    split_dists,
+    split_cols,
+    split_durations, view, carNum2Names
+):
+    if split_times_wide_numeric.empty:
+        return
+    split_times_wide_numeric = (
+        split_times_wide_numeric.copy()
+    )
+
+    if view in ["time_acc", "pos_acc"]:
+        split_times_wide_numeric = merge(
+            split_times_wide[
+                ["carNo", "teamName", "roadPos"]
+            ],
+            split_times_wide_numeric,
+            on="carNo",
+        )
+        split_times_wide_numeric["carNo"] = (
+            split_times_wide_numeric["carNo"].map(
+                carNum2Names
+            )
+        )
+        # TO DO  precision number format formatting
+        # styles = {c: "{0:0.1f}" for c in split_cols}
+        # return split_times_wide_numeric.style.format(styles)
+        split_times_wide_numeric.loc[:, split_cols] = (
+            split_times_wide_numeric[split_cols].round(1)
+        )
+
+        if view == "pos_acc":
+            split_times_wide_numeric.loc[:, split_cols] = (
+                split_times_wide_numeric[split_cols].rank(
+                    method="min", na_option="keep"
+                )
+            )
+
+        split_times_wide_numeric.columns = (
+            ["Driver", "TeamName", "RoadPos"]
+            + [
+                f"Split {i}"
+                for i in range(1, len(split_cols))
+            ]
+            + ["Finish"]
+        )
+        return split_times_wide_numeric
+
+    # We want within split times, not accumulated times
+    # Scope the view if data available
+    output_ = split_durations.copy()
+    if split_dists:
+        if view == "pos_within":
+            output_.loc[:, split_cols] = output_[
+                split_cols
+            ].rank(method="min", na_option="keep")
+        elif view == "pace":
+            output_.update(
+                output_.loc[:, split_dists.keys()].apply(
+                    lambda s: s / split_dists[s.name]
+                )
+            )
+        elif view == "speed":
+            output_.update(
+                output_.loc[:, split_dists.keys()].apply(
+                    lambda s: 3600 * split_dists[s.name] / s
+                )
+            )
+
+    # styles = {c: "{0:0.1f}" for c in split_cols}
+
+    if not view.startswith("pos_"):
+        output_.loc[:, split_cols] = output_[
+            split_cols
+        ].round(1)
+
+    output_ = merge(
+        split_times_wide[["carNo", "teamName", "roadPos"]],
+        output_,
+        on="carNo",
+    )
+    output_["carNo"] = output_["carNo"].map(carNum2Names)
+
+    output_.columns = (
+        ["Driver", "TeamName", "RoadPos"]
+        + [f"Split {i}" for i in range(1, len(split_cols))]
+        + ["Finish"]
+    )
+    return  output_
+
 
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""

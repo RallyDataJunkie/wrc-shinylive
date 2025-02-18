@@ -20,6 +20,7 @@ from wrc_rallydj.livetiming_api import (
     WRCLiveTimingAPIClient,
     time_to_seconds,
     enrich_stage_winners,
+    scaled_splits,
 )
 from icons import question_circle_fill
 from rules_processor import Nth
@@ -702,7 +703,7 @@ with ui.accordion(open=False):
                                     "speed": "Speed (km/h) within each split (*higher* is better).",
                                     "pace": "Pace (s/km) within each split (*lower* is better.)",
                                     "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
-                                    "pos_within": "Rank position within split (* is better).",
+                                    "pos_within": "Rank position within split (*lower* is better).",
                                     "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
                                 }
                                 return ui.markdown(typ[view])
@@ -736,102 +737,27 @@ with ui.accordion(open=False):
                                     split_times_long,
                                     split_times_wide_numeric,
                                 ) = split_times_data()
-                                if split_times_wide_numeric.empty:
-                                    return
-                                split_times_wide_numeric = (
-                                    split_times_wide_numeric.copy()
-                                )
+                                split_cumdists, split_dists = split_dists_for_stage()
                                 split_cols = [
                                     c
                                     for c in split_times_wide_numeric.columns
                                     if c.startswith("round")
                                 ]
-
-                                if view in ["time_acc", "pos_acc"]:
-                                    split_times_wide_numeric = merge(
-                                        split_times_wide[
-                                            ["carNo", "teamName", "roadPos"]
-                                        ],
-                                        split_times_wide_numeric,
-                                        on="carNo",
-                                    )
-                                    split_times_wide_numeric["carNo"] = (
-                                        split_times_wide_numeric["carNo"].map(
-                                            carNum2name()
-                                        )
-                                    )
-                                    # TO DO  precision number format formatting
-                                    # styles = {c: "{0:0.1f}" for c in split_cols}
-                                    # return split_times_wide_numeric.style.format(styles)
-                                    split_times_wide_numeric.loc[:, split_cols] = (
-                                        split_times_wide_numeric[split_cols].round(1)
-                                    )
-
-                                    if view == "pos_acc":
-                                        split_times_wide_numeric.loc[:, split_cols] = (
-                                            split_times_wide_numeric[split_cols].rank(
-                                                method="min", na_option="keep"
-                                            )
-                                        )
-
-                                    split_times_wide_numeric.columns = (
-                                        ["Driver", "TeamName", "RoadPos"]
-                                        + [
-                                            f"Split {i}"
-                                            for i in range(1, len(split_cols))
-                                        ]
-                                        + ["Finish"]
-                                    )
-                                    return render.DataGrid(
-                                        split_times_wide_numeric,
-                                    )
-                                # We want within split times, not accumulated times
-                                output_ = wrc.get_split_duration(
+                                split_durations = wrc.get_split_duration(
                                     split_times_wide_numeric,
                                     split_cols,
                                 )
-                                # Scope the view if data available
-                                split_cumdists, split_dists = split_dists_for_stage()
-                                if split_dists:
-                                    if view == "pos_within":
-                                        output_.loc[:, split_cols] = output_[
-                                            split_cols
-                                        ].rank(method="min", na_option="keep")
-                                    elif view == "pace":
-                                        output_.update(
-                                            output_.loc[:, split_dists.keys()].apply(
-                                                lambda s: s / split_dists[s.name]
-                                            )
-                                        )
-                                    elif view == "speed":
-                                        output_.update(
-                                            output_.loc[:, split_dists.keys()].apply(
-                                                lambda s: 3600 * split_dists[s.name] / s
-                                            )
-                                        )
-
-                                # styles = {c: "{0:0.1f}" for c in split_cols}
-
-                                if not view.startswith("pos_"):
-                                    output_.loc[:, split_cols] = output_[
-                                        split_cols
-                                    ].round(1)
-
-                                output_ = merge(
-                                    split_times_wide[["carNo", "teamName", "roadPos"]],
-                                    output_,
-                                    on="carNo",
+                                output_ = scaled_splits(
+                                    split_times_wide_numeric,
+                                    split_times_wide,
+                                    split_dists,
+                                    split_cols,
+                                    split_durations,
+                                    view,
+                                    carNum2name(),
                                 )
-                                output_["carNo"] = output_["carNo"].map(carNum2name())
-
-                                output_.columns = (
-                                    ["Driver", "TeamName", "RoadPos"]
-                                    + [f"Split {i}" for i in range(1, len(split_cols))]
-                                    + ["Finish"]
-                                )
-                                return render.DataGrid(
-                                    output_,
-                                )
+                                if not output_.empty:
+                                    return render.DataGrid(output_)
 
                             with ui.accordion(open=False):
                                 with ui.accordion_panel(
