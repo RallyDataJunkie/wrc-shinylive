@@ -25,7 +25,7 @@ from wrc_rallydj.livetiming_api import (
     scaled_splits,
 )
 from icons import question_circle_fill
-from rules_processor import p, Nth
+from rules_processor import p, Nth, core_stage, process_rules
 from symbolic_analysis import get_splits_symbols
 import re
 
@@ -482,7 +482,7 @@ with ui.accordion(open=False):
                             overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
                         ].iloc[0]
 
-                        _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
+                        _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position on the stage and {Nth(overall_pos)} overall.
                         """
                         md.append(_md)
 
@@ -529,6 +529,17 @@ with ui.accordion(open=False):
                             leaderDiff = leader_row.iloc[0]["diffPrev"]
                             _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
                             md.append(_md)  # Properly append the string
+
+                        # External rules test
+                        _overall_diff = core_stage(
+                            wrc,
+                            stage_info,
+                            stage_code,
+                        )
+                        remarks = process_rules(_overall_diff)
+
+                        for remark in remarks:
+                            md.append(remark[0])
 
                         md.append(_md_final)
                         return ui.markdown("\n\n".join(md))
@@ -579,6 +590,8 @@ with ui.accordion(open=False):
                         # We are rebasing the data here so we should copy.
                         # TO DO: would it be worth also having a rebased times reactive?
                         stage_times = stage_times_data()
+                        if stage_times.empty:
+                            return
                         core_cols = [
                             "pos",
                             "carNo",
@@ -940,16 +953,16 @@ with ui.accordion(open=False):
                             or rebase_driver == "NONE"
                         ):
                             return
-                        
-                        #TO DO: provide ult view if rebase_driver=="ult"
-                        
+
+                        # TO DO: provide ult view if rebase_driver=="ult"
+
                         if stages.empty or times.empty:
                             return ui.markdown("*No data available.*")
 
                         stage_name = stages.loc[
                             stages["stageId"] == input.stage(), "name"
                         ].iloc[0]
-                        
+
                         # pos is zero indexed
                         pos = (
                             int(
