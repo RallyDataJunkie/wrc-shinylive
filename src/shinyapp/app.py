@@ -19,6 +19,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
 from icons import question_circle_fill
 from rules_processor import Nth
+from symbolic_analysis import encode_symbols
 import re
 
 set_option("display.colheader_justify", "left")
@@ -391,7 +392,7 @@ with ui.accordion(open=False):
                         _md = stage_name
 
                         # Remark on, or imply, the repeated run nature of this stage
-                        repeated_run = re.match(r'.*\s(\d+)\s+\(.*', stage_name)
+                        repeated_run = re.match(r".*\s(\d+)\s+\(.*", stage_name)
                         if repeated_run:
                             _md = f"{_md}, the {Nth(int(repeated_run.group(1)))} run of this stage"
 
@@ -404,7 +405,9 @@ with ui.accordion(open=False):
                             ]["stageInDay"].max()
                         ):
                             _md = f"{_md}, and last,"
-                        _md = f"{_md} stage of the day ({stage_info_row.iloc[0]["day"]})"
+                        _md = (
+                            f"{_md} stage of the day ({stage_info_row.iloc[0]["day"]})"
+                        )
 
                         # Remark on being the longest stage of the rally
                         if (
@@ -582,8 +585,48 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel(title="Splits Analysis"):
         with ui.accordion(open=False):
+
+            with ui.accordion_panel("Splits notes"):
+
+                @render.ui
+                def splits_text_intro():
+                    if input.stage() == "SHD":
+                        return ui.markdown("Shakedown...")
+
+                    (
+                        split_times_wide,
+                        split_times_long,
+                        split_times_wide_numeric,
+                    ) = split_times_data()
+
+                    if split_times_wide.empty:
+                        return DataFrame()
+
+                    md = ""
+                    split_cols = [
+                        c
+                        for c in split_times_wide_numeric.columns
+                        if c.startswith("round")
+                    ]
+
+                    for col in split_cols:
+                        split_times_wide_numeric[f"min_{col}"] = (
+                            split_times_wide_numeric[col].min()
+                        )
+                        split_times_wide_numeric[f"max_{col}"] = (
+                            split_times_wide_numeric[col].max()
+                        )
+                    split_times_wide_numeric["allSyms"] = (
+                        split_times_wide_numeric.apply(
+                            lambda row: encode_symbols(row, split_cols, 5),
+                            axis=1,
+                        )
+                    )
+                    print(split_times_wide_numeric)
+
             with ui.accordion_panel("Split times"):
                 with ui.accordion(open=False):
+
                     with ui.accordion_panel("Overall split times"):
 
                         with ui.card(class_="mt-3"):
@@ -756,9 +799,9 @@ with ui.accordion(open=False):
                                 split_cumdists, split_dists = split_dists_for_stage()
                                 if split_dists:
                                     if view == "pos_within":
-                                        output_.loc[:, split_cols] = output_[split_cols].rank(
-                                            method="min", na_option="keep"
-                                        )
+                                        output_.loc[:, split_cols] = output_[
+                                            split_cols
+                                        ].rank(method="min", na_option="keep")
                                     elif view == "pace":
                                         output_.update(
                                             output_.loc[:, split_dists.keys()].apply(
@@ -1019,7 +1062,9 @@ with ui.accordion(open=False):
                                     ]  # [:-1] + ["Finish"]
 
                                     if input.heatmap_outliers():
-                                        z_scores = ( output_ - output_.mean()) / output_.std()
+                                        z_scores = (
+                                            output_ - output_.mean()
+                                        ) / output_.std()
                                         output_ = z_scores
                                         # A boolen throws an inconsistent type error
                                         # output_.loc[:, split_cols] = (
