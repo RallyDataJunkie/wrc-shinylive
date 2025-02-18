@@ -15,6 +15,7 @@ from shiny.express import ui, input
 
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from datetime import datetime
 
 from wrc_rallydj.livetiming_api import (
     WRCLiveTimingAPIClient,
@@ -394,9 +395,14 @@ with ui.accordion(open=False):
 
                         stage_info = stages_data()
                         stage_info_row = stage_info.loc[
-                            stage_info["stageNo"] == stage_code]
-                        
+                            stage_info["stageNo"] == stage_code
+                        ]
+
                         stage_name = stage_info_row.iloc[0]["name"]
+                        ss_index = itinerary_df[
+                            itinerary_df["stage"] == stage_code
+                        ].index[0]
+
                         _md = stage_name
 
                         # Remark on, or imply, the repeated run nature of this stage
@@ -413,17 +419,36 @@ with ui.accordion(open=False):
                             ]["stageInDay"].max()
                         ):
                             _md = f"{_md}, and last,"
-                        _md = (
-                            f"{_md} stage of the day ({stage_info_row.iloc[0]["day"]})"
+                        start_time = datetime.fromisoformat(
+                            itinerary_df.iloc[ss_index]["firstCarDueDateTimeMs"]
                         )
+                        time_str = (
+                            start_time.strftime("starting at %I.%M%p")
+                            .lower()
+                            .replace(" 0", " ")
+                        )
+
+                        _md = f"{_md} stage of the day {stage_code} ({stage_info_row.iloc[0]["day"]}), {time_str}."
 
                         # Remark on being the longest stage of the rally
                         if (
                             stage_info_row.iloc[0]["distance"]
                             == stage_info["distance"].max()
                         ):
-                            _md = f"{_md}, the longest stage on the rally"
-                        md.append(f"{_md}.\n\n")
+                            _md = f"{_md} It is the longest stage on the rally."
+                        md.append(f"{_md}\n\n")
+
+                        # Previous liaison
+                        if not itinerary_df.empty:
+                            previous_tc = itinerary_df.iloc[ss_index - 1]
+                            previous_out = itinerary_df.iloc[ss_index - 2]
+                            previous_location = (
+                                f"previous {previous_out['location']} stage"
+                                if previous_out["type"] == "FlyingFinish"
+                                else f'{previous_out["location"]} {previous_out["type"]}'
+                            )
+                            _md = f'Prior to the stage, a {previous_tc["distance"]} liasion section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
+                            md.append(_md)
 
                         _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
                         """
@@ -474,10 +499,11 @@ with ui.accordion(open=False):
 
                         # End of stage
                         if not itinerary_df.empty:
-                            ss_index = itinerary_df[itinerary_df['stage'] == stage_code].index[0]
-                            future_ = itinerary_df.iloc[ss_index + 1:]
-                            # Get indices where condition is True
-                            next_tc_idx = future_[future_['stage'].str.startswith('T')].index[0]
+                            future_ = itinerary_df.iloc[ss_index + 1 :]
+                            # Get indices of time controls
+                            next_tc_idx = future_[
+                                future_["stage"].str.startswith("T")
+                            ].index[0]
                             next_tc = itinerary_df.iloc[next_tc_idx]
                         _md = f'Following the stage, a {next_tc["distance"]} liasion section to {next_tc["location"]}.'
                         md.append(_md)
