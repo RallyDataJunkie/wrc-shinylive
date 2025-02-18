@@ -442,7 +442,7 @@ with ui.accordion(open=False):
                                     float(previous_tc["distance"].split()[0])
                                 )
                             ).split()[0]
-                            _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liasion section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
+                            _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liaison section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
                             md.append(_md)
 
                             # End of stage
@@ -463,7 +463,7 @@ with ui.accordion(open=False):
                                 .lower()
                                 .replace(" 0", " ")
                             )
-                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]} ({next_arrival_time}).'
+                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liaison section to {next_tc["location"]} ({next_arrival_time}).'
 
                             # Stage status
                             state_status = itinerary_df.iloc[ss_index]["status"]
