@@ -155,6 +155,7 @@ with ui.accordion(open=False):
                         itinerary = itinerary_data()
                         if itinerary.empty:
                             return
+
                         retcols = [
                             "stage",
                             "type",
@@ -166,7 +167,10 @@ with ui.accordion(open=False):
                             "timingPrecision",
                             "controlPenalties",
                         ]
-                        return render.DataGrid(itinerary[retcols])
+                        # Get latest itinerary
+                        itinerary = itinerary[retcols].copy()
+                        itinerary.drop_duplicates(keep="last", inplace=True)
+                        return render.DataGrid(itinerary)
 
                 with ui.accordion_panel("Startlist"):
 

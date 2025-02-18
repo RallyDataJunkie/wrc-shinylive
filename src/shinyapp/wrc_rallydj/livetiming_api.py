@@ -231,6 +231,7 @@ def tablify(json_data, subcolkey=None, addcols=None):
                 for c in [k for k in value.keys() if k != subcolkey]:
                     _df[c] = value[c]
                     df = concat([df, _df])
+    df.drop_duplicates(inplace=True)
     return df
 
 
