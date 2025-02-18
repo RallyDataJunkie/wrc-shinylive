@@ -455,13 +455,21 @@ with ui.accordion(open=False):
                             art_ = p.a(
                                 p.number_to_words(float(next_tc["distance"].split()[0]))
                             ).split()[0]
-                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]}.'
+                            arrival_time = datetime.fromisoformat(
+                                next_tc["firstCarDueDateTimeMs"]
+                            )
+                            next_arrival_time = (
+                                arrival_time.strftime("from %I.%M%p")
+                                .lower()
+                                .replace(" 0", " ")
+                            )
+                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]} ({next_arrival_time}).'
 
                             # Stage status
                             state_status = itinerary_df.iloc[ss_index]["status"]
                             if state_status:
-                                md.append(f"Stage status: __{state_status}__.")
-                                
+                                md.append(f"Stage status: *{state_status}*.")
+
                         times = stage_times_data()
                         overall_df = overall_data()
 
