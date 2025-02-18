@@ -817,7 +817,7 @@ class WRCLiveTimingAPIClient:
                 time_to_seconds, retzero=True
             )
         if "stageTime" in df_stageTimes:
-            df_stageTimes["Time"] = df_stageTimes["stageTime"].apply(
+            df_stageTimes["timeInS"] = df_stageTimes["stageTime"].apply(
                 time_to_seconds, retzero=True
             )
             # Pace annotations
@@ -827,16 +827,18 @@ class WRCLiveTimingAPIClient:
                     df_stageDetails["stageId"] == stageId, "distance"
                 ].iloc[0]
             )
-            df_stageTimes["speed (km/h)"] = stage_dist / (df_stageTimes["Time"] / 3600)
+            df_stageTimes["speed (km/h)"] = stage_dist / (
+                df_stageTimes["timeInS"] / 3600
+            )
             # Use .loc[] to modify the original DataFrame in place
-            df_stageTimes["pace (s/km)"] = df_stageTimes["Time"] / stage_dist
+            df_stageTimes["pace (s/km)"] = df_stageTimes["timeInS"] / stage_dist
             df_stageTimes["pace diff (s/km)"] = (
                 df_stageTimes["pace (s/km)"] - df_stageTimes.loc[0, "pace (s/km)"]
             )
             # A percent diff is always relative to something
             # In rebasing, we need to work with the actual times
             # so handle percentage diffs in the display logic for now?
-            # df_stageTimes["percent"] = 100 * df_stageTimes["Time"] / df_stageTimes.loc[0,"Time"]
+            # df_stageTimes["percent"] = 100 * df_stageTimes["timeInS"] / df_stageTimes.loc[0,"timeInS"]
 
         return df_stageTimes
 

@@ -1,5 +1,5 @@
 # import pandas as pd
-from pandas import set_option, DataFrame, merge, melt, to_numeric, concat
+from pandas import set_option, DataFrame, melt, to_numeric, concat
 from seaborn import heatmap, lineplot, barplot, boxplot
 import json
 from pathlib import Path
@@ -599,9 +599,9 @@ with ui.accordion(open=False):
                             # Add percentage time column using rebase driver time basis
                             stage_times["percent"] = (
                                 100
-                                * stage_times["Time"]
+                                * stage_times["timeInS"]
                                 / stage_times.loc[
-                                    stage_times["carNo"] == rebase_driver, "Time"
+                                    stage_times["carNo"] == rebase_driver, "timeInS"
                                 ].iloc[0]
                             ).round(1)
 
@@ -1214,7 +1214,16 @@ with ui.accordion(open=False):
                                     ) = split_times_data()
                                     if split_times_long.empty:
                                         return
-                                    split_times_long = split_times_long.copy()
+                                    split_times_long = split_times_long[["carNo","roundN","timeInS"]].copy()
+
+                                    # Add final stage times
+                                    times = stage_times_data()
+                                    if not times.empty:
+                                        times = times[["carNo", "timeInS"]].copy()
+                                        times["roundN"] = f"round{len(split_times_long["roundN"].unique())+1}"
+                                        split_times_long = concat(
+                                            [split_times_long, times], ignore_index=True
+                                        )
 
                                     # TO DO - need a function to rebase a long df by group
                                     ll2 = split_times_long.pivot(
@@ -1222,6 +1231,7 @@ with ui.accordion(open=False):
                                         columns="roundN",
                                         values="timeInS",
                                     ).reset_index()
+
                                     cols = [
                                         c for c in ll2.columns if c.startswith("round")
                                     ]
