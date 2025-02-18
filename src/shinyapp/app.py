@@ -23,7 +23,7 @@ from wrc_rallydj.livetiming_api import (
 )
 from icons import question_circle_fill
 from rules_processor import Nth
-from symbolic_analysis import encode_symbols
+from symbolic_analysis import get_splits_symbols
 import re
 
 set_option("display.colheader_justify", "left")
@@ -594,6 +594,7 @@ with ui.accordion(open=False):
 
                 @render.ui
                 def splits_text_intro():
+
                     if input.stage() == "SHD":
                         return ui.markdown("Shakedown...")
 
@@ -613,20 +614,10 @@ with ui.accordion(open=False):
                         if c.startswith("round")
                     ]
 
-                    for col in split_cols:
-                        split_times_wide_numeric[f"min_{col}"] = (
-                            split_times_wide_numeric[col].min()
-                        )
-                        split_times_wide_numeric[f"max_{col}"] = (
-                            split_times_wide_numeric[col].max()
-                        )
-                    split_times_wide_numeric["allSyms"] = (
-                        split_times_wide_numeric.apply(
-                            lambda row: encode_symbols(row, split_cols, 5),
-                            axis=1,
-                        )
+                    splits_symbols = get_splits_symbols(
+                        split_times_wide_numeric, split_cols
                     )
-                    print(split_times_wide_numeric)
+                    print(splits_symbols)
 
             with ui.accordion_panel("Split times"):
                 with ui.accordion(open=False):

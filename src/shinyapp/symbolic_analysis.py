@@ -73,16 +73,14 @@ def encode_symbols(row, sym_cols, num_bins=5):
     return "".join(symbols)
 
 
-"""
-Example usage:
-
-    for col in sym_cols:
-        df[f'{col}_min'] = df[col].min()
-        df[f'{col}_max'] = df[col].max()
-    
-    # Add the encoded column
-    df['allSyms'] = df.apply(
-        lambda row: encode_symbols(row, sym_cols, num_bins),
-        axis=1
+def get_splits_symbols(split_times_wide_numeric, split_cols):
+    """Generate symbolic encoding of split times."""
+    split_times_wide_numeric = split_times_wide_numeric.copy()
+    for col in split_cols:
+        split_times_wide_numeric[f"min_{col}"] = split_times_wide_numeric[col].min()
+        split_times_wide_numeric[f"max_{col}"] = split_times_wide_numeric[col].max()
+    split_times_wide_numeric["allSyms"] = split_times_wide_numeric.apply(
+        lambda row: encode_symbols(row, split_cols, 5),
+        axis=1,
     )
-"""
+    return split_times_wide_numeric[["carNo", "allSyms"]]
