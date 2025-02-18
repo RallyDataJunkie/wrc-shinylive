@@ -461,7 +461,9 @@ with ui.accordion(open=False):
                         overall_df = overall_data()
 
                         if times.empty or overall_df.empty:
-                            md.append(f"This stage was __{itinerary_df.iloc[ss_index]['status']}__.")
+                            state_status = itinerary_df.iloc[ss_index]['status']
+                            if state_status:
+                                md.append(f"Stage status: __{state_status}__.")
                             md.append(_md_final)
                             return ui.markdown("\n\n".join(md))
 
