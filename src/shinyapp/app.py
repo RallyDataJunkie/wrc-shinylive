@@ -376,15 +376,15 @@ with ui.accordion(open=False):
                     def stage_text_intro():
                         if input.stage() == "SHD":
                             return ui.markdown("Shakedown...")
-                        stage_code = wrc.stage_ids[input.stage()]
                         # TO DO - there will likely be errors if there are joint stage winners
                         # TO DO - cope with two or more winners
                         # TO DO - find an example of a joint stage win for debugging purposes
 
                         md = []
                         itinerary_df = itinerary_data()
-
                         stage_info = stages_data()
+
+                        stage_code = wrc.stage_ids[input.stage()]
                         stage_info_row = stage_info.loc[
                             stage_info["stageNo"] == stage_code
                         ]
