@@ -16,7 +16,11 @@ from shiny.express import ui, input
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient, time_to_seconds
+from wrc_rallydj.livetiming_api import (
+    WRCLiveTimingAPIClient,
+    time_to_seconds,
+    enrich_stage_winners,
+)
 from icons import question_circle_fill
 from rules_processor import Nth
 from symbolic_analysis import encode_symbols
@@ -1354,22 +1358,7 @@ def overall_data():
 def stage_winners_data():
     stagewinners = wrc.getStageWinners(update=True)
     stages = stages_data()
-    if not stages.empty:
-        stagewinners = merge(
-            stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo"
-        )
-        stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
-
-        stagewinners["daily_wins"] = (
-            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
-        )
-
-        stagewinners["speed (km/h)"] = round(
-            stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2
-        )
-        stagewinners["pace (s/km)"] = round(
-            stagewinners["timeInS"] / stagewinners["distance"], 2
-        )
+    stagewinners = enrich_stage_winners(stagewinners, stages)
 
     return stagewinners
 

@@ -4,7 +4,7 @@ import pathlib
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
 
 # import pandas as pd
-from pandas import to_datetime, date_range, to_numeric, DataFrame, concat, melt
+from pandas import to_datetime, date_range, to_numeric, DataFrame, concat, melt, merge
 import requests
 from itertools import zip_longest
 import datetime
@@ -65,6 +65,28 @@ SCHEMA_RESULTS_CALENDAR = {
     "year": int,
 }
 
+def enrich_stage_winners(stagewinners, stages, inplace=True):
+    if not inplace:
+        stagewinners = stagewinners.copy()
+        
+    if not stages.empty:
+        stagewinners = merge(
+            stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo"
+        )
+        stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
+
+        stagewinners["daily_wins"] = (
+            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
+        )
+
+        stagewinners["speed (km/h)"] = round(
+            stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2
+        )
+        stagewinners["pace (s/km)"] = round(
+            stagewinners["timeInS"] / stagewinners["distance"], 2
+        )
+
+        return stagewinners
 
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
