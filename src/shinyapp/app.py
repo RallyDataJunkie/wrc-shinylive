@@ -380,31 +380,21 @@ with ui.accordion(open=False):
                         # TO DO - there will likely be errors if there are joint stage winners
                         # TO DO - cope with two or more winners
                         # TO DO - find an example of a joint stage win for debugging purposes
-                        times = stage_times_data()
-                        overall_df = overall_data()
-                        itinerary_df = itinerary_data()
-
-                        if times.empty or overall_df.empty:
-                            return ui.markdown("No stage results / times available...")
-
-                        overall_pos = overall_df.loc[
-                            overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
-                        ].iloc[0]
 
                         md = []
+                        itinerary_df = itinerary_data()
 
                         stage_info = stages_data()
                         stage_info_row = stage_info.loc[
                             stage_info["stageNo"] == stage_code
                         ]
-
                         stage_name = stage_info_row.iloc[0]["name"]
+
                         ss_index = itinerary_df[
                             itinerary_df["stage"] == stage_code
                         ].index[0]
 
                         _md = stage_name
-
                         # Remark on, or imply, the repeated run nature of this stage
                         repeated_run = re.match(r".*\s(\d+)\s+\(.*", stage_name)
                         if repeated_run:
@@ -438,8 +428,8 @@ with ui.accordion(open=False):
                             _md = f"{_md} It is the longest stage on the rally."
                         md.append(f"{_md}\n\n")
 
-                        # Previous liaison
                         if not itinerary_df.empty:
+                            # Previous liaison
                             previous_tc = itinerary_df.iloc[ss_index - 1]
                             previous_out = itinerary_df.iloc[ss_index - 2]
                             previous_location = (
@@ -447,9 +437,37 @@ with ui.accordion(open=False):
                                 if previous_out["type"] == "FlyingFinish"
                                 else f'{previous_out["location"]} {previous_out["type"]}'
                             )
-                            art_ = p.a(p.number_to_words(float(previous_tc["distance"].split()[0]))).split()[0]
+                            art_ = p.a(
+                                p.number_to_words(
+                                    float(previous_tc["distance"].split()[0])
+                                )
+                            ).split()[0]
                             _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liasion section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
                             md.append(_md)
+
+                            # End of stage
+                            future_ = itinerary_df.iloc[ss_index + 1 :]
+                            # Get indices of time controls
+                            next_tc_idx = future_[
+                                future_["stage"].str.startswith("T")
+                            ].index[0]
+                            next_tc = itinerary_df.iloc[next_tc_idx]
+                            art_ = p.a(
+                                p.number_to_words(float(next_tc["distance"].split()[0]))
+                            ).split()[0]
+                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]}.'
+
+                        times = stage_times_data()
+                        overall_df = overall_data()
+
+                        if times.empty or overall_df.empty:
+                            md.append(f"This stage was __{itinerary_df.iloc[ss_index]['status']}__.")
+                            md.append(_md_final)
+                            return ui.markdown("\n\n".join(md))
+
+                        overall_pos = overall_df.loc[
+                            overall_df["carNo"] == times.iloc[0]["carNo"], "pos"
+                        ].iloc[0]
 
                         _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
                         """
@@ -464,6 +482,7 @@ with ui.accordion(open=False):
                             _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
 
                             md.append(_md)
+
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
                                 times["carNo"] == overall_df.iloc[0]["carNo"]
@@ -498,20 +517,7 @@ with ui.accordion(open=False):
                             _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
                             md.append(_md)  # Properly append the string
 
-                        # End of stage
-                        if not itinerary_df.empty:
-                            future_ = itinerary_df.iloc[ss_index + 1 :]
-                            # Get indices of time controls
-                            next_tc_idx = future_[
-                                future_["stage"].str.startswith("T")
-                            ].index[0]
-                            next_tc = itinerary_df.iloc[next_tc_idx]
-                        art_ = p.a(
-                            p.number_to_words(float(next_tc["distance"].split()[0]))
-                        ).split()[0]
-                        _md = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]}.'
-                        md.append(_md)
-
+                        md.append(_md_final)
                         return ui.markdown("\n\n".join(md))
 
                 with ui.accordion_panel("Overall position"):
