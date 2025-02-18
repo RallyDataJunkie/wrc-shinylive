@@ -16,6 +16,7 @@ from shiny.express import ui, input
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from datetime import datetime
+from adjustText import adjust_text
 
 from wrc_rallydj.livetiming_api import (
     WRCLiveTimingAPIClient,
@@ -928,22 +929,27 @@ with ui.accordion(open=False):
 
                     @render.ui
                     @reactive.event(input.stage, input.rebase_driver)
-                    def rebase_info():
+                    def rebase_driver_info():
+                        stages = stages_data()
+                        times = stage_times_data()
                         stage = input.stage()
                         rebase_driver = input.rebase_driver()
                         if (
                             stage == "SHD"
                             or not rebase_driver
                             or rebase_driver == "NONE"
-                            and rebase_driver != "ult"
                         ):
                             return
-                        stages = stages_data()
-                        times = stage_times_data()
+                        
+                        #TO DO: provide ult view if rebase_driver=="ult"
+                        
+                        if stages.empty or times.empty:
+                            return ui.markdown("*No data available.*")
 
                         stage_name = stages.loc[
                             stages["stageId"] == input.stage(), "name"
                         ].iloc[0]
+                        
                         # pos is zero indexed
                         pos = (
                             int(
@@ -1214,13 +1220,18 @@ with ui.accordion(open=False):
                                     ) = split_times_data()
                                     if split_times_long.empty:
                                         return
-                                    split_times_long = split_times_long[["carNo","roundN","timeInS"]].copy()
+                                    split_times_long = split_times_long[
+                                        ["carNo", "roundN", "timeInS"]
+                                    ].copy()
 
                                     # Add final stage times
                                     times = stage_times_data()
                                     if not times.empty:
                                         times = times[["carNo", "timeInS"]].copy()
-                                        times["roundN"] = f"round{len(split_times_long["roundN"].unique())+1}"
+                                        times["roundN"] = (
+                                            f"round{len(split_times_long["roundN"].unique())+1}"
+                                        )
+
                                         split_times_long = concat(
                                             [split_times_long, times], ignore_index=True
                                         )
@@ -1255,6 +1266,7 @@ with ui.accordion(open=False):
                                     split_cumdists, split_dists = (
                                         split_dists_for_stage()
                                     )
+                                    plt.subplot()
                                     ll3["carNo"] = ll3["carNo"].map(carNum2name())
                                     if split_cumdists:
                                         split_cumdists["round0"] = 0.0
@@ -1273,6 +1285,43 @@ with ui.accordion(open=False):
                                     if rebase_driver and rebase_driver != "NONE":
                                         g.set_ylim(g.get_ylim()[::-1])
 
+                                    texts = []
+                                    for line, label in zip(
+                                        g.get_lines(), ll3["carNo"].unique()
+                                    ):
+                                        x_data, y_data = (
+                                            line.get_xdata(),
+                                            line.get_ydata(),
+                                        )
+                                        x_last, y_last = x_data[-1], y_data[-1]
+                                        text = g.text(
+                                            x_data[-1],
+                                            y_data[-1],
+                                            f" {label}",
+                                            ha="left",
+                                            verticalalignment="center",
+                                        )
+                                        texts.append(text)
+
+                                    # Adjust labels to avoid overlap
+                                    adjust_text(
+                                        texts,
+                                        only_move={
+                                            "text": "y",
+                                            "static": "y",
+                                            "explode": "y",
+                                            "pull": "y",
+                                        },
+                                        arrowprops=dict(
+                                            arrowstyle="-", color="gray", lw=0.5
+                                        ),
+                                    )
+
+                                    g.set_xlim(
+                                        ll3["dist"].min(), ll3["dist"].max() * 1.15
+                                    )
+
+                                    g.legend_.remove()
                                     return g
 
 
