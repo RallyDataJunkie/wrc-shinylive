@@ -378,12 +378,14 @@ with ui.accordion(open=False):
                     def stage_text_intro():
                         if input.stage() == "SHD":
                             return ui.markdown("Shakedown...")
-
+                        stage_code = wrc.stage_ids[input.stage()]
                         # TO DO - there will likely be errors if there are joint stage winners
                         # TO DO - cope with two or more winners
                         # TO DO - find an example of a joint stage win for debugging purposes
                         times = stage_times_data()
                         overall_df = overall_data()
+                        itinerary_df = itinerary_data()
+
                         if times.empty or overall_df.empty:
                             return ui.markdown("No stage results / times available...")
 
@@ -395,8 +397,8 @@ with ui.accordion(open=False):
 
                         stage_info = stages_data()
                         stage_info_row = stage_info.loc[
-                            stage_info["stageNo"] == wrc.stage_ids[input.stage()]
-                        ]
+                            stage_info["stageNo"] == stage_code]
+                        
                         stage_name = stage_info_row.iloc[0]["name"]
                         _md = stage_name
 
@@ -472,6 +474,16 @@ with ui.accordion(open=False):
                             leaderDiff = leader_row.iloc[0]["diffPrev"]
                             _md = f"""Rally leader {overall_df.iloc[0]["driver"]} was {leaderDiff} seconds behind in {Nth(leaderPos)} position."""
                             md.append(_md)  # Properly append the string
+
+                        # End of stage
+                        if not itinerary_df.empty:
+                            ss_index = itinerary_df[itinerary_df['stage'] == stage_code].index[0]
+                            future_ = itinerary_df.iloc[ss_index + 1:]
+                            # Get indices where condition is True
+                            next_tc_idx = future_[future_['stage'].str.startswith('T')].index[0]
+                            next_tc = itinerary_df.iloc[next_tc_idx]
+                        _md = f'Following the stage, a {next_tc["distance"]} liasion section to {next_tc["location"]}.'
+                        md.append(_md)
 
                         return ui.markdown("\n\n".join(md))
 
