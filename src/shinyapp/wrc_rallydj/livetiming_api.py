@@ -65,6 +65,8 @@ SCHEMA_RESULTS_CALENDAR = {
     "year": int,
 }
 
+# TO DO - refactor this into the WRCLiveTimingAPIClient class
+# or create an enrichment class
 def enrich_stage_winners(stagewinners, stages, inplace=True):
     if not inplace:
         stagewinners = stagewinners.copy()
@@ -89,6 +91,8 @@ def enrich_stage_winners(stagewinners, stages, inplace=True):
         return stagewinners
 
 
+# TO DO - refactor this into the WRCLiveTimingAPIClient class
+# or create an enrichment class
 def scaled_splits(
     split_times_wide_numeric,
     split_times_wide,
