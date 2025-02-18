@@ -874,6 +874,7 @@ with ui.accordion(open=False):
             with ui.accordion_panel("Rebased driver reports"):
                 with ui.card(class_="mt-3"):
                     with ui.card_header():
+
                         with ui.tooltip(
                             placement="right", id="rebased_driver_report_tt"
                         ):
@@ -882,6 +883,7 @@ with ui.accordion(open=False):
                                 question_circle_fill,
                             )
                             'Rebased delta times and pace are calculated relative to the selected "rebase" driver.'
+
                         with ui.tooltip(id="rebase_reverse_palette_tt"):
                             ui.input_checkbox(
                                 "rebase_reverse_palette",
@@ -889,6 +891,7 @@ with ui.accordion(open=False):
                                 False,
                             ),
                             "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+
                     # Create driver rebase selector
                     with ui.tooltip(id="rebase_driver_tt"):
                         ui.input_select(
@@ -964,6 +967,14 @@ with ui.accordion(open=False):
                     with ui.accordion(open=False):
                         with ui.accordion_panel("Heatmap"):
 
+                            with ui.tooltip(id="heatmap_outliers_tt"):
+                                ui.input_checkbox(
+                                    "heatmap_outliers",
+                                    "Heatmap outliers",
+                                    False,
+                                ),
+                                "Calculate diff to leader z-scores to identify outliers."
+
                             with ui.card(class_="mt-3"):
                                 with ui.card_header():
                                     with ui.tooltip(
@@ -1001,6 +1012,20 @@ with ui.accordion(open=False):
                                         split_times_wide_numeric, rebase_driver
                                     )
 
+                                    output_.set_index("carNo", inplace=True)
+                                    output_.columns = [
+                                        f"Split {i}"
+                                        for i in range(1, output_.shape[1] + 1)
+                                    ]  # [:-1] + ["Finish"]
+
+                                    if input.heatmap_outliers():
+                                        z_scores = ( output_ - output_.mean()) / output_.std()
+                                        output_ = z_scores
+                                        # A boolen throws an inconsistent type error
+                                        # output_.loc[:, split_cols] = (
+                                        #    abs(z_scores) > 3
+                                        # ).any(axis=1)
+
                                     colors = (
                                         ["red", "white", "green"]
                                         if input.rebase_reverse_palette()
@@ -1009,12 +1034,6 @@ with ui.accordion(open=False):
                                     cmap = LinearSegmentedColormap.from_list(
                                         "custom_cmap", colors
                                     )
-
-                                    output_.set_index("carNo", inplace=True)
-                                    output_.columns = [
-                                        f"Split {i}"
-                                        for i in range(1, output_.shape[1] + 1)
-                                    ]  # [:-1] + ["Finish"]
 
                                     output_.rename(
                                         columns={
