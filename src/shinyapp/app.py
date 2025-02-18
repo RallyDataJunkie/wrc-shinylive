@@ -457,13 +457,15 @@ with ui.accordion(open=False):
                             ).split()[0]
                             _md_final = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]}.'
 
+                            # Stage status
+                            state_status = itinerary_df.iloc[ss_index]["status"]
+                            if state_status:
+                                md.append(f"Stage status: __{state_status}__.")
+                                
                         times = stage_times_data()
                         overall_df = overall_data()
 
                         if times.empty or overall_df.empty:
-                            state_status = itinerary_df.iloc[ss_index]['status']
-                            if state_status:
-                                md.append(f"Stage status: __{state_status}__.")
                             md.append(_md_final)
                             return ui.markdown("\n\n".join(md))
 
