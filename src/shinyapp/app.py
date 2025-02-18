@@ -24,7 +24,7 @@ from wrc_rallydj.livetiming_api import (
     scaled_splits,
 )
 from icons import question_circle_fill
-from rules_processor import Nth
+from rules_processor import p, Nth
 from symbolic_analysis import get_splits_symbols
 import re
 
@@ -447,7 +447,8 @@ with ui.accordion(open=False):
                                 if previous_out["type"] == "FlyingFinish"
                                 else f'{previous_out["location"]} {previous_out["type"]}'
                             )
-                            _md = f'Prior to the stage, a {previous_tc["distance"]} liasion section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
+                            art_ = p.a(p.number_to_words(float(previous_tc["distance"].split()[0]))).split()[0]
+                            _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liasion section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
                             md.append(_md)
 
                         _md = f"""{times.iloc[0]["driver"]} was in {Nth(1)} position and {Nth(overall_pos)} overall.
@@ -505,7 +506,10 @@ with ui.accordion(open=False):
                                 future_["stage"].str.startswith("T")
                             ].index[0]
                             next_tc = itinerary_df.iloc[next_tc_idx]
-                        _md = f'Following the stage, a {next_tc["distance"]} liasion section to {next_tc["location"]}.'
+                        art_ = p.a(
+                            p.number_to_words(float(next_tc["distance"].split()[0]))
+                        ).split()[0]
+                        _md = f'Following the stage, {art_} {next_tc["distance"]} liasion section to {next_tc["location"]}.'
                         md.append(_md)
 
                         return ui.markdown("\n\n".join(md))
