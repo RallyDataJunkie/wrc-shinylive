@@ -436,47 +436,46 @@ with ui.accordion(open=False):
                             _md = f"{_md} It is the longest stage on the rally."
                         md.append(f"{_md}\n\n")
 
-                        if not itinerary_df.empty:
-                            # Previous liaison
-                            previous_tc = itinerary_df.iloc[ss_index - 1]
-                            previous_out = itinerary_df.iloc[ss_index - 2]
-                            previous_location = (
-                                f"previous {previous_out['location']} stage"
-                                if previous_out["type"] == "FlyingFinish"
-                                else f'{previous_out["location"]} {previous_out["type"]}'
+                        # Previous liaison
+                        previous_tc = itinerary_df.iloc[ss_index - 1]
+                        previous_out = itinerary_df.iloc[ss_index - 2]
+                        previous_location = (
+                            f"previous {previous_out['location']} stage"
+                            if previous_out["type"] == "FlyingFinish"
+                            else f'{previous_out["location"]} {previous_out["type"]}'
+                        )
+                        art_ = p.a(
+                            p.number_to_words(
+                                float(previous_tc["distance"].split()[0])
                             )
-                            art_ = p.a(
-                                p.number_to_words(
-                                    float(previous_tc["distance"].split()[0])
-                                )
-                            ).split()[0]
-                            _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liaison section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
-                            md.append(_md)
+                        ).split()[0]
+                        _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liaison section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
+                        md.append(_md)
 
-                            # End of stage
-                            future_ = itinerary_df.iloc[ss_index + 1 :]
-                            # Get indices of time controls
-                            next_tc_idx = future_[
-                                future_["stage"].str.startswith("T")
-                            ].index[0]
-                            next_tc = itinerary_df.iloc[next_tc_idx]
-                            art_ = p.a(
-                                p.number_to_words(float(next_tc["distance"].split()[0]))
-                            ).split()[0]
-                            arrival_time = datetime.fromisoformat(
-                                next_tc["firstCarDueDateTimeMs"]
-                            )
-                            next_arrival_time = (
-                                arrival_time.strftime("from %I.%M%p")
-                                .lower()
-                                .replace(" 0", " ")
-                            )
-                            _md_final = f'Following the stage, {art_} {next_tc["distance"]} liaison section to {next_tc["location"]} ({next_arrival_time}).'
+                        # End of stage
+                        future_ = itinerary_df.iloc[ss_index + 1 :]
+                        # Get indices of time controls
+                        next_tc_idx = future_[
+                            future_["stage"].str.startswith("T")
+                        ].index[0]
+                        next_tc = itinerary_df.iloc[next_tc_idx]
+                        art_ = p.a(
+                            p.number_to_words(float(next_tc["distance"].split()[0]))
+                        ).split()[0]
+                        arrival_time = datetime.fromisoformat(
+                            next_tc["firstCarDueDateTimeMs"]
+                        )
+                        next_arrival_time = (
+                            arrival_time.strftime("from %I.%M%p")
+                            .lower()
+                            .replace(" 0", " ")
+                        )
+                        _md_final = f'Following the stage, {art_} {next_tc["distance"]} liaison section to {next_tc["location"]} ({next_arrival_time}).'
 
-                            # Stage status
-                            state_status = itinerary_df.iloc[ss_index]["status"]
-                            if state_status:
-                                md.append(f"Stage status: *{state_status}*.")
+                        # Stage status
+                        state_status = itinerary_df.iloc[ss_index]["status"]
+                        if state_status:
+                            md.append(f"Stage status: *{state_status}*.")
 
                         times = stage_times_data()
                         overall_df = overall_data()
