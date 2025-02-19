@@ -772,7 +772,7 @@ class WRCLiveTimingAPIClient:
             value_name="_time",
         ).dropna()
         splits_long_df["round"] = (
-            splits_long_df["roundN"].str.replace("round", "").astype(int)
+            splits_long_df["roundN"].str.replace("round", "").astype("Int64")
         )
         splits_long_df["timeInS_"] = splits_long_df["_time"].apply(time_to_seconds)
 
