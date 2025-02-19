@@ -761,18 +761,20 @@ class WRCLiveTimingAPIClient:
             df_overall = tablify(json_data)
             if "pos" in df_overall:
                 df_overall["pos"] = df_overall["pos"].astype("Int64")
-            df_overall["totalTimeInS"] = df_overall["totalTime"].apply(
-                time_to_seconds, retzero=True
-            )
-            df_overall["timeToCarBehind"] = abs(df_overall["totalTimeInS"].diff(-1))
-            if "diffFirst" in df_overall:
-                df_overall["overallGap"] = df_overall["diffFirst"].apply(
+            # If we are in shakedown, then the times are in roundN
+            if "totalTime" in df_overall:
+                df_overall["totalTimeInS"] = df_overall["totalTime"].apply(
                     time_to_seconds, retzero=True
                 )
-            if "diffPrev" in df_overall:
-                df_overall["overallDiff"] = df_overall["diffPrev"].apply(
-                    time_to_seconds, retzero=True
-                )
+                df_overall["timeToCarBehind"] = abs(df_overall["totalTimeInS"].diff(-1))
+                if "diffFirst" in df_overall:
+                    df_overall["overallGap"] = df_overall["diffFirst"].apply(
+                        time_to_seconds, retzero=True
+                    )
+                if "diffPrev" in df_overall:
+                    df_overall["overallDiff"] = df_overall["diffPrev"].apply(
+                        time_to_seconds, retzero=True
+                    )
             self.stage_id_annotations(df_overall, eventId, rallyId, stageId)
             self.overall_df = df_overall
 
