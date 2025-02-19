@@ -560,7 +560,9 @@ with ui.accordion(open=False):
                             return
                         retcols = [
                             k
-                            for k in [
+                            for k in overall_df.columns
+                            if k
+                            in [
                                 "pos",
                                 "carNo",
                                 "driver",
@@ -573,8 +575,7 @@ with ui.accordion(open=False):
                                 "totalTime",
                                 "groupClass",
                                 "eligibility",
-                            ]
-                            if k in overall_df.columns
+                            ] or k.startswith("round")
                         ]
                         return render.DataGrid(overall_df[retcols])
 
