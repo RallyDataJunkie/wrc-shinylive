@@ -409,7 +409,7 @@ with ui.accordion(open=False):
                             _md = f"{_md}, the {Nth(int(repeated_run.group(1)))} run of this stage"
 
                         # Remark on being the Nth stage of the day
-                        _md = f"{_md}, the {Nth(stage_info_row.iloc[0]["stageInDay"])}"
+                        _md = f"""{_md}, the {Nth(stage_info_row.iloc[0]["stageInDay"])}"""
                         if (
                             stage_info_row.iloc[0]["stageInDay"]
                             == stage_info[
@@ -426,7 +426,7 @@ with ui.accordion(open=False):
                             .replace(" 0", " ")
                         )
 
-                        _md = f"{_md} stage of the day {stage_code} ({stage_info_row.iloc[0]["day"]}), {time_str}."
+                        _md = f"""{_md} stage of the day {stage_code} ({stage_info_row.iloc[0]["day"]}), {time_str}."""
 
                         # Remark on being the longest stage of the rally
                         if (
