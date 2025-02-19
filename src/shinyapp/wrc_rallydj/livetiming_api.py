@@ -212,7 +212,15 @@ def tablify(json_data, subcolkey=None, addcols=None):
     if subcolkey is None:
         values = json_data["values"]
         # Create a DataFrame
-        df = DataFrame(values, columns=fields)
+        df = DataFrame(columns=fields)
+        _values = []
+        _nvals = len(fields)
+        for value in values:
+            _nval = len(value)
+            if _nval <_nvals:
+                value += [""] * (_nvals - _nval)
+            _values.append(value)
+        df = DataFrame(_values, columns=fields)
     else:
         df = DataFrame(columns=fields)
         if "values" in json_data:
