@@ -73,7 +73,7 @@ with ui.sidebar(open="desktop"):
     # Create event selector
     # Dynamically populated using a list of events
     # based on the season selection
-    ui.input_select("event", "Event:", {}, selected=wrc.rallyId)
+    ui.input_select("event", "Event:", {})
 
     # Create stages selector
     ui.input_select(
@@ -1482,7 +1482,8 @@ def update_events_select():
     events = (
         season[["rallyId", "rallyTitle"]].set_index("rallyId")["rallyTitle"].to_dict()
     )
-    ui.update_select("event", choices=events)
+    wrc.setEvent()
+    ui.update_select("event", choices=events, selected=wrc.rallyId)
 
 
 @reactive.effect
