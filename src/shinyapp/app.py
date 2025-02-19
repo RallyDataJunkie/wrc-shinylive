@@ -1479,7 +1479,6 @@ def split_times_data():
 
 
 @reactive.effect
-@reactive.event(input.season, input.championship)
 def update_events_select():
     season = season_data()
     if season_data().empty:
