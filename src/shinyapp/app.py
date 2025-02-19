@@ -321,17 +321,17 @@ with ui.accordion(open=False):
 
             @render.ui
             def stageresult_hero():
-                stage = input.stage()
+                stageId = input.stage()
                 stages = stages_data()
-                if stage == "SHD":
+                if stageId == "SHD":
                     return
 
                 times = stage_times_data()
                 if times.empty:
-                    print(f"No stage times in stage_times_data() for {stage}")
+                    print(f"No stage times in stage_times_data() for {stageId}")
                     return
                 stage_name = stages.loc[
-                    stages["stageId"] == input.stage(), "name"
+                    stages["stageId"] == stageId, "name"
                 ].iloc[0]
 
                 def _get_hero_text(pos):
@@ -381,7 +381,8 @@ with ui.accordion(open=False):
 
                     @render.ui
                     def stage_text_intro():
-                        if input.stage() == "SHD":
+                        stageId = input.stage()
+                        if stageId == "SHD":
                             return ui.markdown("Shakedown...")
                         # TO DO - there will likely be errors if there are joint stage winners
                         # TO DO - cope with two or more winners
@@ -391,7 +392,7 @@ with ui.accordion(open=False):
                         itinerary_df = itinerary_data()
                         stage_info = stages_data()
 
-                        stage_code = wrc.stage_ids[input.stage()]
+                        stage_code = wrc.stage_ids[stageId]
                         stage_info_row = stage_info.loc[
                             stage_info["stageNo"] == stage_code
                         ]
@@ -495,7 +496,7 @@ with ui.accordion(open=False):
                         stagewinners = stage_winners_data()
                         if not stagewinners.empty:
                             winner_row = stagewinners.loc[
-                                stagewinners["stageNo"] == wrc.stage_ids[input.stage()]
+                                stagewinners["stageNo"] == wrc.stage_ids[stageId]
                             ]
 
                             _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
@@ -595,6 +596,7 @@ with ui.accordion(open=False):
                     def stage_times_short_frame():
                         # We are rebasing the data here so we should copy.
                         # TO DO: would it be worth also having a rebased times reactive?
+                        stageId = input.stage()
                         stage_times = stage_times_data()
                         if stage_times.empty:
                             return
@@ -609,7 +611,7 @@ with ui.accordion(open=False):
                             "pace (s/km)",
                             "pace diff (s/km)",
                         ]
-                        if input.stage() == "SHD":
+                        if stageId == "SHD":
                             core_cols += [
                                 c for c in stage_times.columns if c.startswith("round")
                             ]
@@ -676,8 +678,8 @@ with ui.accordion(open=False):
 
                 @render.ui
                 def splits_text_intro():
-
-                    if input.stage() == "SHD":
+                    stageId = input.stage()
+                    if stageId == "SHD":
                         return ui.markdown("Shakedown...")
 
                     (
@@ -810,8 +812,9 @@ with ui.accordion(open=False):
                             @render.data_frame
                             @reactive.event(input.splits_section_view, input.stage)
                             def split_report():
+                                stageId = input.stage()
                                 view = input.splits_section_view()
-                                if input.stage() == "SHD":
+                                if stageId == "SHD":
                                     return
                                 (
                                     split_times_wide,
@@ -852,8 +855,9 @@ with ui.accordion(open=False):
                                         input.stage, input.splits_section_view
                                     )
                                     def plot_split_dists():
+                                        stageId = input.stage()
                                         view = input.splits_section_view()
-                                        if input.stage() == "SHD":
+                                        if stageId == "SHD":
                                             return
                                         (
                                             split_times_wide,
@@ -951,10 +955,10 @@ with ui.accordion(open=False):
                     def rebase_driver_info():
                         stages = stages_data()
                         times = stage_times_data()
-                        stage = input.stage()
+                        stageId = input.stage()
                         rebase_driver = input.rebase_driver()
                         if (
-                            stage == "SHD"
+                            stageId == "SHD"
                             or not rebase_driver
                             or rebase_driver == "NONE"
                         ):
@@ -966,7 +970,7 @@ with ui.accordion(open=False):
                             return ui.markdown("*No data available.*")
 
                         stage_name = stages.loc[
-                            stages["stageId"] == input.stage(), "name"
+                            stages["stageId"] == stageId, "name"
                         ].iloc[0]
 
                         # pos is zero indexed
@@ -1039,10 +1043,11 @@ with ui.accordion(open=False):
 
                                 @render.plot(alt="Heatmap of within split delta times.")
                                 def seaborn_heatmap_splits():
+                                    stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
                                     if (
-                                        input.stage() == "SHD"
+                                        stageId == "SHD"
                                         or not rebase_driver
                                         or rebase_driver == "NONE"
                                     ):
@@ -1132,10 +1137,11 @@ with ui.accordion(open=False):
 
                                 @render.plot(alt="Barplot of within split delta times.")
                                 def seaborn_barplot_splits():
+                                    stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
                                     if (
-                                        input.stage() == "SHD"
+                                        stageId == "SHD"
                                         or not rebase_driver
                                         or rebase_driver == "NONE"
                                     ):
@@ -1229,8 +1235,9 @@ with ui.accordion(open=False):
                                     alt="Line chart of within split delta times."
                                 )
                                 def seaborn_linechart_splits():
+                                    stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
-                                    if input.stage() == "SHD":
+                                    if stageId == "SHD":
                                         return
                                     (
                                         split_times_wide,
@@ -1379,12 +1386,13 @@ def _reshape_splits_wide_with_ult(split_times_wide_numeric, rebase_driver):
 @reactive.calc
 @reactive.event(input.event)
 def rally_id_var():
-    rally_id = input.event()
-    wrc.eventId = wrc.rallyId2eventId[rally_id]
-    wrc.rallyId = rally_id
-    # Forcing the startlist sets the car2driver mapping
-    _ = wrc.getStartlist()
-    return wrc.rallyId
+    rallyId = input.event()
+    if rallyId:
+        wrc.eventId = wrc.rallyId2eventId[rallyId]
+        wrc.rallyId = rallyId
+        # Forcing the startlist sets the car2driver mapping
+        _ = wrc.getStartlist()
+        return wrc.rallyId
 
 
 @reactive.calc
@@ -1455,7 +1463,8 @@ def startlist_data():
 @reactive.calc
 @reactive.event(input.event, input.stage)
 def stage_times_data():
-    wrc.stageId = input.stage()
+    stageId = input.stage()
+    wrc.stageId = stageId
     # WRC API data fetch
     stage_times = wrc.getStageTimes()
     return stage_times
@@ -1464,14 +1473,15 @@ def stage_times_data():
 @reactive.calc
 @reactive.event(input.stage, input.event, input.championship)
 def split_times_data():
-    wrc.stageId = input.stage()
+    stageId = input.stage()
+    wrc.stageId = stageId
     # WRC API data fetch
     # TO DO remove try - errors should be caught elsewhere?
     try:
         split_times_wide = wrc.getSplitTimes()
         split_times_long = wrc.getSplitsLong(split_times_wide)
         split_times_wide_numeric = wrc.get_splits_as_numeric(
-            split_times_wide, regularise=input.stage() != "SHD"
+            split_times_wide, regularise=stageId != "SHD"
         )
         return split_times_wide, split_times_long, split_times_wide_numeric
     except:
@@ -1518,7 +1528,8 @@ def update_stages_driver_rebase_select():
 @reactive.effect
 @reactive.event(input.championship, input.event, input.stage)
 def update_driver_rebase_select():
-    if input.stage() == "SHD" or stage_times_data().empty:
+    stageId = input.stage()
+    if stageId == "SHD" or stage_times_data().empty:
         return
     # rebase_drivers = {"NONE": ""}
     rebase_drivers = {}
@@ -1564,11 +1575,10 @@ def getSplitDists():
 @reactive.calc
 @reactive.event(input.event, input.stage)
 def split_dists_for_stage():
+    stageId = input.stage()
     split_dists = getSplitDists()
     try:
-        split_cumdists = (
-            split_dists.loc[wrc.stage_ids[input.stage()]].dropna().to_dict()
-        )
+        split_cumdists = split_dists.loc[wrc.stage_ids[stageId]].dropna().to_dict()
         split_cumdists = {k: split_cumdists[k] for k in sorted(split_cumdists)}
 
         # Extract values in the sorted order of keys
