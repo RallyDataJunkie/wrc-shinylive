@@ -85,6 +85,12 @@ with ui.sidebar(open="desktop"):
 
 # The accordion widget provides collapsible elements
 with ui.accordion(open=False):
+    with ui.accordion_panel("About"):
+        @render.ui
+        def about():
+            txt = "This website was developed in order to explore the use of Shinylive-Python for developing in-browser reactive Python applications, and to support personal use (reasearch, analysis, visualisation, reporting) of timing and results data arising from WRC rally events.\n\nThe website may contain errors resulting from the processing of the data: please file an issue at https://github.com/RallyDataJunkie/wrc-shinylive/issues if you notice an error.\n\n*This website is unofficial and is not associated in any way with WRC Promoter GmbH. WRC WORLD RALLY CHAMPIONSHIP is a trade mark of the FEDERATION INTERNATIONALE DE L'AUTOMOBILE.*"
+            return ui.markdown(txt)
+
     with ui.accordion_panel("Season info"):
 
         @render.data_frame
