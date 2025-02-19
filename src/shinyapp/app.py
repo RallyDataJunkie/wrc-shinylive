@@ -25,7 +25,7 @@ from wrc_rallydj.livetiming_api import (
     scaled_splits,
 )
 from icons import question_circle_fill
-from rules_processor import p, Nth, core_stage, process_rules
+from rules_processor import p, Nth, core_stage, process_rally_overall_rules
 from symbolic_analysis import get_splits_symbols
 import re
 
@@ -542,7 +542,7 @@ with ui.accordion(open=False):
                             stage_info,
                             stage_code,
                         )
-                        remarks = process_rules(_overall_diff)
+                        remarks = process_rally_overall_rules(_overall_diff)
 
                         for remark in remarks:
                             md.append(remark[0])

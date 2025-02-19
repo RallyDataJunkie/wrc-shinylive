@@ -149,14 +149,14 @@ def rule_into_first(row):
             if row["overallPosDelta"] > 1
             else "moved"
         )
-        remark = f"""With {Nth(row["pos"])} on stage, {row["driver"]} {big_jump} into first place overall, taking a lead of {round(row["timeToCarBehind"], 1)}s"""
+        remark = f"""Taking {Nth(row["pos"])} place on stage, {row["driver"]} {big_jump} into first place overall, taking a lead of {round(row["timeToCarBehind"], 1)}s"""
     return (remark, 1.0)
 
 
 def rule_lost_first(row):
     remark = ""
     if row["prevLeader"] and not row["currLeader"]:
-        remark = f"""Coming in at {Nth(row["pos"])} on the stage, {row["Gap"]}s behind the stage winner, {row["driver"]} lost the overall lead, falling back to {Nth(row["overallPos"])}"""
+        remark = f"""Coming in at {Nth(row["pos"])} on the stage, {row["Gap"]}s behind the stage winner, {row["driver"]} lost the overall lead, falling back to {Nth(row["overallPos"])} place"""
         if row["overallPos"] >= 2:
             fell_back = f"""{remark}, {row["overallGap"]}s behind the new leader."""
         else:
@@ -189,7 +189,7 @@ def rule_onto_podium(row):
         remark = ""
 
 
-def process_rules(df):
+def process_rally_overall_rules(df):
     # Apply each rule to create new columns
     remarks_df = DataFrame(
         {
