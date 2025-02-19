@@ -345,10 +345,11 @@ class WRCLiveTimingAPIClient:
             expire_after=SECONDS
         """
         self.year = year
-        self.championshipId = None
         # We will auto update the championship based on
         # championshipId set separately as a class property
-        self._championship = championship
+        self._championship = None #championship
+        self.championshipId = None #self.getChampionshipId()
+        self.championship = championship
         self.group = group
         self.full_calendar = DataFrame()
         self.results_calendar_df = DataFrame()
@@ -369,6 +370,7 @@ class WRCLiveTimingAPIClient:
         self.seasonId = None
         self.eventId = None
         self.rallyId = None
+        self._stageId = None
         self.stageId = None
 
         # Initialize the proxy with caching if requested
@@ -428,11 +430,21 @@ class WRCLiveTimingAPIClient:
         return self._championship
 
     @property
+    def stageId(self):
+        return self._stageId
+
+    @property
     def db_results_calendar_df(self):
         """Dynamically fetches the latest data from the 'results_calendar' table."""
         return DataFrame(
             self.db.query(f"SELECT * FROM results_calendar WHERE year='{self.year}'")
         )
+
+    @stageId.setter
+    def stageId(self, value):
+        # This will attempt to set a valid stage code
+        # but will not validate the supplied value
+        self._stageId = self.stage_codes.get(value, value) or self._stageId
 
     @championship.setter
     def championship(self, value):
@@ -870,7 +882,7 @@ class WRCLiveTimingAPIClient:
     ):
         eventId = self.eventId if eventId is None else eventId
         rallyId = self.rallyId if rallyId is None else rallyId
-        stageId = self.stageId if stageId is None else stageId
+        stageId = self.stage_codes.get(stageId, stageId) or self.stageId
         championship = self.championship if championship is None else championship
         if int(self.year) > 2023:
             stub = f"result/splitTime?championshipId={self.getChampionshipId(championship)}&eventId={eventId}&rallyId={rallyId}&stageId={stageId}&championship={championship}"
