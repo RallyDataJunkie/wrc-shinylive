@@ -3,3 +3,4 @@ shinysite
 __pycache__/
 src/_book
 *.egg-info
+src/_site

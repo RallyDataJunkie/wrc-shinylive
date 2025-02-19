@@ -1,0 +1,11 @@
+---
+format: live-html
+---
+
+HEre
+
+```{pyodide}
+print("hello")
+```
+
+Thwre

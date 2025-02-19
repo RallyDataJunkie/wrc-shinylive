@@ -1,12 +1,9 @@
 from urllib.parse import urljoin
 from parse import parse
-import pathlib
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
 
 # import pandas as pd
 from pandas import to_datetime, date_range, to_numeric, DataFrame, concat, melt, merge
-import requests
-from itertools import zip_longest
 import datetime
 from numpy import nan
 from sqlite_utils import Database
@@ -211,20 +208,20 @@ def tablify(json_data, subcolkey=None, addcols=None):
     # Note that the JSON may be a few rows short cf. provided keys
     if "fields" not in json_data:
         return DataFrame()
+    fields = json_data["fields"]
     if subcolkey is None:
-        fields = json_data["fields"]
         values = json_data["values"]
-
         # Create a DataFrame
         df = DataFrame(values, columns=fields)
     else:
-        df = DataFrame(columns=json_data["fields"])
+        df = DataFrame(columns=fields)
         if "values" in json_data:
-            for value in json_data["values"]:
+            values = json_data["values"]
+            for value in values:
                 _df = DataFrame(value[subcolkey])
-                if len(_df.columns) < len(json_data["fields"]):
-                    _df[[json_data["fields"][len(_df.columns) :]]] = None
-                _df.columns = json_data["fields"]
+                if len(_df.columns) < len(fields):
+                    _df[fields[len(_df.columns):]] = None
+                _df.columns = fields
                 if addcols:
                     for c in addcols:
                         _df[c] = value[c]
@@ -483,6 +480,7 @@ class WRCLiveTimingAPIClient:
             if not self.full_calendar.empty
             else None
         )
+
         self.setEvent(eventName=eventName)
 
     @staticmethod
@@ -636,9 +634,11 @@ class WRCLiveTimingAPIClient:
                 return stub
             json_data = self._WRC_json(stub)
             df_calendar = tablify(json_data)
-            df_calendar["year"] = (
-                df_calendar["date"].str.extract(r"(\d{4})").astype(int)
-            )
+            if not df_calendar.empty:
+                if "date" in df_calendar.columns:
+                    df_calendar["year"] = (
+                        df_calendar["date"].str.extract(r"(\d{4})").astype("Int64")
+                    )
             # timeify(df_calendar, "date", "daterange")
             # timeify(df_calendar, "startDate")
             # timeify(df_calendar, "finishDate")
