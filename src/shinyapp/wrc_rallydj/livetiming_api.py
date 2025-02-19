@@ -697,7 +697,7 @@ class WRCLiveTimingAPIClient:
 
         return self.stage_details_df
 
-    def getItinerary(self, eventId=None, update=False):
+    def getItinerary(self, latest=True, eventId=None, update=False):
         if self.itinerary_df.empty or update:
             eventId = self.eventId if eventId is None else eventId
 
@@ -706,6 +706,13 @@ class WRCLiveTimingAPIClient:
             if not json_data:
                 return DataFrame()
             df_itinerary = tablify(json_data, "values")
+            if latest:
+                # Get latest itinerary
+                df_itinerary.drop_duplicates(
+                    subset=["stage"], keep="last", inplace=True
+                )
+                df_itinerary.reset_index(drop=True, inplace=True)
+
             self.itinerary_df = df_itinerary
         return self.itinerary_df
 
