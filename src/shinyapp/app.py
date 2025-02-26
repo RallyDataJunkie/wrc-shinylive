@@ -703,115 +703,155 @@ with ui.accordion(open=False):
                     )
                     print(splits_symbols)
 
-            with ui.accordion_panel("Split times"):
-                with ui.accordion(open=False):
+            with ui.accordion_panel("Overall split times"):
 
-                    with ui.accordion_panel("Overall split times"):
-
-                        with ui.card(class_="mt-3"):
-                            with ui.card_header():
-                                with ui.tooltip(
-                                    placement="right", id="splits_times_original_tt"
-                                ):
-                                    ui.span(
-                                        "WRC split times data ",
-                                        question_circle_fill,
-                                    )
-                                    "Original timing data from WRC live timing API."
-
-                            @render.table
-                            @reactive.event(input.stage)
-                            def split_times_original():
-                                (
-                                    split_times_wide,
-                                    split_times_long,
-                                    split_times_wide_numeric,
-                                ) = split_times_data()
-                                if split_times_wide.empty:
-                                    return DataFrame()
-
-                                display_cols = [
-                                    "roadPos",
-                                    "start",
-                                    "carNo",
-                                    "driver",
-                                    "team/car",
-                                    "teamName",
-                                    "eligibility",
-                                    "groupClass",
-                                    "stageTime",
-                                    "diffFirst",
-                                ]
-                                # A set intersection does not preserve order?
-                                display_cols = [
-                                    c
-                                    for c in display_cols
-                                    if c in split_times_wide.columns
-                                ] + [
-                                    c
-                                    for c in split_times_wide.columns
-                                    if c.startswith("round")
-                                ]
-
-                                return split_times_wide[display_cols]
-
-                    with ui.accordion_panel("Split times detail"):
-
-                        @render.ui
-                        @reactive.event(input.stage)
-                        def split_sections_details():
-                            split_cumdists, split_dists = split_dists_for_stage()
-                            return ui.markdown(
-                                f"Split section distances: {split_dists}"
+                with ui.card(class_="mt-3"):
+                    with ui.card_header():
+                        with ui.tooltip(
+                            placement="right", id="splits_times_original_tt"
+                        ):
+                            ui.span(
+                                "WRC split times data ",
+                                question_circle_fill,
                             )
+                            "Original timing data from WRC live timing API."
 
-                        with ui.card(class_="mt-3"):
-                            with ui.card_header():
-                                with ui.tooltip(
-                                    placement="right", id="splits_section_report_tt"
-                                ):
-                                    ui.span(
-                                        "Split section report ",
-                                        question_circle_fill,
-                                    )
-                                    "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
+                    @render.table
+                    @reactive.event(input.stage)
+                    def split_times_original():
+                        (
+                            split_times_wide,
+                            split_times_long,
+                            split_times_wide_numeric,
+                        ) = split_times_data()
+                        if split_times_wide.empty:
+                            return DataFrame()
 
-                            @render.ui
-                            @reactive.event(input.stage, input.splits_section_view)
-                            def split_report_view():
-                                view = input.splits_section_view()
-                                split_cumdists, split_dists = split_dists_for_stage()
-                                typ = {
-                                    "time": "Time (s) within each split (*lower* is better).",
-                                    "speed": "Speed (km/h) within each split (*higher* is better).",
-                                    "pace": "Pace (s/km) within each split (*lower* is better.)",
-                                    "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
-                                    "pos_within": "Rank position within split (*lower* is better).",
-                                    "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
-                                }
-                                return ui.markdown(typ[view])
+                        display_cols = [
+                            "roadPos",
+                            "start",
+                            "carNo",
+                            "driver",
+                            "team/car",
+                            "teamName",
+                            "eligibility",
+                            "groupClass",
+                            "stageTime",
+                            "diffFirst",
+                        ]
+                        # A set intersection does not preserve order?
+                        display_cols = [
+                            c
+                            for c in display_cols
+                            if c in split_times_wide.columns
+                        ] + [
+                            c
+                            for c in split_times_wide.columns
+                            if c.startswith("round")
+                        ]
 
-                            with ui.tooltip(id="splits_section_view_tt"):
-                                ui.input_select(
-                                    "splits_section_view",
-                                    "Section report view",
-                                    {
-                                        "time": "Section time (s)",
-                                        "pace": "Av. pace in section (s/km)",
-                                        "speed": "Av. speed in section (km/h)",
-                                        "time_acc": "Acc. time over sections (s)",
-                                        "pos_within": "Section time rank",
-                                        "pos_acc": "Acc. time rank",
-                                    },
-                                    selected="time",
-                                ),
-                                "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
-                                # Scope the view if data available
+                        return split_times_wide[display_cols]
 
-                            # @render.table
-                            @render.data_frame
-                            @reactive.event(input.splits_section_view, input.stage)
-                            def split_report():
+            with ui.accordion_panel("Split times detail"):
+
+                @render.ui
+                @reactive.event(input.stage)
+                def split_sections_details():
+                    split_cumdists, split_dists = split_dists_for_stage()
+                    return ui.markdown(
+                        f"Split section distances: {split_dists}"
+                    )
+
+                with ui.card(class_="mt-3"):
+                    with ui.card_header():
+                        with ui.tooltip(
+                            placement="right", id="splits_section_report_tt"
+                        ):
+                            ui.span(
+                                "Split section report ",
+                                question_circle_fill,
+                            )
+                            "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
+
+                    @render.ui
+                    @reactive.event(input.stage, input.splits_section_view)
+                    def split_report_view():
+                        view = input.splits_section_view()
+                        split_cumdists, split_dists = split_dists_for_stage()
+                        typ = {
+                            "time": "Time (s) within each split (*lower* is better).",
+                            "speed": "Speed (km/h) within each split (*higher* is better).",
+                            "pace": "Pace (s/km) within each split (*lower* is better.)",
+                            "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
+                            "pos_within": "Rank position within split (*lower* is better).",
+                            "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
+                        }
+                        return ui.markdown(typ[view])
+
+                    with ui.tooltip(id="splits_section_view_tt"):
+                        ui.input_select(
+                            "splits_section_view",
+                            "Section report view",
+                            {
+                                "time": "Section time (s)",
+                                "pace": "Av. pace in section (s/km)",
+                                "speed": "Av. speed in section (km/h)",
+                                "time_acc": "Acc. time over sections (s)",
+                                "pos_within": "Section time rank",
+                                "pos_acc": "Acc. time rank",
+                            },
+                            selected="time",
+                        ),
+                        "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
+                        # Scope the view if data available
+
+                    # @render.table
+                    @render.data_frame
+                    @reactive.event(input.splits_section_view, input.stage)
+                    def split_report():
+                        stageId = input.stage()
+                        view = input.splits_section_view()
+                        if stageId == "SHD":
+                            return
+                        (
+                            split_times_wide,
+                            split_times_long,
+                            split_times_wide_numeric,
+                        ) = split_times_data()
+                        split_cumdists, split_dists = split_dists_for_stage()
+                        split_cols = [
+                            c
+                            for c in split_times_wide_numeric.columns
+                            if c.startswith("round")
+                        ]
+                        split_durations = wrc.get_split_duration(
+                            split_times_wide_numeric,
+                            split_cols,
+                        )
+                        output_ = scaled_splits(
+                            split_times_wide_numeric,
+                            split_times_wide,
+                            split_dists,
+                            split_cols,
+                            split_durations,
+                            view,
+                            carNum2name(),
+                        )
+                        if not output_.empty:
+                            return render.DataGrid(output_)
+
+                    with ui.accordion(open=False):
+                        with ui.accordion_panel(
+                            "Split section speed/pace distributions"
+                        ):
+
+                            @render.plot(
+                                alt="Box plot of split section speed/pace distributions."
+                            )
+                            @reactive.event(
+                                input.stage, input.splits_section_view
+                            )
+                            def plot_split_dists():
                                 stageId = input.stage()
                                 view = input.splits_section_view()
                                 if stageId == "SHD":
@@ -821,104 +861,61 @@ with ui.accordion(open=False):
                                     split_times_long,
                                     split_times_wide_numeric,
                                 ) = split_times_data()
-                                split_cumdists, split_dists = split_dists_for_stage()
+                                if split_times_wide_numeric.empty:
+                                    return
                                 split_cols = [
                                     c
                                     for c in split_times_wide_numeric.columns
                                     if c.startswith("round")
                                 ]
-                                split_durations = wrc.get_split_duration(
+                                # We want within split times, not accumulated times
+                                output_ = wrc.get_split_duration(
                                     split_times_wide_numeric,
                                     split_cols,
                                 )
-                                output_ = scaled_splits(
-                                    split_times_wide_numeric,
-                                    split_times_wide,
-                                    split_dists,
-                                    split_cols,
-                                    split_durations,
-                                    view,
-                                    carNum2name(),
+                                split_cumdists, split_dists = (
+                                    split_dists_for_stage()
                                 )
-                                if not output_.empty:
-                                    return render.DataGrid(output_)
+                                newcol = "Time in section (s)"
+                                if split_dists:
+                                    if view == "pace":
+                                        output_.update(
+                                            output_.loc[
+                                                :, split_dists.keys()
+                                            ].apply(
+                                                lambda s: s
+                                                / split_dists[s.name]
+                                            )
+                                        )
+                                        newcol = "Pace (s/km)"
+                                    elif view == "speed":
+                                        output_.update(
+                                            output_.loc[
+                                                :, split_dists.keys()
+                                            ].apply(
+                                                lambda s: 3600
+                                                * split_dists[s.name]
+                                                / s
+                                            )
+                                        )
+                                        newcol = "Speed (km/h)"
+                                    output_.rename(columns={"timeInS": newcol})
 
-                            with ui.accordion(open=False):
-                                with ui.accordion_panel(
-                                    "Split section speed/pace distributions"
-                                ):
-
-                                    @render.plot(
-                                        alt="Box plot of split section speed/pace distributions."
-                                    )
-                                    @reactive.event(
-                                        input.stage, input.splits_section_view
-                                    )
-                                    def plot_split_dists():
-                                        stageId = input.stage()
-                                        view = input.splits_section_view()
-                                        if stageId == "SHD":
-                                            return
-                                        (
-                                            split_times_wide,
-                                            split_times_long,
-                                            split_times_wide_numeric,
-                                        ) = split_times_data()
-                                        if split_times_wide_numeric.empty:
-                                            return
-                                        split_cols = [
-                                            c
-                                            for c in split_times_wide_numeric.columns
-                                            if c.startswith("round")
-                                        ]
-                                        # We want within split times, not accumulated times
-                                        output_ = wrc.get_split_duration(
-                                            split_times_wide_numeric,
-                                            split_cols,
-                                        )
-                                        split_cumdists, split_dists = (
-                                            split_dists_for_stage()
-                                        )
-                                        newcol = "Time in section (s)"
-                                        if split_dists:
-                                            if view == "pace":
-                                                output_.update(
-                                                    output_.loc[
-                                                        :, split_dists.keys()
-                                                    ].apply(
-                                                        lambda s: s
-                                                        / split_dists[s.name]
-                                                    )
-                                                )
-                                                newcol = "Pace (s/km)"
-                                            elif view == "speed":
-                                                output_.update(
-                                                    output_.loc[
-                                                        :, split_dists.keys()
-                                                    ].apply(
-                                                        lambda s: 3600
-                                                        * split_dists[s.name]
-                                                        / s
-                                                    )
-                                                )
-                                                newcol = "Speed (km/h)"
-                                            output_.rename(columns={"timeInS": newcol})
-
-                                        output_long = melt(
-                                            output_,
-                                            id_vars=["carNo"],
-                                            value_vars=split_cols,
-                                            var_name="roundN",
-                                            value_name=newcol,
-                                        )
-                                        output_long["roundN"] = output_long[
-                                            "roundN"
-                                        ].str.replace("round", "s")
-                                        ax = boxplot(
-                                            data=output_long, x="roundN", y=newcol
-                                        )
-                                        ax.set(xlabel=None)
-                                        return ax
+                                output_long = melt(
+                                    output_,
+                                    id_vars=["carNo"],
+                                    value_vars=split_cols,
+                                    var_name="roundN",
+                                    value_name=newcol,
+                                )
+                                output_long["roundN"] = output_long[
+                                    "roundN"
+                                ].str.replace("round", "s")
+                                ax = boxplot(
+                                    data=output_long, x="roundN", y=newcol
+                                )
+                                ax.set(xlabel=None)
+                                return ax
 
             with ui.accordion_panel("Rebased driver reports"):
                 with ui.card(class_="mt-3"):
