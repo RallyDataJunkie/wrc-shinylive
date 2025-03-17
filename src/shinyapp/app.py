@@ -470,7 +470,7 @@ with ui.accordion(open=False):
                             .lower()
                             .replace(" 0", " ")
                         )
-                        _md_final = f'Following the stage, {art_} {next_tc["distance"]} liaison section to {next_tc["location"]} ({next_arrival_time}).'
+                        _md_final = f'Following the stage, {art_} {next_tc["distance"]} liaison section to {next_tc["location"]} (stage running from {next_arrival_time}).'
 
                         # Stage status
                         state_status = itinerary_df.iloc[ss_index]["status"]

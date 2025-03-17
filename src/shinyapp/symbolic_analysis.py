@@ -1,4 +1,4 @@
-import pandas as pd
+from pandas import isna
 
 
 # Via claude.ai
@@ -16,7 +16,7 @@ def bin_label(value, min_val, max_val, num_bins):
     str: A letter label corresponding to the appropriate bin
     """
     # Handle NaN values first, before any calculations
-    if pd.isna(value) or pd.isna(min_val) or pd.isna(max_val) or pd.isna(num_bins):
+    if isna(value) or isna(min_val) or isna(max_val) or isna(num_bins):
         return "X"
 
     try:
