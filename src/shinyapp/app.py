@@ -327,58 +327,7 @@ with ui.accordion(open=False):
             @render.ui
             def stageresult_hero():
                 stageId = input.stage()
-                stages = stages_data()
-                if stageId == "SHD":
-                    return
-
-                times = stage_times_data()
-                if times.empty:
-                    print(f"No stage times in stage_times_data() for {stageId}")
-                    return
-                stage_name = stages.loc[
-                    stages["stageId"] == stageId, "name"
-                ].iloc[0]
-
-                def _get_hero_text(pos):
-                    return ui.markdown(
-                        f"""
-                __{times.loc[pos, "driver"]}__  
-                {times.loc[pos, "stageTime"]}  
-                """
-                    )
-
-                # Positions are zero indexed, so first is pos=0
-                p1 = ui.value_box(
-                    title=stage_name,
-                    value=_get_hero_text(0),
-                    theme="text-green",
-                    showcase=f"Averaging  \n  \n{round(times.loc[0, 'speed (km/h)'],1)} km/h",
-                    showcase_layout="left center",
-                    full_screen=True,
-                )
-                if len(times) > 1:
-                    p2pace = f'(Pace: {round(times.loc[1, "pace diff (s/km)"], 2)} s/km slower)'
-                    p2 = ui.value_box(
-                        value=times.loc[1, "diffFirst"],
-                        title=_get_hero_text(1),
-                        theme="text-blue",
-                        showcase=p2pace,
-                        showcase_layout="bottom",
-                        full_screen=True,
-                    )
-                    if len(times) > 2:
-                        p3pace = f'(Pace: {round(times.loc[2, "pace diff (s/km)"], 2)} s/km slower)'
-                        p3 = ui.value_box(
-                            value=times.loc[2, "diffFirst"],
-                            title=_get_hero_text(2),
-                            theme="text-purple",
-                            showcase=p3pace,
-                            showcase_layout="bottom",
-                            full_screen=True,
-                        )
-                        return ui.TagList(p1, uis.layout_columns(p2, p3))
-                    return ui.TagList(p1, p2)
-                return p1
+                return get_stage_result_hero(stageId, stages_data, stage_times_data)
 
             with ui.accordion(open=False):
 
@@ -1612,3 +1561,71 @@ def split_dists_for_stage():
         split_dists = {}
 
     return split_cumdists, split_dists
+
+
+def get_stage_result_hero(stageId, stages_data, stage_times_data):
+    stages = stages_data()
+
+    if stageId == "SHD":
+        return None
+
+    times = (
+        stage_times_data
+        if isinstance(stage_times_data, DataFrame)
+        else stage_times_data()
+    )
+    if times.empty:
+        print(f"No stage times in stage_times_data() for {stageId}")
+        return None
+
+    stage_name = stages.loc[stages["stageId"] == stageId, "name"].iloc[0]
+
+    def _get_hero_text(pos):
+        return ui.markdown(
+            f"""
+            __{times.loc[pos, "driver"]}__  
+            {times.loc[pos, "stageTime"]}  
+            """
+        )
+
+    # Positions are zero-indexed
+    averaging = round(times.loc[0, "speed (km/h)"], 1)
+    # TO DO - if this is final result, we can use overall dist for speed
+    averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
+    p1 = ui.value_box(
+        title=stage_name,
+        value=_get_hero_text(0),
+        theme="text-green",
+        showcase=averaging,
+        showcase_layout="left center",
+        full_screen=True,
+    )
+
+    if len(times) > 1:
+        p2pace = round(times.loc[1, "pace diff (s/km)"], 2)
+        p2pace = p2pace if p2pace else ""
+        p2pace = f'(Pace: {p2pace} s/km slower)'
+        p2 = ui.value_box(
+            value=times.loc[1, "diffFirst"],
+            title=_get_hero_text(1),
+            theme="text-blue",
+            showcase=p2pace,
+            showcase_layout="bottom",
+            full_screen=True,
+        )
+        if len(times) > 2:
+            p3pace = round(times.loc[2, "pace diff (s/km)"], 2)
+            p3pace = p3pace if p3pace else ""
+            p3pace = f"(Pace: {p3pace} s/km slower)"
+            p3 = ui.value_box(
+                value=times.loc[2, "diffFirst"],
+                title=_get_hero_text(2),
+                theme="text-purple",
+                showcase=p3pace,
+                showcase_layout="bottom",
+                full_screen=True,
+            )
+            return ui.TagList(p1, uis.layout_columns(p2, p3))
+        return ui.TagList(p1, p2)
+
+    return p1
