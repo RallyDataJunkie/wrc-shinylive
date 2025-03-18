@@ -717,6 +717,15 @@ class WRCLiveTimingAPIClient:
         return self.itinerary_df
 
     def getStartlist(self, eventId=None, update=False):
+        def convert_to_day(value):
+            if value.startswith("Entrylist"):
+                return value  # Keep "Entrylist" unchanged
+            try:
+                dt = to_datetime(value)  # Convert to datetime
+                return dt.strftime("%A")  # Get day of the week
+            except Exception as e:
+                return value
+
         if self.startlist_df.empty or update:
             eventId = self.eventId if eventId is None else eventId
             stub = f"result/startLists?eventId={eventId}"
@@ -726,6 +735,9 @@ class WRCLiveTimingAPIClient:
             # We
             df_startlist = tablify(
                 json_data, "startListItems", addcols=["date", "startDateTimeLocal"]
+            )
+            df_startlist["startList"] = df_startlist["startDateTimeLocal"].apply(
+                convert_to_day
             )
             self.startlist_df = df_startlist
             self.carNum2name = (

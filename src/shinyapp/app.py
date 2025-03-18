@@ -179,15 +179,19 @@ with ui.accordion(open=False):
 
                 with ui.accordion_panel("Startlist"):
 
+                    # Create startlist type selector
+                    # Dynamically populated using available startlists
+                    ui.input_select("startlist", "Startlist:", {})
+
                     @render.data_frame
-                    @reactive.event(input.stage)
+                    @reactive.event(input.stage, input.startlist)
                     def startlist_frame():
                         startlist = wrc.getStartlist()
                         if startlist.empty:
                             return
                         retcols = [
                             "order",
-                            "startDateTimeLocal",
+                            "startList",
                             "priority",
                             "carNo",
                             "driver",
@@ -197,6 +201,7 @@ with ui.accordion(open=False):
                             "eligibility",
                             "groupClass",
                         ]
+                        startlist = startlist[startlist["startList"] == input.startlist()]
                         return render.DataGrid(startlist[retcols])
 
                 with ui.accordion_panel("Stage winners"):
@@ -1432,7 +1437,8 @@ def stages_data():
     wrc.eventId = wrc.rallyId2eventId[wrc.rallyId]
     # WRC API data fetch
     stages = wrc.getStageDetails(update=True)
-    stages["stageInDay"] = stages.groupby(["day"]).cumcount() + 1
+    if "day" in stages:
+        stages["stageInDay"] = stages.groupby(["day"]).cumcount() + 1
     return stages
 
 
@@ -1497,6 +1503,23 @@ def update_events_select():
     wrc.setEvent()
     ui.update_select("event", choices=events, selected=wrc.rallyId)
 
+
+@reactive.effect
+@reactive.event(input.stage)
+def update_startlist_select():
+    startlist = wrc.getStartlist()
+    if startlist.empty:
+        return
+    # Need to select today
+    startLists = startlist["startList"].unique().tolist()
+    if startLists:
+        # TO DO - this is a hack ?
+        day_today = datetime.today().strftime("%A")
+        if len(startLists)==1 or day_today not in startLists:
+            startwith = startLists[0]
+        else:
+            startwith = day_today
+        ui.update_select("startlist", choices=startLists, selected=startwith)
 
 @reactive.effect
 @reactive.event(input.event, input.championship)
