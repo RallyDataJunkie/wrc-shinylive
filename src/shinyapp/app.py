@@ -273,7 +273,7 @@ with ui.accordion(open=False):
 
                 with ui.accordion_panel("Retirements"):
                     # Try to be sensible about how often we call
-                    # getReiterments and getPenalties
+                    # getRetirements and getPenalties
                     # If the event has completed
                     # we need only do this one
                     @render.data_frame
@@ -1256,9 +1256,7 @@ with ui.accordion(open=False):
                                     times = stage_times_data()
                                     if not times.empty:
                                         times = times[["carNo", "timeInS"]].copy()
-                                        times["roundN"] = (
-                                            f"round{len(split_times_long["roundN"].unique())+1}"
-                                        )
+                                        times["roundN"] = round(len(split_times_long["roundN"].unique())+1)
 
                                         split_times_long = concat(
                                             [split_times_long, times], ignore_index=True
