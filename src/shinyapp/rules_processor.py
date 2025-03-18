@@ -1,7 +1,7 @@
-import inflect
+from inflect import engine
 from pandas import merge, DataFrame
 
-p = inflect.engine()
+p = engine()
 
 import random
 
