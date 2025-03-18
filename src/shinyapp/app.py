@@ -86,6 +86,7 @@ with ui.sidebar(open="desktop"):
 # The accordion widget provides collapsible elements
 with ui.accordion(open=False):
     with ui.accordion_panel("About"):
+
         @render.ui
         def about():
             txt = "This website was developed in order to explore the use of Shinylive-Python for developing in-browser reactive Python applications, and to support personal use (reasearch, analysis, visualisation, reporting) of timing and results data arising from WRC rally events.\n\nThe website may contain errors resulting from the processing of the data: please file an issue at https://github.com/RallyDataJunkie/wrc-shinylive/issues if you notice an error.\n\n*This website is unofficial and is not associated in any way with WRC Promoter GmbH. WRC WORLD RALLY CHAMPIONSHIP is a trade mark of the FEDERATION INTERNATIONALE DE L'AUTOMOBILE.*"
@@ -127,6 +128,35 @@ with ui.accordion(open=False):
                 full_screen=True,
             )
             return so
+
+        ui.input_checkbox(
+            "display_latest_overall",
+            "Display latest result",
+            True,
+        )
+
+        @render.ui
+        @reactive.event(input.stage, input.display_latest_overall)
+        def rally_overview_latest_hero():
+            stages = stages_data()
+            stageId = None
+            if input.display_latest_overall() and "STATUS" in stages:
+                completed_stages = stages[stages["STATUS"] == "Completed"]
+                if not completed_stages.empty:
+                    last_stage = completed_stages.iloc[-1]["stageNo"]
+                    if last_stage == "FINAL" and len(completed_stages)>1:
+                        last_stage = completed_stages.iloc[-2]["stageNo"]
+                else:
+                    last_stage = ""
+
+                stageId = wrc.stage_codes[last_stage]
+                return get_overall_result_hero(stageId, stages_data, wrc.getOverall(stageId=stageId))
+                # TO DO  - this is currently stage result hero;
+                # need overall hero
+
+            stageId = input.stage()
+            if stageId != "SHD":
+                return get_overall_result_hero(stageId, stages_data, overall_data)
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
@@ -201,7 +231,9 @@ with ui.accordion(open=False):
                             "eligibility",
                             "groupClass",
                         ]
-                        startlist = startlist[startlist["startList"] == input.startlist()]
+                        startlist = startlist[
+                            startlist["startList"] == input.startlist()
+                        ]
                         return render.DataGrid(startlist[retcols])
 
                 with ui.accordion_panel("Stage winners"):
@@ -399,9 +431,7 @@ with ui.accordion(open=False):
                             else f'{previous_out["location"]} {previous_out["type"]}'
                         )
                         art_ = p.a(
-                            p.number_to_words(
-                                float(previous_tc["distance"].split()[0])
-                            )
+                            p.number_to_words(float(previous_tc["distance"].split()[0]))
                         ).split()[0]
                         _md = f'Prior to the stage, {art_} {previous_tc["distance"]} liaison section to the {previous_tc["location"]} {previous_tc["type"]} from the {previous_location}.'
                         md.append(_md)
@@ -528,7 +558,8 @@ with ui.accordion(open=False):
                                 "totalTime",
                                 "groupClass",
                                 "eligibility",
-                            ] or k.startswith("round")
+                            ]
+                            or k.startswith("round")
                         ]
                         return render.DataGrid(overall_df[retcols])
 
@@ -695,13 +726,9 @@ with ui.accordion(open=False):
                         ]
                         # A set intersection does not preserve order?
                         display_cols = [
-                            c
-                            for c in display_cols
-                            if c in split_times_wide.columns
+                            c for c in display_cols if c in split_times_wide.columns
                         ] + [
-                            c
-                            for c in split_times_wide.columns
-                            if c.startswith("round")
+                            c for c in split_times_wide.columns if c.startswith("round")
                         ]
 
                         return split_times_wide[display_cols]
@@ -712,9 +739,7 @@ with ui.accordion(open=False):
                 @reactive.event(input.stage)
                 def split_sections_details():
                     split_cumdists, split_dists = split_dists_for_stage()
-                    return ui.markdown(
-                        f"Split section distances: {split_dists}"
-                    )
+                    return ui.markdown(f"Split section distances: {split_dists}")
 
                 with ui.card(class_="mt-3"):
                     with ui.card_header():
@@ -802,9 +827,7 @@ with ui.accordion(open=False):
                             @render.plot(
                                 alt="Box plot of split section speed/pace distributions."
                             )
-                            @reactive.event(
-                                input.stage, input.splits_section_view
-                            )
+                            @reactive.event(input.stage, input.splits_section_view)
                             def plot_split_dists():
                                 stageId = input.stage()
                                 view = input.splits_section_view()
@@ -827,29 +850,20 @@ with ui.accordion(open=False):
                                     split_times_wide_numeric,
                                     split_cols,
                                 )
-                                split_cumdists, split_dists = (
-                                    split_dists_for_stage()
-                                )
+                                split_cumdists, split_dists = split_dists_for_stage()
                                 newcol = "Time in section (s)"
                                 if split_dists:
                                     if view == "pace":
                                         output_.update(
-                                            output_.loc[
-                                                :, split_dists.keys()
-                                            ].apply(
-                                                lambda s: s
-                                                / split_dists[s.name]
+                                            output_.loc[:, split_dists.keys()].apply(
+                                                lambda s: s / split_dists[s.name]
                                             )
                                         )
                                         newcol = "Pace (s/km)"
                                     elif view == "speed":
                                         output_.update(
-                                            output_.loc[
-                                                :, split_dists.keys()
-                                            ].apply(
-                                                lambda s: 3600
-                                                * split_dists[s.name]
-                                                / s
+                                            output_.loc[:, split_dists.keys()].apply(
+                                                lambda s: 3600 * split_dists[s.name] / s
                                             )
                                         )
                                         newcol = "Speed (km/h)"
@@ -865,9 +879,7 @@ with ui.accordion(open=False):
                                 output_long["roundN"] = output_long[
                                     "roundN"
                                 ].str.replace("round", "s")
-                                ax = boxplot(
-                                    data=output_long, x="roundN", y=newcol
-                                )
+                                ax = boxplot(data=output_long, x="roundN", y=newcol)
                                 ax.set(xlabel=None)
                                 return ax
 
@@ -1205,7 +1217,9 @@ with ui.accordion(open=False):
                                     times = stage_times_data()
                                     if not times.empty:
                                         times = times[["carNo", "timeInS"]].copy()
-                                        times["roundN"] = round(len(split_times_long["roundN"].unique())+1)
+                                        times["roundN"] = round(
+                                            len(split_times_long["roundN"].unique()) + 1
+                                        )
 
                                         split_times_long = concat(
                                             [split_times_long, times], ignore_index=True
@@ -1462,11 +1476,12 @@ def update_startlist_select():
     if startLists:
         # TO DO - this is a hack ?
         day_today = datetime.today().strftime("%A")
-        if len(startLists)==1 or day_today not in startLists:
+        if len(startLists) == 1 or day_today not in startLists:
             startwith = startLists[0]
         else:
             startwith = day_today
         ui.update_select("startlist", choices=startLists, selected=startwith)
+
 
 @reactive.effect
 @reactive.event(input.event, input.championship)
@@ -1563,6 +1578,63 @@ def split_dists_for_stage():
     return split_cumdists, split_dists
 
 
+def get_overall_result_hero(stageId, stages_data, overall_data):
+    stages = stages_data()
+    overall_df = overall_data if isinstance(overall_data, DataFrame) else overall_data()
+
+    stage_name = stages.loc[stages["stageId"] == stageId, "name"].iloc[0]
+
+    def _get_hero_text(pos):
+        return ui.markdown(
+            f"""
+            __{overall_df.loc[pos, "driver"]}__  
+            {overall_df.loc[pos, "stageTime"]}  
+            """
+        )
+
+    # Positions are zero-indexed
+    ##averaging = round(overall_df.loc[0, "speed (km/h)"], 1)
+    # TO DO - if this is final result, we can use overall dist for speed
+    # averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
+    p1 = ui.value_box(
+        title=stage_name,
+        value=_get_hero_text(0),
+        theme="text-green",
+        # showcase=averaging,
+        # showcase_layout="left center",
+        full_screen=True,
+    )
+
+    if len(overall_df) > 1:
+        # p2pace = round(times.loc[1, "pace diff (s/km)"], 2)
+        # p2pace = p2pace if p2pace else ""
+        # p2pace = f'(Pace: {p2pace} s/km slower)'
+        p2 = ui.value_box(
+            value=overall_df.loc[1, "diffFirst"],
+            title=_get_hero_text(1),
+            theme="text-blue",
+            # showcase=p2pace,
+            # showcase_layout="bottom",
+            full_screen=True,
+        )
+        if len(overall_df) > 2:
+            # p3pace = round(overall_df.loc[2, "pace diff (s/km)"], 2)
+            # p3pace = p3pace if p3pace else ""
+            # p3pace = f"(Pace: {p3pace} s/km slower)"
+            p3 = ui.value_box(
+                value=overall_df.loc[2, "diffFirst"],
+                title=_get_hero_text(2),
+                theme="text-purple",
+                # showcase=p3pace,
+                # showcase_layout="bottom",
+                full_screen=True,
+            )
+            return ui.TagList(p1, uis.layout_columns(p2, p3))
+        return ui.TagList(p1, p2)
+
+    return p1
+
+
 def get_stage_result_hero(stageId, stages_data, stage_times_data):
     stages = stages_data()
 
@@ -1604,7 +1676,7 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     if len(times) > 1:
         p2pace = round(times.loc[1, "pace diff (s/km)"], 2)
         p2pace = p2pace if p2pace else ""
-        p2pace = f'(Pace: {p2pace} s/km slower)'
+        p2pace = f"(Pace: {p2pace} s/km slower)"
         p2 = ui.value_box(
             value=times.loc[1, "diffFirst"],
             title=_get_hero_text(1),
