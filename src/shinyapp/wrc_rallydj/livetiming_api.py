@@ -95,47 +95,38 @@ def scaled_splits(
     split_times_wide,
     split_dists,
     split_cols,
-    split_durations, view, carNum2Names
+    split_durations,
+    view,
+    carNum2Names,
 ):
     if split_times_wide_numeric.empty:
         return
-    split_times_wide_numeric = (
-        split_times_wide_numeric.copy()
-    )
+    split_times_wide_numeric = split_times_wide_numeric.copy()
 
     if view in ["time_acc", "pos_acc"]:
         split_times_wide_numeric = merge(
-            split_times_wide[
-                ["carNo", "teamName", "roadPos"]
-            ],
+            split_times_wide[["carNo", "teamName", "roadPos"]],
             split_times_wide_numeric,
             on="carNo",
         )
-        split_times_wide_numeric["carNo"] = (
-            split_times_wide_numeric["carNo"].map(
-                carNum2Names
-            )
+        split_times_wide_numeric["carNo"] = split_times_wide_numeric["carNo"].map(
+            carNum2Names
         )
         # TO DO  precision number format formatting
         # styles = {c: "{0:0.1f}" for c in split_cols}
         # return split_times_wide_numeric.style.format(styles)
-        split_times_wide_numeric.loc[:, split_cols] = (
-            split_times_wide_numeric[split_cols].round(1)
-        )
+        split_times_wide_numeric.loc[:, split_cols] = split_times_wide_numeric[
+            split_cols
+        ].round(1)
 
         if view == "pos_acc":
-            split_times_wide_numeric.loc[:, split_cols] = (
-                split_times_wide_numeric[split_cols].rank(
-                    method="min", na_option="keep"
-                )
-            )
+            split_times_wide_numeric.loc[:, split_cols] = split_times_wide_numeric[
+                split_cols
+            ].rank(method="min", na_option="keep")
 
         split_times_wide_numeric.columns = (
             ["Driver", "TeamName", "RoadPos"]
-            + [
-                f"Split {i}"
-                for i in range(1, len(split_cols))
-            ]
+            + [f"Split {i}" for i in range(1, len(split_cols))]
             + ["Finish"]
         )
         return split_times_wide_numeric
@@ -145,9 +136,9 @@ def scaled_splits(
     output_ = split_durations.copy()
     if split_dists:
         if view == "pos_within":
-            output_.loc[:, split_cols] = output_[
-                split_cols
-            ].rank(method="min", na_option="keep")
+            output_.loc[:, split_cols] = output_[split_cols].rank(
+                method="min", na_option="keep"
+            )
         elif view == "pace":
             output_.update(
                 output_.loc[:, split_dists.keys()].apply(
@@ -164,9 +155,7 @@ def scaled_splits(
     # styles = {c: "{0:0.1f}" for c in split_cols}
 
     if not view.startswith("pos_"):
-        output_.loc[:, split_cols] = output_[
-            split_cols
-        ].round(1)
+        output_.loc[:, split_cols] = output_[split_cols].round(1)
 
     output_ = merge(
         split_times_wide[["carNo", "teamName", "roadPos"]],
@@ -180,7 +169,7 @@ def scaled_splits(
         + [f"Split {i}" for i in range(1, len(split_cols))]
         + ["Finish"]
     )
-    return  output_
+    return output_
 
 
 def convert_date_range(date_range_str):
@@ -217,7 +206,7 @@ def tablify(json_data, subcolkey=None, addcols=None):
         _nvals = len(fields)
         for value in values:
             _nval = len(value)
-            if _nval <_nvals:
+            if _nval < _nvals:
                 value += [""] * (_nvals - _nval)
             _values.append(value)
         df = DataFrame(_values, columns=fields)
@@ -228,7 +217,7 @@ def tablify(json_data, subcolkey=None, addcols=None):
             for value in values:
                 _df = DataFrame(value[subcolkey])
                 if len(_df.columns) < len(fields):
-                    _df[fields[len(_df.columns):]] = None
+                    _df[fields[len(_df.columns) :]] = None
                 _df.columns = fields
                 if addcols:
                     for c in addcols:
@@ -355,8 +344,8 @@ class WRCLiveTimingAPIClient:
         self.year = year
         # We will auto update the championship based on
         # championshipId set separately as a class property
-        self._championship = None #championship
-        self.championshipId = None #self.getChampionshipId()
+        self._championship = None  # championship
+        self.championshipId = None  # self.getChampionshipId()
         self.championship = championship
         self.group = group
         self.full_calendar = DataFrame()
