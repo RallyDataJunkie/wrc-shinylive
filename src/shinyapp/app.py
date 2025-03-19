@@ -19,11 +19,10 @@ from datetime import datetime
 from adjustText import adjust_text
 
 from wrc_rallydj.livetiming_api import (
-    WRCLiveTimingAPIClient,
-    time_to_seconds,
-    enrich_stage_winners,
-    scaled_splits,
+    WRCLiveTimingAPIClient
 )
+
+from wrc_rallydj.utils import time_to_seconds, enrich_stage_winners, scaled_splits
 from icons import question_circle_fill
 from rules_processor import p, Nth, core_stage, process_rally_overall_rules
 from symbolic_analysis import get_splits_symbols
@@ -268,6 +267,8 @@ with ui.accordion(open=False):
                     @render.plot(alt="Bar chart of stage wins.")
                     def plot_driver_stagewins():
                         df = stage_winners_data()
+                        if df.empty:
+                            return
                         # TO DO - make use of commented out elements
                         # which limit counts  up to and including current stage
                         # df["_stagenum"] = df["stageNo"].str.replace("SS", "")
@@ -377,6 +378,8 @@ with ui.accordion(open=False):
                         md = []
                         itinerary_df = itinerary_data()
                         stage_info = stages_data()
+                        if stage_info.empty or itinerary_df.empty:
+                            return
 
                         stage_code = wrc.stage_ids[stageId]
                         stage_info_row = stage_info.loc[
@@ -1581,7 +1584,9 @@ def split_dists_for_stage():
 def get_overall_result_hero(stageId, stages_data, overall_data):
     stages = stages_data()
     overall_df = overall_data if isinstance(overall_data, DataFrame) else overall_data()
-
+    if stages.empty:
+        return
+    
     stage_name = stages.loc[stages["stageId"] == stageId, "name"].iloc[0]
 
     def _get_hero_text(pos):
