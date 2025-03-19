@@ -580,7 +580,7 @@ class WRCLiveTimingAPIClient:
 
     def setEvent(self, eventName=None):
         # If no event name provided, use current event
-        if not eventName:
+        if not eventName and not self.full_calendar.empty:
             # Set current_event as the last event in calendar before now
             self.eventId, self.rallyId = self.full_calendar[
                 self.full_calendar["startDate"] < timeNow()
