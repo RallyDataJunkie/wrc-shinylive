@@ -315,12 +315,18 @@ class WRCLiveTimingAPIClient:
             self.eventId, self.rallyId = self.full_calendar[
                 self.full_calendar["startDate"] < timeNow()
             ].iloc[-1][["eventId", "rallyId"]]
+        elif not self.full_calendar.empty:
+            _try = self.full_calendar[
+                self.full_calendar["title"] == eventName
+            ]
+            if not _try.empty:
+                self.eventId, self.rallyId = _try.iloc[-1][["eventId", "rallyId"]]
 
     def _WRC_json(self, path, base=None, retUrl=False):
         """Return JSON from API."""
         base = self.WRC_LIVETIMING_API_BASE if base is None else base
         url = urljoin(base, path)
-        #print(url)
+        # print(url)
         if retUrl:
             return url
         # print(f"Fetching: {url}")
@@ -355,6 +361,8 @@ class WRCLiveTimingAPIClient:
         # return json_data
 
         df_full_calendar = DataFrame(json_data["content"])
+        if "title" in df_full_calendar.columns:
+            df_full_calendar["title"] = df_full_calendar["title"].str.strip()
         self.full_calendar = df_full_calendar
 
         self.db_upsert("full_calendar", df_full_calendar, pk="rallyId")
