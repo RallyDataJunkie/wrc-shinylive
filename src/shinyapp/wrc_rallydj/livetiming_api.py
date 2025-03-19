@@ -320,7 +320,7 @@ class WRCLiveTimingAPIClient:
         """Return JSON from API."""
         base = self.WRC_LIVETIMING_API_BASE if base is None else base
         url = urljoin(base, path)
-        print(url)
+        #print(url)
         if retUrl:
             return url
         # print(f"Fetching: {url}")
