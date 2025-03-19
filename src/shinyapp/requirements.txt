@@ -9,3 +9,4 @@ seaborn
 sqlite_utils
 inflect
 adjustText
+sqlite3
