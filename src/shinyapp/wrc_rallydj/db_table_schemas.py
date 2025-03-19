@@ -1,3 +1,199 @@
+## V2 SCHEMA
+
+# TO DO - check FK references
+
+SETUP_V2_Q = """
+
+CREATE TABLE "seasons" (
+  "seasonId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "year" INTEGER
+);
+
+CREATE TABLE "championship_lookup" (
+  "championshipId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "seasonId" INTEGER,
+  "type" TEXT,
+  "fieldOneDescription" TEXT,
+  "fieldTwoDescription" TEXT,
+  "fieldThreeDescription" TEXT,
+  "fieldFiveDescription" TEXT,
+  "fieldFourDescription" TEXT
+);
+
+CREATE TABLE "season_rounds" (
+  "categories" TEXT,
+  "clerkOfTheCourse" TEXT,
+  "country.countryId" INTEGER,
+  "country.iso2" TEXT,
+  "country.iso3" TEXT,
+  "country.name" TEXT,
+  "countryId" INTEGER,
+  "eventId" INTEGER PRIMARY KEY,
+  "finishDate" TEXT,
+  "location" TEXT,
+  "mode" TEXT,
+  "name" TEXT,
+  "organiserUrl" TEXT,
+  "slug" TEXT,
+  "startDate" TEXT,
+  "stewards" TEXT,
+  "surfaces" TEXT,
+  "templateFilename" TEXT,
+  "timeZoneId" TEXT,
+  "timeZoneName" TEXT,
+  "timeZoneOffset" INTEGER,
+  "trackingEventId" INTEGER ,
+  "order" INTEGER,
+  "seasonId" INTEGER,
+  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
+);
+
+
+CREATE TABLE "stage_controls" (
+  "code" TEXT,
+  "controlId" INTEGER PRIMARY KEY,
+  "controlPenalties" TEXT,
+  "distance" REAL,
+  "eventId" INTEGER,
+  "firstCarDueDateTime" TEXT,
+  "firstCarDueDateTimeLocal" TEXT,
+  "location" TEXT,
+  "stageId" INTEGER,
+  "status" TEXT,
+  "targetDuration" TEXT,
+  "targetDurationMs" INTEGER,
+  "timingPrecision" TEXT,
+  "type" TEXT,
+  "bogey" TEXT,
+  "bogeyMs" INTEGER,
+  "roundingPolicy" TEXT
+);
+
+CREATE TABLE "split_points" (
+  "splitPointId" INTEGER PRIMARY KEY,
+  "stageId" INTEGER,
+  "number" INTEGER,
+  "distance" REAL
+);
+
+CREATE TABLE "stage_info" (
+  "code" TEXT,
+  "distance" REAL,
+  "eventId" INTEGER,
+  "name" TEXT,
+  "number" INTEGER,
+  "stageId" INTEGER PRIMARY KEY,
+  "stageType" TEXT,
+  "status" TEXT,
+  "timingPrecision" TEXT,
+  "locked" TEXT
+);
+
+CREATE TABLE "shakedown_times" (
+  "shakedownTimeId" INTEGER PRIMARY KEY,
+  "eventId" INTEGER,
+  "entryId" INTEGER,
+  "runNumber" INTEGER,
+  "shakedownNumber" INTEGER,
+  "runDuration" TEXT,
+  "runDurationMs" INTEGER
+);
+
+CREATE TABLE "stage_overall" (
+  "diffFirst" TEXT,
+  "diffFirstMs" INTEGER,
+  "diffPrev" TEXT,
+  "diffPrevMs" INTEGER,
+  "entryId" INTEGER,
+  "penaltyTime" TEXT,
+  "penaltyTimeMs" INTEGER,
+  "position" INTEGER,
+  "stageTime" TEXT,
+  "stageTimeMs" INTEGER,
+  "totalTime" TEXT,
+  "totalTimeMs" INTEGER,
+  "stageId" INTEGER,
+  "eventId" INTEGER,
+  PRIMARY KEY ("stageId", "entryId"),
+  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+);
+
+CREATE TABLE "penalties" (
+  "controlId" INTEGER,
+  "entryId" INTEGER,
+  "penaltyDuration" TEXT,
+  "penaltyDurationMs" INTEGER,
+  "penaltyId" INTEGER,
+  "reason" TEXT,
+  "eventId" INTEGER,
+  PRIMARY KEY ("penaltyId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+);
+
+CREATE TABLE "retirements" (
+  "controlId" INTEGER,
+  "entryId" INTEGER,
+  "reason" TEXT,
+  "retirementDateTime" TEXT,
+  "retirementDateTimeLocal" TEXT,
+  "retirementId" INTEGER,
+  "status" TEXT,
+  "eventId" INTEGER,
+  PRIMARY KEY ("retirementId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+);
+
+CREATE TABLE "stagewinners" (
+  "elapsedDuration" TEXT,
+  "elapsedDurationMs" INTEGER,
+  "entryId" INTEGER,
+  "stageId" INTEGER,
+  "stageName" TEXT,
+  "eventId" INTEGER,
+  "rallyId" INTEGER,
+  PRIMARY KEY ("stageId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId"),
+  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId")
+);
+
+CREATE TABLE "controltimes" (
+  "controlTimeId" INTEGER PRIMARY KEY,
+  "controlId" INTEGER,
+  "entryId" INTEGER,
+  "dueDateTime" TEXT,
+  "dueDateTimeLocal" TEXT,
+  "actualDateTime" TEXT,
+  "actualDateTimeLocal" TEXT,
+  "absoluteActualDateTime" TEXT,
+  "absoluteActualDateTimeLocal" TEXT,
+  "source" TEXT,
+  "status" TEXT
+);
+
+CREATE TABLE "split_times" (
+  "elapsedDuration" TEXT,
+  "elapsedDurationMs" INTEGER,
+  "entryId" INTEGER,
+  "splitDateTime" TEXT,
+  "splitDateTimeLocal" TEXT,
+  "splitPointId" INTEGER,
+  "splitPointTimeId" INTEGER PRIMARY KEY,
+  "stageTimeDuration" TEXT,
+  "stageTimeDurationMs" REAL,
+  "startDateTime" TEXT,
+  "startDateTimeLocal" TEXT,
+  "stageId" INTEGER,
+  "eventId" INTEGER,
+  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+);
+"""
+
+# OLD BELOW
+
 SCHEMA_FULL_CALENDAR = {
     "id": str,
     "guid": str,
@@ -78,40 +274,7 @@ CREATE TABLE "itinerary_sections" (
   "order" INTEGER,
   FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
 );
-CREATE TABLE "itinerary_stages" (
-  "code" TEXT,
-  "distance" REAL,
-  "eventId" INTEGER,
-  "name" TEXT,
-  "number" INTEGER,
-  "stageId" INTEGER PRIMARY KEY,
-  "stageType" TEXT,
-  "status" TEXT,
-  "timingPrecision" TEXT,
-  "itineraryLegId" INTEGER,
-  "itinerarySections.itinerarySectionId" INTEGER,
-  FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
-);
-CREATE TABLE "itinerary_controls" (
-  "code" TEXT,
-  "controlId" INTEGER PRIMARY KEY,
-  "controlPenalties" TEXT,
-  "distance" REAL,
-  "eventId" INTEGER,
-  "firstCarDueDateTime" TEXT,
-  "firstCarDueDateTimeLocal" TEXT,
-  "location" TEXT,
-  "stageId" INTEGER,
-  "status" TEXT,
-  "targetDuration" TEXT,
-  "targetDurationMs" INTEGER,
-  "timingPrecision" TEXT,
-  "type" TEXT,
-  "itineraryLegId" INTEGER,
-  "itinerarySections.itinerarySectionId" INTEGER,
-  "roundingPolicy" TEXT,
-  FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
-);
+
 CREATE TABLE "startlists" (
   "codriver.abbvName" TEXT,
   "codriver.code" TEXT,
@@ -179,69 +342,9 @@ CREATE TABLE "startlist_classes" (
   FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId"),
   FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
 );
-CREATE TABLE "penalties" (
-  "controlId" INTEGER,
-  "entryId" INTEGER,
-  "penaltyDuration" TEXT,
-  "penaltyDurationMs" INTEGER,
-  "penaltyId" INTEGER PRIMARY KEY,
-  "reason" TEXT,
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-CREATE TABLE "retirements" (
-  "controlId" INTEGER,
-  "entryId" INTEGER,
-  "reason" TEXT,
-  "retirementDateTime" TEXT,
-  "retirementDateTimeLocal" TEXT,
-  "retirementId" INTEGER PRIMARY KEY,
-  "status" TEXT,
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-CREATE TABLE "stagewinners" (
-  "elapsedDuration" TEXT,
-  "elapsedDurationMs" INTEGER,
-  "entryId" INTEGER,
-  "stageId" INTEGER,
-  "stageName" TEXT,
-  PRIMARY KEY ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId"),
-  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId")
-);
-CREATE TABLE "stage_overall" (
-  "diffFirst" TEXT,
-  "diffFirstMs" INTEGER,
-  "diffPrev" TEXT,
-  "diffPrevMs" INTEGER,
-  "entryId" INTEGER,
-  "penaltyTime" TEXT,
-  "penaltyTimeMs" INTEGER,
-  "position" INTEGER,
-  "stageTime" TEXT,
-  "stageTimeMs" INTEGER,
-  "totalTime" TEXT,
-  "totalTimeMs" INTEGER,
-  "stageId" INTEGER,
-  PRIMARY KEY ("stageId","entryId"),
-  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-CREATE TABLE "split_times" (
-  "elapsedDuration" TEXT,
-  "elapsedDurationMs" INTEGER,
-  "entryId" INTEGER,
-  "splitDateTime" TEXT,
-  "splitDateTimeLocal" TEXT,
-  "splitPointId" INTEGER,
-  "splitPointTimeId" INTEGER PRIMARY KEY,
-  "stageTimeDuration" TEXT,
-  "stageTimeDurationMs" REAL,
-  "startDateTime" TEXT,
-  "startDateTimeLocal" TEXT,
-  "stageId" INTEGER,
-  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
+
+
+
 CREATE TABLE "stage_times_stage" (
   "diffFirst" TEXT,
   "diffFirstMs" INTEGER,
@@ -276,19 +379,7 @@ CREATE TABLE "stage_times_overall" (
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
   FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
 );
-CREATE TABLE "championship_lookup" (
-  "championshipId" INTEGER PRIMARY KEY,
-  "fieldFiveDescription" TEXT,
-  "fieldFourDescription" TEXT,
-  "fieldOneDescription" TEXT,
-  "fieldThreeDescription" TEXT,
-  "fieldTwoDescription" TEXT,
-  "name" TEXT,
-  "seasonId" INTEGER,
-  "type" TEXT,
-  "_codeClass" TEXT,
-  "_codeTyp" TEXT
-);
+
 CREATE TABLE "championship_results" (
   "championshipEntryId" INTEGER,
   "championshipId" INTEGER,
@@ -336,31 +427,6 @@ CREATE TABLE "championship_rounds" (
   "order" INTEGER,
   PRIMARY KEY ("championshipId","eventId"),
   FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
-  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
-);
-CREATE TABLE "championship_events" (
-  "categories" TEXT,
-  "clerkOfTheCourse" TEXT,
-  "country.countryId" INTEGER,
-  "country.iso2" TEXT,
-  "country.iso3" TEXT,
-  "country.name" TEXT,
-  "countryId" INTEGER,
-  "eventId" INTEGER PRIMARY KEY,
-  "finishDate" TEXT,
-  "location" TEXT,
-  "mode" TEXT,
-  "name" TEXT,
-  "organiserUrl" TEXT,
-  "slug" TEXT,
-  "startDate" TEXT,
-  "stewards" TEXT,
-  "surfaces" TEXT,
-  "templateFilename" TEXT,
-  "timeZoneId" TEXT,
-  "timeZoneName" TEXT,
-  "timeZoneOffset" INTEGER,
-  "trackingEventId" INTEGER ,
   FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
 );
 CREATE TABLE "championship_entries_drivers" (
