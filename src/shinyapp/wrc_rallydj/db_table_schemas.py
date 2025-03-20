@@ -22,6 +22,29 @@ CREATE TABLE "championship_lookup" (
   "fieldFourDescription" TEXT
 );
 
+CREATE TABLE "championship_overall" (
+  "championshipEntryId" INTEGER,
+  "overallPosition" INTEGER,
+  "overallPoints" INTEGER
+);
+
+CREATE TABLE "championship_results" (
+  "championshipEntryId" INTEGER,
+  "championshipId" INTEGER,
+  "dropped" INTEGER,
+  "eventId" INTEGER,
+  "pointsBreakdown" TEXT,
+  "position" INTEGER,
+  "publishedStatus" TEXT,
+  "status" TEXT,
+  "totalPoints" INTEGER,
+  "entryId" INTEGER,
+  PRIMARY KEY ("championshipEntryId","eventId"),
+  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
+  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
+);
+
+
 CREATE TABLE "season_rounds" (
   "categories" TEXT,
   "clerkOfTheCourse" TEXT,
@@ -66,6 +89,7 @@ CREATE TABLE "stage_controls" (
   "targetDurationMs" INTEGER,
   "timingPrecision" TEXT,
   "type" TEXT,
+  "locked" TEXT,
   "bogey" TEXT,
   "bogeyMs" INTEGER,
   "roundingPolicy" TEXT
@@ -116,6 +140,7 @@ CREATE TABLE "stage_overall" (
   "totalTimeMs" INTEGER,
   "stageId" INTEGER,
   "eventId" INTEGER,
+  "rallyId" INTEGER,
   PRIMARY KEY ("stageId", "entryId"),
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
   FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
@@ -173,6 +198,26 @@ CREATE TABLE "controltimes" (
   "status" TEXT
 );
 
+CREATE TABLE "stage_times" (
+  "diffFirst" TEXT,
+  "diffFirstMs" INTEGER,
+  "diffPrev" TEXT,
+  "diffPrevMs" INTEGER,
+  "elapsedDuration" TEXT,
+  "elapsedDurationMs" INTEGER,
+  "entryId" INTEGER,
+  "position" INTEGER,
+  "source" TEXT,
+  "stageId" INTEGER,
+  "stageTimeId" INTEGER PRIMARY KEY,
+  "status" TEXT,
+  "eventId" INTEGER,
+  "rallyId" INTEGER,
+  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
+  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+);
+
+
 CREATE TABLE "split_times" (
   "elapsedDuration" TEXT,
   "elapsedDurationMs" INTEGER,
@@ -187,67 +232,13 @@ CREATE TABLE "split_times" (
   "startDateTimeLocal" TEXT,
   "stageId" INTEGER,
   "eventId" INTEGER,
+  "rallyId" INTEGER,
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
   FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
 );
 """
 
 # OLD BELOW
-
-SCHEMA_FULL_CALENDAR = {
-    "id": str,
-    "guid": str,
-    "title": str,
-    "location": str,
-    "startDate": str,
-    "endDate": str,
-    "eventId": str,
-    "rallyId": str,
-    "description": str,
-    "round": str,
-    "cvpSeriesLink": str,
-    "sponsor": str,
-    "images": str,
-    "season": str,
-    "competition": str,
-    "country": str,
-    "asset": str,
-    "__typename": str,
-    "type": str,
-    "uid": str,
-    "seriesUid": str,
-    "releaseYear": str,
-    "availableOn": str,
-    "availableTill": str,
-    "startDateLocal": str,
-    "endDateLocal": str,
-    "finishDate": str,
-    "championship": str,
-    "championshipLogo": str,
-}
-SCHEMA_RESULTS_CALENDAR = {
-    "id": str,
-    "rallyTitle": str,
-    "ROUND": str,
-    "rallyCountry": str,
-    "rallyCountryImage": str,
-    "rallyId": str,
-    "date": str,
-    "startDate": str,
-    "finishDate": str,
-    "driverId": str,
-    "driverCountryImage": str,
-    "driver": str,
-    "coDriverId": str,
-    "coDriverCountryImage": str,
-    "coDriver": str,
-    "teamId": str,
-    "teamLogo": str,
-    "teamName": str,
-    "manufacturer": str,
-    "year": int,
-}
-
 
 # SQL in wrcResults.sql
 SETUP_Q = """
@@ -344,56 +335,6 @@ CREATE TABLE "startlist_classes" (
 );
 
 
-
-CREATE TABLE "stage_times_stage" (
-  "diffFirst" TEXT,
-  "diffFirstMs" INTEGER,
-  "diffPrev" TEXT,
-  "diffPrevMs" INTEGER,
-  "elapsedDuration" TEXT,
-  "elapsedDurationMs" INTEGER,
-  "entryId" INTEGER,
-  "position" INTEGER,
-  "source" TEXT,
-  "stageId" INTEGER,
-  "stageTimeId" INTEGER PRIMARY KEY,
-  "status" TEXT,
-  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-CREATE TABLE "stage_times_overall" (
-  "diffFirst" TEXT,
-  "diffFirstMs" INTEGER,
-  "diffPrev" TEXT,
-  "diffPrevMs" INTEGER,
-  "entryId" INTEGER,
-  "penaltyTime" TEXT,
-  "penaltyTimeMs" INTEGER,
-  "position" INTEGER,
-  "stageTime" TEXT,
-  "stageTimeMs" INTEGER,
-  "totalTime" TEXT,
-  "totalTimeMs" INTEGER,
-  "stageId" INTEGER,
-  PRIMARY KEY ("stageId","entryId"),
-  FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-
-CREATE TABLE "championship_results" (
-  "championshipEntryId" INTEGER,
-  "championshipId" INTEGER,
-  "dropped" INTEGER,
-  "eventId" INTEGER,
-  "pointsBreakdown" TEXT,
-  "position" INTEGER,
-  "publishedStatus" TEXT,
-  "status" TEXT,
-  "totalPoints" INTEGER,
-  PRIMARY KEY ("championshipEntryId","eventId"),
-  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
-  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
-);
 CREATE TABLE "championship_entries_codrivers" (
   "championshipEntryId" INTEGER PRIMARY KEY,
   "championshipId" INTEGER,
