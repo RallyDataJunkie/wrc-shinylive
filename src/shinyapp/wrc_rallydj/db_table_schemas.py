@@ -155,6 +155,7 @@ CREATE TABLE "manufacturers" (
 CREATE TABLE "entries" (
   "entryId" INTEGER PRIMARY KEY,
   "eventId" INTEGER,
+  "rallyId" INTEGER,
   "driverId" INTEGER,
   "codriverId" INTEGER,
   "manufacturerId" INTEGER,
