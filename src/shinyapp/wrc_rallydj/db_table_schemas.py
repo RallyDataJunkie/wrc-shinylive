@@ -22,6 +22,43 @@ CREATE TABLE "championship_lookup" (
   "fieldFourDescription" TEXT
 );
 
+CREATE TABLE "championship_countries" (
+  "countryId" INTEGER PRIMARY KEY,
+  "name" TEXT, 
+  "iso2" TEXT,
+  "iso3" TEXT
+);
+
+CREATE TABLE "championship_rounds_detail" (
+  "eventId" INTEGER PRIMARY KEY,
+  "countryId" INTEGER,
+  "eventProfileId" INTEGER,
+  "country" TEXT,
+  "name" TEXT,
+  "slug" TEXT,
+  "location" TEXT,
+  "startDate" TEXT,
+  "finishDate" TEXT,
+  "timeZoneId" TEXT,
+  "timeZoneName" TEXT,
+  "timeZoneOffset" INTEGER,
+  "surfaces" TEXT,
+  "organiserUrl" TEXT,
+  "categories" TEXT,
+  "mode" TEXT,
+  "trackingEventId" INTEGER,
+  "clerkOfTheCourse" TEXT,
+  "stewards" TEXT,
+  "templateFilename" TEXT,
+  "locked" TEXT,
+  "public" TEXT,
+  "applyJumpStarts" TEXT,
+  "displayFiaColumns" TEXT,
+  "roundShakedownTimes" TEXT,
+  "shakedownCount" TEXT,
+  "displayLicenseNumber" TEXT
+);
+
 CREATE TABLE "championship_overall" (
   "championshipEntryId" INTEGER,
   "overallPosition" INTEGER,
@@ -42,6 +79,22 @@ CREATE TABLE "championship_results" (
   PRIMARY KEY ("championshipEntryId","eventId"),
   FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
   FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
+);
+
+
+
+CREATE TABLE "championship_entries" (
+  "championshipEntryId" INTEGER PRIMARY KEY,
+  "championshipId" INTEGER,
+  "personId" INTEGER,
+  "entrantId" INTEGER,
+  "manufacturerId" INTEGER,
+  "tyreManufacturerId" TEXT,
+  "FirstName" TEXT,
+  "LastName" TEXT,
+  "CountryISO3" TEXT,
+  "Manufacturer" TEXT,
+  "TyreManufacturer" TEXT
 );
 
 
@@ -73,6 +126,185 @@ CREATE TABLE "season_rounds" (
   FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
 );
 
+CREATE TABLE "event_classes" (
+  "eventClassId" INTEGER,
+  "eventId" INTEGER,
+  "name" TEXT,
+  PRIMARY KEY ("eventId", "eventClassId")
+);
+
+
+CREATE TABLE "groups" (
+  "groupId" INTEGER PRIMARY KEY,
+  "name" TEXT
+);
+
+CREATE TABLE "entrants" (
+  "entrantId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "logoFilename" TEXT
+);
+
+
+CREATE TABLE "manufacturers" (
+  "manufacturerId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "logoFilename" TEXT
+);
+
+CREATE TABLE "entries" (
+  "entryId" INTEGER PRIMARY KEY,
+  "eventId" INTEGER,
+  "driverId" INTEGER,
+  "codriverId" INTEGER,
+  "manufacturerId" INTEGER,
+  "entrantId" INTEGER,
+  "groupId" INTEGER,
+  "identifier" INTEGER,
+  "vehicleModel" TEXT,
+  "entryListOrder" INTEGER,
+  "pbf" TEXT,
+  "drive" TEXT,
+  "eligibility" TEXT,
+  "priority" TEXT,
+  "status" TEXT,
+  "tyreManufacturer" TEXT
+);
+
+CREATE TABLE "entries_drivers" (
+  "personId" INTEGER PRIMARY KEY,
+  "countryId" INTEGER,
+  "state" TEXT,
+  "firstName" TEXT,
+  "lastName" TEXT,
+  "abbvName" TEXT,
+  "fullName" TEXT,
+  "code" TEXT,
+  "licenseNumber" TEXT,
+  "country.countryId" TEXT,
+  "country.name" TEXT,
+  "country.iso2" TEXT,
+  "country.iso3" TEXT
+);
+
+CREATE TABLE "entries_codrivers" (
+  "personId" INTEGER PRIMARY KEY,
+  "countryId" INTEGER,
+  "state" TEXT,
+  "firstName" TEXT,
+  "lastName" TEXT,
+  "abbvName" TEXT,
+  "fullName" TEXT,
+  "code" TEXT,
+  "licenseNumber" TEXT,
+  "country.countryId" TEXT,
+  "country.name" TEXT,
+  "country.iso2" TEXT,
+  "country.iso3" TEXT
+);
+
+CREATE TABLE "event_rallies" (
+  "rallyId" INTEGER,
+  "eventId" INTEGER,
+  "itineraryId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "isMain" TEXT
+);
+
+CREATE TABLE "event_date" (
+  "eventId" INTEGER PRIMARY KEY,
+  "countryId" INTEGER,
+  "eventProfileId" INTEGER,
+  "name" TEXT,
+  "slug" TEXT,
+  "location" TEXT,
+  "startDate" TEXT,
+  "finishDate" TEXT,
+  "timeZoneId" TEXT,
+  "timeZoneName" TEXT,
+  "timeZoneOffset" INTEGER,
+  "surfaces" TEXT,
+  "organiserUrl" TEXT,
+  "categories" TEXT,
+  "mode" TEXT,
+  "trackingEventId" INTEGER,
+  "clerkOfTheCourse" TEXT,
+  "stewards" TEXT,
+  "templateFilename" TEXT,
+  "locked" TEXT,
+  "public" TEXT,
+  "applyJumpStarts" TEXT,
+  "displayFiaColumns" TEXT,
+  "roundShakedownTimes" TEXT,
+  "shakedownCount" TEXT,
+  "displayLicenseNumber" TEXT,
+  "country.countryId" INTEGER,
+  "country.name" TEXT,
+  "country.iso2" TEXT,
+  "country.iso3" TEXT
+);
+
+
+CREATE TABLE "itinerary_legs" (
+  "itineraryId" INTEGER,
+  "itineraryLegId" INTEGER PRIMARY KEY,
+  "legDate" TEXT,
+  "name" TEXT,
+  "order" INTEGER,
+  "startListId" INTEGER,
+  "status" TEXT,
+  FOREIGN KEY ("itineraryId") REFERENCES "itinerary_event" ("itineraryId")
+);
+
+
+CREATE TABLE "itinerary_stages" (
+  "itinerarySectionId" INTEGER,
+  "itineraryLegId" INTEGER,
+  "order" INTEGER,
+  "name" TEXT,
+  "stageId" INTEGER PRIMARY KEY,
+  "eventId" INTEGER,
+  "number" INTEGER,
+  "distance" REAL,
+  "status" TEXT,
+  "stageType" TEXT,
+  "timingPrecision" TEXT,
+  "locked" TEXT,
+  "code" TEXT
+);
+
+CREATE TABLE "itinerary_controls" (
+  "itinerarySectionId" INTEGER,
+  "itineraryLegId" INTEGER,
+  "order" INTEGER,
+  "name" TEXT,
+  "controlId" INTEGER PRIMARY KEY,
+  "eventId" INTEGER,
+  "stageId" INTEGER,
+  "type" TEXT,
+  "code" TEXT,
+  "location" TEXT,
+  "timingPrecision" TEXT,
+  "distance" REAL,
+  "targetDuration" TEXT,
+  "targetDurationMs" INTEGER,
+  "firstCarDueDateTime" TEXT,
+  "firstCarDueDateTimeLocal" TEXT,
+  "status" TEXT,
+  "controlPenalties" TEXT,
+  "roundingPolicy" TEXT,
+  "locked" TEXT,
+  "bogey" TEXT,
+  "bogeyMs" INTEGER
+);
+
+CREATE TABLE "itinerary_sections" (
+  "itineraryLegId" INTEGER,
+  "itinerarySectionId" INTEGER PRIMARY KEY,
+  "name" TEXT,
+  "order" INTEGER,
+  FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
+);
 
 CREATE TABLE "stage_controls" (
   "code" TEXT,
@@ -143,7 +375,7 @@ CREATE TABLE "stage_overall" (
   "rallyId" INTEGER,
   PRIMARY KEY ("stageId", "entryId"),
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
 
 CREATE TABLE "penalties" (
@@ -155,7 +387,7 @@ CREATE TABLE "penalties" (
   "reason" TEXT,
   "eventId" INTEGER,
   PRIMARY KEY ("penaltyId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
 
 CREATE TABLE "retirements" (
@@ -168,7 +400,7 @@ CREATE TABLE "retirements" (
   "status" TEXT,
   "eventId" INTEGER,
   PRIMARY KEY ("retirementId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
 
 CREATE TABLE "stagewinners" (
@@ -180,7 +412,7 @@ CREATE TABLE "stagewinners" (
   "eventId" INTEGER,
   "rallyId" INTEGER,
   PRIMARY KEY ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId"),
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId"),
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId")
 );
 
@@ -214,7 +446,7 @@ CREATE TABLE "stage_times" (
   "eventId" INTEGER,
   "rallyId" INTEGER,
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
 
 
@@ -234,190 +466,6 @@ CREATE TABLE "split_times" (
   "eventId" INTEGER,
   "rallyId" INTEGER,
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-"""
-
-# OLD BELOW
-
-# SQL in wrcResults.sql
-SETUP_Q = """
-CREATE TABLE "itinerary_event" (
-  "eventId" INTEGER,
-  "itineraryId" INTEGER PRIMARY KEY,
-  "name" TEXT,
-  "priority" INTEGER
-);
-CREATE TABLE "itinerary_legs" (
-  "itineraryId" INTEGER,
-  "itineraryLegId" INTEGER PRIMARY KEY,
-  "legDate" TEXT,
-  "name" TEXT,
-  "order" INTEGER,
-  "startListId" INTEGER,
-  "status" TEXT,
-  FOREIGN KEY ("itineraryId") REFERENCES "itinerary_event" ("itineraryId")
-);
-CREATE TABLE "itinerary_sections" (
-  "itineraryLegId" INTEGER,
-  "itinerarySectionId" INTEGER PRIMARY KEY,
-  "name" TEXT,
-  "order" INTEGER,
-  FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
-);
-
-CREATE TABLE "startlists" (
-  "codriver.abbvName" TEXT,
-  "codriver.code" TEXT,
-  "codriver.country.countryId" INTEGER,
-  "codriver.country.iso2" TEXT,
-  "codriver.country.iso3" TEXT,
-  "codriver.country.name" TEXT,
-  "codriver.countryId" INTEGER,
-  "codriver.firstName" TEXT,
-  "codriver.fullName" TEXT,
-  "codriver.lastName" TEXT,
-  "codriver.personId" INTEGER,
-  "codriverId" INTEGER,
-  "driver.abbvName" TEXT,
-  "driver.code" TEXT,
-  "driver.country.countryId" INTEGER,
-  "driver.country.iso2" TEXT,
-  "driver.country.iso3" TEXT,
-  "driver.country.name" TEXT,
-  "driver.countryId" INTEGER,
-  "driver.firstName" TEXT,
-  "driver.fullName" TEXT,
-  "driver.lastName" TEXT,
-  "driver.personId" INTEGER,
-  "driverId" INTEGER,
-  "eligibility" TEXT,
-  "entrant.entrantId" INTEGER,
-  "entrant.logoFilename" TEXT,
-  "entrant.name" TEXT,
-  "entrantId" INTEGER,
-  "entryId" INTEGER PRIMARY KEY,
-  "eventId" INTEGER,
-  "group.name" TEXT,
-  "groupId" INTEGER,
-  "group.groupId" INTEGER,
-  "identifier" TEXT,
-  "manufacturer.logoFilename" TEXT,
-  "manufacturer.manufacturerId" INTEGER,
-  "manufacturer.name" TEXT,
-  "manufacturerId" INTEGER,
-  "priority" TEXT,
-  "status" TEXT,
-  "tag" TEXT,
-  "tag.name" TEXT,
-  "tag.tagId" INTEGER,
-  "tagId" INTEGER,
-  "tyreManufacturer" TEXT,
-  "vehicleModel" TEXT,
-  "entryListOrder" INTEGER,
-  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
-);
-CREATE TABLE "roster" (
-  "fiasn" INTEGER,
-  "code" TEXT,
-  "sas-entryid" INTEGER PRIMARY KEY,
-  "roster_num" INTEGER,
-  FOREIGN KEY ("sas-entryid") REFERENCES "startlists" ("entryId")
-);
-CREATE TABLE "startlist_classes" (
-  "eventClassId" INTEGER,
-  "eventId" INTEGER,
-  "name" TEXT,
-  "entryId" INTEGER,
-  PRIMARY KEY ("eventClassId","entryId"),
-  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId"),
-  FOREIGN KEY ("entryId") REFERENCES "startlists" ("entryId")
-);
-
-
-CREATE TABLE "championship_entries_codrivers" (
-  "championshipEntryId" INTEGER PRIMARY KEY,
-  "championshipId" INTEGER,
-  "entrantId" TEXT,
-  "ManufacturerTyre" TEXT,
-  "Manufacturer" TEXT,
-  "FirstName" TEXT,
-  "CountryISO3" TEXT,
-  "CountryISO2" TEXT,
-  "LastName" TEXT,
-  "manufacturerId" INTEGER,
-  "personId" INTEGER,
-  "tyreManufacturer" TEXT,
-  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId")
-);
-CREATE TABLE "championship_entries_manufacturers" (
-  "championshipEntryId" INTEGER PRIMARY KEY ,
-  "championshipId" INTEGER,
-  "entrantId" INTEGER,
-  "Name" TEXT,
-  "LogoFileName" TEXT,
-  "Manufacturer" TEXT,
-  "manufacturerId" INTEGER,
-  "personId" TEXT,
-  "tyreManufacturer" TEXT,
-  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId")
-);
-CREATE TABLE "championship_rounds" (
-  "championshipId" INTEGER,
-  "eventId" INTEGER,
-  "order" INTEGER,
-  PRIMARY KEY ("championshipId","eventId"),
-  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
-  FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
-);
-CREATE TABLE "championship_entries_drivers" (
-  "championshipEntryId" INTEGER PRIMARY KEY ,
-  "championshipId" INTEGER,
-  "entrantId" TEXT,
-  "ManufacturerTyre" TEXT,
-  "Manufacturer" TEXT,
-  "FirstName" TEXT,
-  "CountryISO3" TEXT,
-  "CountryISO2" TEXT,
-  "LastName" TEXT,
-  "manufacturerId" INTEGER,
-  "personId" INTEGER,
-  "tyreManufacturer" TEXT,
-  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId")
-);
-CREATE TABLE "event_metadata" (
-  "_id" TEXT,
-  "availability" TEXT,
-  "date-finish" TEXT,
-  "date-start" TEXT,
-  "gallery" TEXT,
-  "hasdata" TEXT,
-  "hasfootage" TEXT,
-  "hasvideos" TEXT,
-  "id" TEXT,
-  "info-based" TEXT,
-  "info-categories" TEXT,
-  "info-date" TEXT,
-  "info-flag" TEXT,
-  "info-surface" TEXT,
-  "info-website" TEXT,
-  "kmlfile" TEXT,
-  "logo" TEXT,
-  "name" TEXT,
-  "org-website" TEXT,
-  "poi-Klo im Wald" TEXT,
-  "poilistid" TEXT,
-  "position" TEXT,
-  "rosterid" TEXT,
-  "sas-eventid" TEXT,
-  "sas-itineraryid" TEXT,
-  "sas-rallyid" TEXT,
-  "sas-trackingid" TEXT,
-  "sitid" TEXT,
-  "testid" TEXT,
-  "thumbnail" TEXT,
-  "time-zone" TEXT,
-  "tzoffset" TEXT,
-  "year" INTEGER
+  FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
 """
