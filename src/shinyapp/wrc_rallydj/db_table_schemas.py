@@ -263,6 +263,7 @@ CREATE TABLE "itinerary_stages" (
   "itineraryLegId" INTEGER,
   "order" INTEGER,
   "name" TEXT,
+  "name_" TEXT,
   "stageId" INTEGER PRIMARY KEY,
   "eventId" INTEGER,
   "number" INTEGER,
