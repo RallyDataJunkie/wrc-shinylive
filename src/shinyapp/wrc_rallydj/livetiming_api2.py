@@ -734,7 +734,9 @@ class WRCLiveTimingAPIClientV2:
             q = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId};"
-            q = f"{q} ORDER BY sl.`order` ASC;"
+            q = f"{q} ORDER BY sl.[order] ASC;"
+            # We can also escape order (reserved word as column name)
+            # using eg sl.[order] or sl."order" or  sl.`order`
 
         startlist_df = read_sql(q, self.conn)
 
@@ -1079,8 +1081,9 @@ class WRCLiveTimingAPIClientV2:
 
         return controlTimes_df
 
-    def _getStageTimes(self, updateDB=False):
-        stub = f"events/{self.eventId}/stages/{self.stageId}/stagetimes.json?rallyId={self.rallyId}"
+    def _getStageTimes(self, stageId=None, updateDB=False):
+        stageId = stageId if stageId else self.stageId
+        stub = f"events/{self.eventId}/stages/{stageId}/stagetimes.json?rallyId={self.rallyId}"
         json_data = self._WRC_RedBull_json(stub)
         stagetimes_df = DataFrame(json_data)
         if stagetimes_df.empty:
@@ -1094,24 +1097,42 @@ class WRCLiveTimingAPIClientV2:
 
         return stagetimes_df
 
-    def getStageTimes(self, updateDB=False):
-        sql = f"""SELECT * FROM stage_times WHERE eventId={self.eventId} AND stageId={self.stageId} AND rallyId={self.rallyId};"""
-        r = read_sql(sql, self.conn)
-        # Hack to poll API if empty
-        if r.empty:
-            self._getStageTimes(updateDB=True)
+    def getStageTimes(self, stageId=None, raw=True, updateDB=False):
+        if updateDB:
+            self._getStageTimes(stageId=stageId)
+
+        stageId = stageId if stageId else self.stageId
+        if stageId and self.eventId and self.rallyId:
+            on_event_ = f"st.eventId={self.eventId} AND st.stageId={stageId} AND st.rallyId={self.rallyId}"
+            if raw:
+                sql = f"""SELECT * FROM stage_times AS st WHERE {on_event_};"""
+            else:
+                _entry_join = f"INNER JOIN entries AS e ON st.entryId=e.entryId"
+                _driver_join = (
+                    f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+                )
+                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, st.* FROM stage_times AS st {_entry_join} {_driver_join} WHERE {on_event_};"
+
             r = read_sql(sql, self.conn)
+            # Hack to poll API if empty
+            if r.empty:
+                self._getStageTimes(stageId=stageId, updateDB=True)
+                r = read_sql(sql, self.conn)
+        else:
+            print(f"No getStageTimes? {self.eventId} {self.stageId} {self.rallyId}")
+            r = DataFrame()
         return r
 
-    def _getSplitTimes(self, updateDB=False):
-        stub = f"events/{self.eventId}/stages/{self.stageId}/splittimes.json?rallyId={self.rallyId}"
+    def _getSplitTimes(self, stageId=None, updateDB=False):
+        stageId = stageId if stageId else self.stageId
+        stub = f"events/{self.eventId}/stages/{stageId}/splittimes.json?rallyId={self.rallyId}"
         json_data = self._WRC_RedBull_json(stub)
         splitTimes_df = DataFrame(json_data)
         if splitTimes_df.empty:
             return DataFrame()
-
+        
+        splitTimes_df["stageId"] = stageId
         splitTimes_df["eventId"] = self.eventId
-        splitTimes_df["stageId"] = self.stageId
         splitTimes_df["rallyId"] = self.rallyId
 
         if updateDB:
@@ -1119,16 +1140,34 @@ class WRCLiveTimingAPIClientV2:
 
         return splitTimes_df
 
-    def getSplitTimes(self, updateDB=False):
-        sql = f"""SELECT * FROM split_times WHERE eventId={self.eventId} AND stageId={self.stageId} AND rallyId={self.rallyId};"""
-        r = read_sql(sql, self.conn)
-        # Hack to poll API if empty
-        if r.empty:
-            self._getSplitTimes(updateDB=True)
+    def getSplitTimes(self, stageId=None, raw=True, updateDB=False):
+        if updateDB:
+            self._getSplitTimes(stageId=stageId)
+        if stageId and self.eventId and self.rallyId:
+            on_event_ = f"sp.eventId={self.eventId} AND sp.stageId={stageId} AND sp.rallyId={self.rallyId}"
+            if raw:
+                sql = f"""SELECT * FROM split_times AS sp WHERE {on_event_};"""
+            else:
+                _entry_join = f"INNER JOIN entries AS e ON sp.entryId=e.entryId"
+                _driver_join = (
+                    f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+                )
+                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, sp.* FROM split_times AS sp {_entry_join} {_driver_join} WHERE {on_event_};"
+
             r = read_sql(sql, self.conn)
+            # Hack to poll API if empty
+            if r.empty:
+                self._getSplitTimes(stageId=stageId, updateDB=True)
+                r = read_sql(sql, self.conn)
+        else:
+            print(f"No getSplitTimes? {self.eventId} {self.stageId} {self.rallyId}")
+            r = DataFrame()
+
         return r
 
-    def _getStageResults(self, stageId=None, by_championship=False, updateDB=False):
+    def _getStageOverallResults(
+        self, stageId=None, by_championship=False, updateDB=False
+    ):
         """This is the overall result at the end of the stage. TO DO CHECK"""
         # TO DO: if we select by championship, are these different?
         # If so, do we need to set championship and championship Pos cols, maybe in a new table?
@@ -1151,9 +1190,9 @@ class WRCLiveTimingAPIClientV2:
 
         return stageResults_df
 
-    def getStageResults(self, stageId=None, raw=True, updateDB=False):
+    def getStageOverallResults(self, stageId=None, raw=True, updateDB=False):
         if updateDB:
-            self._getStageResults(stageId=stageId)
+            self._getStageOverallResults(stageId=stageId)
 
         stageId = stageId if stageId else self.stageId
         if self.eventId and stageId and self.rallyId:
@@ -1169,10 +1208,12 @@ class WRCLiveTimingAPIClientV2:
             r = read_sql(sql, self.conn)
             # Hack to poll API if empty
             if r.empty:
-                self._getStageResults(stageId=stageId, updateDB=True)
+                self._getStageOverallResults(stageId=stageId, updateDB=True)
                 r = read_sql(sql, self.conn)
         else:
-            print(f"No getStageResults? {self.eventId} {self.stageId} {self.rallyId}")
+            print(
+                f"No getStageOverallResults? {self.eventId} {self.stageId} {self.rallyId}"
+            )
             r = DataFrame()
         return r
 
@@ -1311,6 +1352,7 @@ class WRCLiveTimingAPIClientV2:
             _control_join = f"INNER JOIN stage_controls AS c ON p.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
             sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+
         r = read_sql(sql, self.conn)
         # Hack to poll API if empty
         if r.empty:

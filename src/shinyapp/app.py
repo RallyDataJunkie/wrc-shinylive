@@ -108,7 +108,9 @@ with ui.accordion(open=False):
         @reactive.event(input.stage, input.display_latest_overall)
         def rally_overview_latest_hero():
             setStageData()
-            stagesInfo = wrc.getStageInfo(on_event=True).sort_values(by="number", ascending=True)
+            stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
+                by="number", ascending=True
+            )
             stageId = None
             if input.display_latest_overall() and "status" in stagesInfo:
                 completed_stages = stagesInfo[stagesInfo["status"] == "Completed"]
@@ -119,7 +121,7 @@ with ui.accordion(open=False):
 
             if stageId and not stagesInfo.empty:
                 stageId = int(stageId)
-                overallResults = wrc.getStageResults(stageId=stageId, raw=False)
+                overallResults = wrc.getStageOverallResults(stageId=stageId, raw=False)
                 if not overallResults.empty:
                     return get_overall_result_hero(stageId, stagesInfo, overallResults)
             else:
@@ -173,7 +175,7 @@ with ui.accordion(open=False):
                             "targetDuration",
                             "timingPrecision",
                             "controlPenalties",
-                            "status"
+                            "status",
                         ]
                         return render.DataGrid(itinerary[retcols])
 
@@ -204,9 +206,7 @@ with ui.accordion(open=False):
                             "priority",
                             # "groupClass",
                         ]
-                        startlist = startlist[
-                            startlist["name"] == input.startlist()
-                        ]
+                        startlist = startlist[startlist["name"] == input.startlist()]
                         return render.DataGrid(startlist[retcols])
 
                 with ui.accordion_panel("Stage winners"):
@@ -231,7 +231,7 @@ with ui.accordion(open=False):
                             "sectionName",
                             "carNo",
                             # "time",
-                            #"eligibility",
+                            # "eligibility",
                             "wins_overall",
                             "daily_wins",
                             "timeInS",
@@ -301,6 +301,86 @@ with ui.accordion(open=False):
                         ]
                         return render.DataGrid(penalties[retcols])
 
+    with ui.accordion_panel("Stage Review"):
+        with ui.card(class_="mt-3"):
+
+            """Stage hero here TO DO"""
+
+            with ui.accordion(open=False, id="stage_review_accordion"):
+
+                with ui.accordion_panel("Overall position"):
+
+                    @render.data_frame
+                    @reactive.event(input.stage_review_accordion, input.stage)
+                    def overall_short():
+                        stageId = input.stage()
+                        if not stageId:
+                            return
+                        stageId = int(stageId)
+                        overall_df = wrc.getStageOverallResults(
+                            stageId=stageId, raw=False
+                        )
+                        if overall_df.empty:
+                            return
+                        retcols = [
+                            k
+                            for k in overall_df.columns
+                            if k
+                            in [
+                                "pos",
+                                "carNo",
+                                "driver",
+                                "coDriver",
+                                "teamName",
+                                "stageTime",
+                                "diffFirst",
+                                "diffPrev",
+                                "penaltyTime",
+                                "totalTime",
+                                "groupClass",
+                                "eligibility",
+                            ]
+                            or k.startswith("round")
+                        ]
+                        return render.DataGrid(overall_df)  # [retcols])
+
+                with ui.accordion_panel("Stage times"):
+                    """ TO DO rebase widget """
+
+                    @render.data_frame
+                    @reactive.event(input.stage_review_accordion, input.stage)
+                    def stage_results_short():
+                        stageId = input.stage()
+                        if not stageId:
+                            return
+                        stageId = int(stageId)
+
+                        stage_times_df = wrc.getStageTimes(stageId=stageId, raw=False)
+                        if stage_times_df.empty:
+                            return
+                        return render.DataGrid(stage_times_df)
+
+    with ui.accordion_panel(title="Splits Analysis"):
+        with ui.card(class_="mt-3"):
+
+            """ TO DO """
+
+            with ui.accordion(open=False, id="splits_review_accordion"):
+
+                with ui.accordion_panel("Split times"):
+
+                    @render.data_frame
+                    @reactive.event(input.splits_review_accordion, input.stage)
+                    def split_results_short():
+                        stageId = input.stage()
+                        if not stageId:
+                            return
+                        stageId = int(stageId)
+
+                        split_times_df = wrc.getSplitTimes(stageId=stageId, raw=False)
+                        if split_times_df.empty:
+                            return
+                        return render.DataGrid(split_times_df)
 
 @reactive.calc
 @reactive.event(input.season_round)
@@ -390,7 +470,10 @@ def update_section_select():
 
 
 @reactive.effect
-@reactive.event(input.season_round, input.event_day, )
+@reactive.event(
+    input.season_round,
+    input.event_day,
+)
 def update_startlist_select():
     eventId = input.season_round()
     if not eventId:
@@ -413,7 +496,9 @@ def update_startlist_select():
 
 
 @reactive.effect
-@reactive.event(input.rally_seasonId, input.season_round, input.event_day, input.event_section)
+@reactive.event(
+    input.rally_seasonId, input.season_round, input.event_day, input.event_section
+)
 def update_stage_select():
     eventId = input.season_round()
     itineraryLegId = input.event_day()
@@ -474,7 +559,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
         # p2pace = f'(Pace: {p2pace} s/km slower)'
         p2_ = overall_data[overall_data["position"] == 2]
         p2 = ui.value_box(
-            value= "+"+format_timedelta(p2_.iloc[0]["diffFirstMs"]),
+            value="+" + format_timedelta(p2_.iloc[0]["diffFirstMs"]),
             title=_get_hero_text(p2_),
             theme="text-blue",
             # showcase=p2pace,
@@ -511,8 +596,11 @@ def getStageWinners():
 
     return stagewinners
 
+
 @reactive.calc
-@reactive.event(input.rally_seasonId, input.season_round, input.event_day, input.event_section)
+@reactive.event(
+    input.rally_seasonId, input.season_round, input.event_day, input.event_section
+)
 def getItinerary():
     eventId = input.season_round()
     itineraryLegId = input.event_day()
@@ -520,8 +608,10 @@ def getItinerary():
 
     eventId = int(eventId) if eventId else eventId
     itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
-    itinerarySectionId = int(itinerarySectionId) if itinerarySectionId else itinerarySectionId
-    
+    itinerarySectionId = (
+        int(itinerarySectionId) if itinerarySectionId else itinerarySectionId
+    )
+
     itinerary = wrc.getItineraryControls(
         eventId=eventId,
         itineraryLegId=itineraryLegId,
