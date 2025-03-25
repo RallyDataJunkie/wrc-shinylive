@@ -4,6 +4,8 @@ ShinyLive site for WRC - uses in-browser Python/Pyodide WASM environment to run 
 
 View app here: [http://rallydatajunkie.com/wrc-shinylive/](http://rallydatajunkie.com/wrc-shinylive/)
 
+This repo is also currently home to the `wrc_rallydj` package on PyPi.
+
 ## RallyDataJunkie WRC Timing and Results App
 
 ### Home page
