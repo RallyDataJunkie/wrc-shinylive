@@ -6,6 +6,9 @@ View app here: [http://rallydatajunkie.com/wrc-shinylive/](http://rallydatajunki
 
 This repo is also currently home to the `wrc_rallydj` package on PyPi.
 
+
+*Official docs etc conveniently located at e.g. https://www.rallysupport.com/wrc-rally-sweden-2025*
+
 ## RallyDataJunkie WRC Timing and Results App
 
 ### Home page

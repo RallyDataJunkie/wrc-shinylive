@@ -731,10 +731,10 @@ class WRCLiveTimingAPIClientV2:
                 f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
             )
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-            q = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event} ORDER BY sl.order ASC"
+            q = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId};"
-            q = f"{q};"
+            q = f"{q} ORDER BY sl.`order` ASC;"
 
         startlist_df = read_sql(q, self.conn)
 
@@ -1310,7 +1310,7 @@ class WRCLiveTimingAPIClientV2:
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON p.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
         r = read_sql(sql, self.conn)
         # Hack to poll API if empty
         if r.empty:
