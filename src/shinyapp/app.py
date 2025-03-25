@@ -2,7 +2,8 @@ from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners
-
+from wrc_rallydj.utils import format_timedelta
+from datetime import datetime
 from icons import question_circle_fill
 
 from wrc_rallydj.livetiming_api2 import WRCLiveTimingAPIClientV2
@@ -107,7 +108,7 @@ with ui.accordion(open=False):
         @reactive.event(input.stage, input.display_latest_overall)
         def rally_overview_latest_hero():
             setStageData()
-            stagesInfo = wrc.getStageInfo().sort_values(by="number", ascending=True)
+            stagesInfo = wrc.getStageInfo(on_event=True).sort_values(by="number", ascending=True)
             stageId = None
             if input.display_latest_overall() and "status" in stagesInfo:
                 completed_stages = stagesInfo[stagesInfo["status"] == "Completed"]
@@ -118,7 +119,7 @@ with ui.accordion(open=False):
 
             if stageId and not stagesInfo.empty:
                 stageId = int(stageId)
-                overallResults = wrc.getStageResults(stageId=stageId)
+                overallResults = wrc.getStageResults(stageId=stageId, raw=False)
                 if not overallResults.empty:
                     return get_overall_result_hero(stageId, stagesInfo, overallResults)
             else:
@@ -154,6 +155,60 @@ with ui.accordion(open=False):
                         ]
                         return render.DataGrid(stages[retcols])
 
+                with ui.accordion_panel(title="Itinerary"):
+
+                    @render.data_frame
+                    def itinerary_frame():
+                        itinerary = getItinerary()
+                        if itinerary.empty:
+                            return
+
+                        retcols = [
+                            "name",
+                            "code",
+                            "type",
+                            "location",
+                            "distance",
+                            "firstCarDueDateTime",
+                            "targetDuration",
+                            "timingPrecision",
+                            "controlPenalties",
+                            "status"
+                        ]
+                        return render.DataGrid(itinerary[retcols])
+
+                with ui.accordion_panel("Startlist"):
+
+                    # Create startlist type selector
+                    # Dynamically populated using available startlists
+                    ui.input_select("startlist", "Startlist:", {})
+
+                    @render.data_frame
+                    @reactive.event(
+                        input.startlist, input.season_round, input.event_day
+                    )
+                    def startlist_frame():
+                        startlist = wrc.getStartList(raw=False)
+                        if startlist.empty:
+                            return
+                        retcols = [
+                            "order",
+                            "carNo",
+                            "driverName",
+                            "startDateTimeLocal",
+                            "codriverName",
+                            "manufacturerName",
+                            "entrantName",
+                            "vehicleModel",
+                            "eligibility",
+                            "priority",
+                            # "groupClass",
+                        ]
+                        startlist = startlist[
+                            startlist["name"] == input.startlist()
+                        ]
+                        return render.DataGrid(startlist[retcols])
+
                 with ui.accordion_panel("Stage winners"):
 
                     @render.data_frame
@@ -164,22 +219,25 @@ with ui.accordion(open=False):
                         # TO DO - need enrichers
                         retcols = [
                             # "stageType",
+                            "code",
                             "stageName",
-                            "abbvName",
+                            "driverName",
+                            "codriverName",
+                            "manufacturerName",
+                            "entrantName",
+                            "vehicleModel",
                             "elapsedDuration",
-                            # "day",
-                            # "carNo",
-                            # "driver",
-                            # "coDriver",
+                            "day",
+                            "sectionName",
+                            "carNo",
                             # "time",
-                            # "teamName",
-                            # "eligibility",
-                            # "wins_overall",
-                            # "daily_wins",
-                            # "timeInS",
-                            # "distance",
-                            # "pace (s/km)",
-                            # "speed (km/h)",
+                            #"eligibility",
+                            "wins_overall",
+                            "daily_wins",
+                            "timeInS",
+                            "distance",
+                            "pace (s/km)",
+                            "speed (km/h)",
                         ]
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
@@ -200,11 +258,18 @@ with ui.accordion(open=False):
                         if retirements.empty:
                             return
                         retcols = [
-                            "abbvName",
+                            "carNo",
+                            "driverName",
                             "code",
+                            "type",
                             "reason",
                             "retirementDateTime",
                             "status",
+                            "codriverName",
+                            "vehicleModel",
+                            "location",
+                            "manufacturerName",
+                            "entrantName",
                         ]
                         return render.DataGrid(retirements[retcols])
 
@@ -221,7 +286,19 @@ with ui.accordion(open=False):
                         penalties = wrc.getPenalties(raw=False)
                         if penalties.empty:
                             return
-                        retcols = ["abbvName", "code", "penaltyDuration", "reason"]
+                        retcols = [
+                            "carNo",
+                            "driverName",
+                            "code",
+                            "type",
+                            "penaltyDuration",
+                            "reason",
+                            "codriverName",
+                            "vehicleModel",
+                            "location",
+                            "manufacturerName",
+                            "entrantName",
+                        ]
                         return render.DataGrid(penalties[retcols])
 
 
@@ -296,7 +373,7 @@ def update_day_select():
 
 
 @reactive.effect
-@reactive.event(input.rally_seasonId, input.season_round, input.event_day)
+@reactive.event(input.season_round, input.event_day)
 def update_section_select():
     itineraryLegId = input.event_day()
     if not itineraryLegId:
@@ -304,12 +381,35 @@ def update_section_select():
         return
     # Ensure the event data is loaded
     getEventData()
-
+    itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
     sections_ = wrc.getItinerarySections(itineraryLegId=itineraryLegId)
     sections = {0: "All"}
     sections.update(sections_.set_index("itinerarySectionId")["name"].to_dict())
 
     ui.update_select("event_section", choices=sections)
+
+
+@reactive.effect
+@reactive.event(input.season_round, input.event_day, )
+def update_startlist_select():
+    eventId = input.season_round()
+    if not eventId:
+        ui.update_select("startlist", choices={})
+        return
+    eventId = int(eventId) if eventId else None
+    startlist = wrc.getStartList(eventId=eventId)
+    if startlist.empty:
+        return
+    # Need to select today
+    startLists = startlist["name"].unique().tolist()
+    if startLists:
+        # TO DO - this is a hack ? We assume the name of the startlist is a day
+        day_today = datetime.today().strftime("%A")
+        if len(startLists) == 1 or day_today not in startLists:
+            startwith = startLists[0]
+        else:
+            startwith = day_today
+        ui.update_select("startlist", choices=startLists, selected=startwith)
 
 
 @reactive.effect
@@ -325,7 +425,7 @@ def update_stage_select():
     eventId = int(eventId)
     itineraryLegId = int(itineraryLegId)
     itinerarySectionId = int(itinerarySectionId)
-    
+
     stages = wrc.getItineraryStages(
         eventId=eventId,
         itineraryLegId=itineraryLegId,
@@ -349,8 +449,8 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             record = record.iloc[0]
             return ui.markdown(
                 f"""
-                __{record["entryId"]}__  
-                {record["stageTime"]}  
+                __{record["driverName"]}__  
+                {format_timedelta(record["stageTimeMs"])}  
                 """
             )
 
@@ -360,7 +460,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
     # averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
     p1_ = overall_data[overall_data["position"] == 1]
     p1 = ui.value_box(
-        title=stage_name,
+        title=f"{stage_code}: {stage_name}",
         value=_get_hero_text(p1_),
         theme="text-green",
         # showcase=averaging,
@@ -374,7 +474,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
         # p2pace = f'(Pace: {p2pace} s/km slower)'
         p2_ = overall_data[overall_data["position"] == 2]
         p2 = ui.value_box(
-            value=p2_.iloc[0]["diffFirst"],
+            value= "+"+format_timedelta(p2_.iloc[0]["diffFirstMs"]),
             title=_get_hero_text(p2_),
             theme="text-blue",
             # showcase=p2pace,
@@ -387,7 +487,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             # p3pace = f"(Pace: {p3pace} s/km slower)"
             p3_ = overall_data[overall_data["position"] == 3]
             p3 = ui.value_box(
-                value=p3_.iloc[0]["diffFirst"],
+                value="+" + format_timedelta(p3_.iloc[0]["diffFirstMs"]),
                 title=_get_hero_text(p3_),
                 theme="text-purple",
                 # showcase=p3pace,
@@ -406,16 +506,25 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
 @reactive.calc
 @reactive.event(input.season_round)
 def getStageWinners():
-    return wrc.getStageWinners(raw=False)
-
-
-"""
-@reactive.calc
-@reactive.event(input.event, input.championship, input.stage)
-def stage_winners_data():
-    stagewinners = wrc.getStageWinners(update=True)
-    stages = stages_data()
-    stagewinners = enrich_stage_winners(stagewinners, stages)
+    stagewinners = wrc.getStageWinners(raw=False)
+    stagewinners = enrich_stage_winners(stagewinners)
 
     return stagewinners
-"""
+
+@reactive.calc
+@reactive.event(input.rally_seasonId, input.season_round, input.event_day, input.event_section)
+def getItinerary():
+    eventId = input.season_round()
+    itineraryLegId = input.event_day()
+    itinerarySectionId = input.event_section()
+
+    eventId = int(eventId) if eventId else eventId
+    itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
+    itinerarySectionId = int(itinerarySectionId) if itinerarySectionId else itinerarySectionId
+    
+    itinerary = wrc.getItineraryControls(
+        eventId=eventId,
+        itineraryLegId=itineraryLegId,
+        itinerarySectionId=itinerarySectionId,
+    )
+    return itinerary

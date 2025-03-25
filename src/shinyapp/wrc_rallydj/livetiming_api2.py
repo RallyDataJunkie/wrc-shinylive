@@ -47,6 +47,7 @@ class WRCLiveTimingAPIClientV2:
         self.eventName = None
         self.championshipId = None
         self.championshipName = None
+        self.itineraryId = None
         self.stageId = None
         self.stageName = None
         self.stageCode = None
@@ -614,6 +615,9 @@ class WRCLiveTimingAPIClientV2:
                 itinerarySections2_df, "itinerary_sections", pk="itinerarySectionId"
             )
             self.dbfy(itineraryControls_df, "itinerary_controls", pk="controlId")
+            for _, row in itineraryLegs_df.iterrows():
+                startListId = row["startListId"]
+                self._getStartLists(startListId=startListId, updateDB=updateDB)
 
         return (
             itineraryLegs_df,
@@ -658,7 +662,7 @@ class WRCLiveTimingAPIClientV2:
         if updateDB:
             self._getEventItineraries(updateDB)
 
-        if eventId is None and itineraryLegId is None:
+        if not eventId and not itineraryLegId:
             q = "SELECT * FROM itinerary_sections;"
         elif itineraryLegId:
             q = f"SELECT * FROM itinerary_sections WHERE itineraryLegId={int(itineraryLegId)};"
@@ -669,16 +673,72 @@ class WRCLiveTimingAPIClientV2:
 
         return itinerarySections_df
 
-    def getItineraryControls(self, eventId=None, updateDB=False):
+    def getItineraryControls(
+        self, eventId=None, itineraryLegId=None, itinerarySectionId=None, updateDB=False
+    ):
         if updateDB:
             self._getEventItineraries(updateDB)
-        if eventId is None:
+
+        if not eventId and not itineraryLegId and not itinerarySectionId:
             q = "SELECT * FROM itinerary_controls;"
-        else:
+        elif itinerarySectionId:
+            q = f"SELECT * FROM itinerary_controls WHERE itinerarySectionId={int(itinerarySectionId)};"
+        elif itineraryLegId:
+            q = f"SELECT * FROM itinerary_controls WHERE itineraryLegId={int(itineraryLegId)};"
+        elif eventId:
             q = f"SELECT * FROM itinerary_controls WHERE eventId={int(eventId)};"
+
         itineraryControls_df = read_sql(q, self.conn)
 
         return itineraryControls_df
+
+    def _getStartLists(self, startListId=None, updateDB=False):
+        if not startListId:
+            return DataFrame()
+
+        stub = f"events/{self.eventId}/startLists/{startListId}.json"
+        json_data = self._WRC_RedBull_json(stub)
+
+        startlist_df = json_normalize(json_data["startListItems"])
+        startlist_df["eventId"] = json_data["eventId"]
+        startlist_df["name"] = json_data["name"]
+
+        if updateDB:
+            self.dbfy(startlist_df, "startlists", pk="startListItemId")
+
+        return startlist_df
+
+    def getStartList(self, eventId=None, startListId=None, raw=True, updateDB=False):
+        # TO DO  - offer e.g. a day instead of startListId
+
+        if updateDB and startListId:
+            self._getStartLists(startListId=startListId)
+
+        eventId = eventId if eventId else self.eventId
+        _on_event = f"sl.eventId={eventId}" if eventId else "1=1"
+        if raw:
+            q = f"SELECT * FROM startlists AS sl WHERE {_on_event}"
+            if startListId:
+                q = f"{q} AND startListId={startListId}"
+            q = f"{q};"
+        else:
+            _entry_join = f"INNER JOIN entries AS e ON sl.entryId=e.entryId"
+            _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+            _codriver_join = (
+                f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+            )
+            _manufacturer_join = (
+                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+            )
+            _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
+            q = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event} ORDER BY sl.order ASC"
+            if startListId:
+                q = f"{q} AND startListId={startListId};"
+            q = f"{q};"
+
+        startlist_df = read_sql(q, self.conn)
+
+        return startlist_df
 
     def _getEntries(self, updateDB=False):
         stub = f"events/{self.eventId}/rallies/{self.rallyId}/entries.json"
@@ -740,11 +800,11 @@ class WRCLiveTimingAPIClientV2:
         if updateDB:
             self._getEntries(updateDB)
         _on_event = (
-            f"WHERE eventId={self.eventId} AND rallyId={self.rallyId}"
+            f"eventId={self.eventId} AND rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
-            else ""
+            else "1=1"
         )
-        q = f"SELECT * FROM entries {_on_event};"
+        q = f"SELECT * FROM entries AS e WHERE {_on_event};"
         entries_df = read_sql(q, self.conn)
 
         return entries_df
@@ -784,12 +844,12 @@ class WRCLiveTimingAPIClientV2:
         if updateDB:
             self._getEntries(updateDB)
         _on_event = (
-            f"INNER JOIN entries AS e ON c.personId=e.codriverId WHERE e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
+            f"INNER JOIN entries AS e ON cd.personId=e.codriverId WHERE e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
             else ""
         )
 
-        q = f"SELECT c.* FROM entries_codrivers AS c {_on_event};"
+        q = f"SELECT c.* FROM entries_codrivers AS cd {_on_event};"
         codrivers_df = read_sql(q, self.conn)
 
         return codrivers_df
@@ -874,11 +934,16 @@ class WRCLiveTimingAPIClientV2:
 
         return stages_df, stage_split_points_df, stage_controls_df
 
-    def getStageInfo(self, updateDB=False):
+    def getStageInfo(self, on_event=True, raw=True, updateDB=False):
         if updateDB:
             self._getStages(updateDB)
 
-        q = "SELECT * FROM stage_info;"
+        on_event_ = f"""eventId={self.eventId}""" if on_event else "1=1"
+        if raw:
+            q = f"SELECT * FROM stage_info AS i WHERE {on_event_};"
+        else:
+            q = f"SELECT * FROM stage_info AS i WHERE {on_event_};"
+
         stages_df = read_sql(q, self.conn)
 
         return stages_df
@@ -905,7 +970,7 @@ class WRCLiveTimingAPIClientV2:
         return stage_controls_df
 
     def _getEvent(self, updateDB=False):
-        """This also sets self.rallyId and self.itineraryId"""
+        """This also sets self.rallyId, self.itineraryId"""
         stub = f"events/{self.eventId}.json"
         json_data = self._WRC_RedBull_json(stub)
         if "rallies" not in json_data:
@@ -1065,6 +1130,8 @@ class WRCLiveTimingAPIClientV2:
 
     def _getStageResults(self, stageId=None, by_championship=False, updateDB=False):
         """This is the overall result at the end of the stage. TO DO CHECK"""
+        # TO DO: if we select by championship, are these different?
+        # If so, do we need to set championship and championship Pos cols, maybe in a new table?
         # The rallyId is optional? Or does it filter somehow?
         stageId = stageId if stageId else self.stageId
         stub = f"events/{self.eventId}/stages/{stageId}/results.json?rallyId={self.rallyId}"
@@ -1084,10 +1151,21 @@ class WRCLiveTimingAPIClientV2:
 
         return stageResults_df
 
-    def getStageResults(self, stageId=None, updateDB=False):
+    def getStageResults(self, stageId=None, raw=True, updateDB=False):
+        if updateDB:
+            self._getStageResults(stageId=stageId)
+
         stageId = stageId if stageId else self.stageId
         if self.eventId and stageId and self.rallyId:
-            sql = f"""SELECT * FROM stage_overall WHERE eventId={self.eventId} AND stageId={stageId} AND rallyId={self.rallyId};"""
+            on_event_ = f"o.eventId={self.eventId} AND o.stageId={stageId} AND o.rallyId={self.rallyId}"
+            if raw:
+                sql = f"""SELECT * FROM stage_overall AS o WHERE {on_event_};"""
+            else:
+                _entry_join = f"INNER JOIN entries AS e ON o.entryId=e.entryId"
+                _driver_join = (
+                    f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+                )
+                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, o.* FROM stage_overall AS o {_entry_join} {_driver_join} WHERE {on_event_};"
             r = read_sql(sql, self.conn)
             # Hack to poll API if empty
             if r.empty:
@@ -1154,9 +1232,21 @@ class WRCLiveTimingAPIClientV2:
             sql = f"""SELECT * FROM stagewinners AS w WHERE {_on_event};"""
         else:
             _entry_join = f"INNER JOIN entries AS e ON w.entryId=e.entryId"
+            _stages_join = f"INNER JOIN stage_info AS st ON st.stageId=w.stageId"
             _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
-            _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.abbvName, w.* FROM stagewinners AS w {_entry_join} {_driver_join} {_on_event};"""
+            _codriver_join = (
+                f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+            )
+            _manufacturer_join = (
+                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+            )
+            _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
+            _itinerary_stages_join = (
+                f"INNER JOIN itinerary_stages AS it_st ON it_st.stageId=w.stageId"
+            )
+            _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
+            _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
+            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {_on_event};"""
 
         r = read_sql(sql, self.conn)
         # Hack to poll API if empty
@@ -1179,9 +1269,16 @@ class WRCLiveTimingAPIClientV2:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON r.entryId=e.entryId"
             _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+            _codriver_join = (
+                f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+            )
+            _manufacturer_join = (
+                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+            )
+            _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON r.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.abbvName, c.code, r.reason, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
 
         r = read_sql(sql, self.conn)
         # Hack to poll API if empty
@@ -1204,9 +1301,16 @@ class WRCLiveTimingAPIClientV2:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON p.entryId=e.entryId"
             _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+            _codriver_join = (
+                f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+            )
+            _manufacturer_join = (
+                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+            )
+            _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON p.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.abbvName, c.code, p.penaltyDuration, p.Reason FROM penalties AS p {_entry_join} {_driver_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
         r = read_sql(sql, self.conn)
         # Hack to poll API if empty
         if r.empty:

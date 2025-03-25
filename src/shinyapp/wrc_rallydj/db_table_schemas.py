@@ -310,6 +310,17 @@ CREATE TABLE "itinerary_sections" (
   FOREIGN KEY ("itineraryLegId") REFERENCES "itinerary_legs" ("itineraryLegId")
 );
 
+CREATE TABLE "startlists" (
+  "startListItemId" INTEGER PRIMARY KEY,
+  "startListId" INTEGER,
+  "entryId" INTEGER,
+  "startDateTime" TEXT,
+  "startDateTimeLocal" TEXT,
+  "order" INTEGER,
+  "eventId" INTEGER,
+  "name" TEXT
+);
+
 CREATE TABLE "stage_controls" (
   "code" TEXT,
   "controlId" INTEGER PRIMARY KEY,

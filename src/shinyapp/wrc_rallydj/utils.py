@@ -1,4 +1,5 @@
 from parse import parse
+from datetime import timedelta
 
 # import pandas as pd
 from pandas import to_datetime, date_range, DataFrame, concat, merge
@@ -6,31 +7,68 @@ import datetime
 from numpy import nan
 
 
-# TO DO - refactor this into the WRCLiveTimingAPIClient class
+def format_timedelta(milliseconds):
+    """
+    Convert seconds to a precise hh:mm:ss.tenth format string.
 
-# or create an enrichment class
-def enrich_stage_winners(stagewinners, stages, inplace=True):
+    Args:
+    milliseconds (float): Total number of milliseconds
+
+    Returns:
+    str: Formatted time string in hh:mm:ss.tenth format
+    """
+    # Create timedelta
+    td = timedelta(seconds=milliseconds/1000)
+
+    # Extract total seconds with high precision
+    total_seconds = td.total_seconds()
+
+    # Calculate hours, minutes, seconds, and tenths
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    # Split seconds and tenths
+    whole_seconds = int(seconds)
+    tenths = int((seconds - whole_seconds) * 10)
+
+    # Conditional formatting based on hours and minutes
+    if hours:
+        return f"{int(hours):02d}:{int(minutes):02d}:{whole_seconds:02d}.{tenths:01d}"
+    elif minutes:
+        return f"{int(minutes):02d}:{whole_seconds:02d}.{tenths:01d}"
+    else:
+        return f"{whole_seconds:02d}.{tenths:01d}"
+
+
+# TO DO - refactor this into the WRCLiveTimingAPIClient class
+def enrich_stage_winners(stagewinners, inplace=True):
+    if "wins_overall" in stagewinners:
+        # Already enriched
+        return stagewinners
+
     if not inplace:
         stagewinners = stagewinners.copy()
 
-    if not stages.empty:
-        stagewinners = merge(
-            stagewinners, stages[["stageNo", "day", "distance"]], on="stageNo"
-        )
-        stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
+    stagewinners["timeInS"] = stagewinners["elapsedDuration"].apply(
+        time_to_seconds, retzero=True
+    )
 
-        stagewinners["daily_wins"] = (
-            stagewinners.groupby(["day", "carNo"]).cumcount() + 1
-        )
+    stagewinners["wins_overall"] = stagewinners.groupby("carNo").cumcount() + 1
 
-        stagewinners["speed (km/h)"] = round(
-            stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2
-        )
-        stagewinners["pace (s/km)"] = round(
-            stagewinners["timeInS"] / stagewinners["distance"], 2
-        )
+    stagewinners["section_wins"] = (
+        stagewinners.groupby(["sectionName", "carNo"]).cumcount() + 1
+    )
 
-        return stagewinners
+    stagewinners["daily_wins"] = stagewinners.groupby(["day", "carNo"]).cumcount() + 1
+
+    stagewinners["speed (km/h)"] = round(
+        stagewinners["distance"] / (stagewinners["timeInS"] / 3600), 2
+    )
+    stagewinners["pace (s/km)"] = round(
+        stagewinners["timeInS"] / stagewinners["distance"], 2
+    )
+
+    return stagewinners
 
 
 # TO DO - refactor this into the WRCLiveTimingAPIClient class
