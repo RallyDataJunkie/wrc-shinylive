@@ -575,6 +575,7 @@ class WRCLiveTimingAPIClientV2:
             return DataFrame(), DataFrame(), DataFrame(), DataFrame()
 
         itineraryLegs_df = DataFrame(json_data["itineraryLegs"])
+        itineraryLegs_df["eventId"] = self.eventId
 
         if "itinerarySections" not in itineraryLegs_df:
             return itineraryLegs_df, DataFrame(), DataFrame(), DataFrame()
@@ -584,6 +585,7 @@ class WRCLiveTimingAPIClientV2:
         itinerarySections2_df = json_normalize(
             itinerarySections_df["itinerarySections"]
         )
+
         itineraryControls_df = itinerarySections2_df.explode("controls").reset_index(
             drop=True
         )
@@ -620,45 +622,63 @@ class WRCLiveTimingAPIClientV2:
             itineraryStages_df,
         )
 
-    def getItineraryLegs(self, updateDB=False):
-        if updateDB:
-            self._getEventItineraries(updateDB)
-
-        q = "SELECT * FROM itinerary_legs;"
-        itineraryLegs_df = read_sql(q, self.conn)
-
-        return itineraryLegs_df
-
-    def getItinerarySections(self, eventId=None, updateDB=False):
+    def getItineraryLegs(self, eventId=None, updateDB=False):
         if updateDB:
             self._getEventItineraries(updateDB)
 
         if eventId is None:
-            q = "SELECT * FROM itinerary_stages;"
+            q = "SELECT * FROM itinerary_legs;"
         else:
+            q = f"SELECT * FROM itinerary_legs WHERE eventId={int(eventId)};"
+
+        itineraryLegs_df = read_sql(q, self.conn)
+
+        return itineraryLegs_df
+
+    def getItineraryStages(
+        self, eventId=None, itineraryLegId=None, itinerarySectionId=None, updateDB=False
+    ):
+        if updateDB:
+            self._getEventItineraries(updateDB)
+
+        if not eventId and not itineraryLegId and not itinerarySectionId:
+            q = "SELECT * FROM itinerary_stages;"
+        elif itinerarySectionId:
+            q = f"SELECT * FROM itinerary_stages WHERE itinerarySectionId={int(itinerarySectionId)};"
+        elif itineraryLegId:
+            q = f"SELECT * FROM itinerary_stages WHERE itineraryLegId={int(itineraryLegId)};"
+        elif eventId:
             q = f"SELECT * FROM itinerary_stages WHERE eventId={int(eventId)};"
 
         itinerarySections_df = read_sql(q, self.conn)
 
         return itinerarySections_df
 
-    def getItineraryControls(self, updateDB=False):
+    def getItinerarySections(self, eventId=None, itineraryLegId=None, updateDB=False):
         if updateDB:
             self._getEventItineraries(updateDB)
 
-        q = "SELECT * FROM itinerary_sections;"
+        if eventId is None and itineraryLegId is None:
+            q = "SELECT * FROM itinerary_sections;"
+        elif itineraryLegId:
+            q = f"SELECT * FROM itinerary_sections WHERE itineraryLegId={int(itineraryLegId)};"
+        elif eventId:
+            q = f"SELECT * FROM itinerary_sections WHERE eventId={int(eventId)};"
+
+        itinerarySections_df = read_sql(q, self.conn)
+
+        return itinerarySections_df
+
+    def getItineraryControls(self, eventId=None, updateDB=False):
+        if updateDB:
+            self._getEventItineraries(updateDB)
+        if eventId is None:
+            q = "SELECT * FROM itinerary_controls;"
+        else:
+            q = f"SELECT * FROM itinerary_controls WHERE eventId={int(eventId)};"
         itineraryControls_df = read_sql(q, self.conn)
 
         return itineraryControls_df
-
-    def getItineraryStages(self, updateDB=False):
-        if updateDB:
-            self._getEventItineraries(updateDB)
-
-        q = "SELECT * FROM itinerary_controls;"
-        itineraryStages_df = read_sql(q, self.conn)
-
-        return itineraryStages_df
 
     def _getEntries(self, updateDB=False):
         stub = f"events/{self.eventId}/rallies/{self.rallyId}/entries.json"

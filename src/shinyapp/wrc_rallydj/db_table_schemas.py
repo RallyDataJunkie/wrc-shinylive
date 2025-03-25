@@ -249,6 +249,7 @@ CREATE TABLE "event_date" (
 CREATE TABLE "itinerary_legs" (
   "itineraryId" INTEGER,
   "itineraryLegId" INTEGER PRIMARY KEY,
+  "eventId" INTEGER,
   "legDate" TEXT,
   "name" TEXT,
   "order" INTEGER,
@@ -301,6 +302,7 @@ CREATE TABLE "itinerary_controls" (
 );
 
 CREATE TABLE "itinerary_sections" (
+  "eventId" INTEGER,
   "itineraryLegId" INTEGER,
   "itinerarySectionId" INTEGER PRIMARY KEY,
   "name" TEXT,

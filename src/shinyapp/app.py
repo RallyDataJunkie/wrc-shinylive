@@ -39,6 +39,10 @@ with ui.sidebar(open="desktop"):
         {},
     )
 
+    ui.input_select("event_day", "Day:", {})
+
+    ui.input_select("event_section", "Section:", {})
+
     # Create stages selector
     ui.input_select(
         "stage",
@@ -143,7 +147,7 @@ with ui.accordion(open=False):
                         retcols = [
                             "code",
                             "name",
-                            #"day",
+                            # "day",
                             "distance",
                             "stageType",
                             "status",
@@ -260,6 +264,7 @@ def update_season_round_select():
     season_rounds = wrc.getSeasonRounds()
     seasonId = input.rally_seasonId()
     if season_rounds.empty or not seasonId:
+        ui.update_select("season_round", choices={})
         return
 
     seasonId = int(seasonId)
@@ -274,17 +279,58 @@ def update_season_round_select():
 
 
 @reactive.effect
-@reactive.event(input.season_round)
-def update_stage_select():
+@reactive.event(input.rally_seasonId, input.season_round)
+def update_day_select():
     eventId = input.season_round()
     if not eventId:
+        ui.update_select("event_day", choices={})
         return
-    eventId = int(eventId)
-
     # Ensure the event data is loaded
     getEventData()
 
-    stages = wrc.getItinerarySections(eventId=eventId)
+    days_ = wrc.getItineraryLegs(eventId=eventId)
+    days = {0: "All"}
+    days.update(days_.set_index("itineraryLegId")["name"].to_dict())
+
+    ui.update_select("event_day", choices=days)
+
+
+@reactive.effect
+@reactive.event(input.rally_seasonId, input.season_round, input.event_day)
+def update_section_select():
+    itineraryLegId = input.event_day()
+    if not itineraryLegId:
+        ui.update_select("event_section", choices={})
+        return
+    # Ensure the event data is loaded
+    getEventData()
+
+    sections_ = wrc.getItinerarySections(itineraryLegId=itineraryLegId)
+    sections = {0: "All"}
+    sections.update(sections_.set_index("itinerarySectionId")["name"].to_dict())
+
+    ui.update_select("event_section", choices=sections)
+
+
+@reactive.effect
+@reactive.event(input.rally_seasonId, input.season_round, input.event_day, input.event_section)
+def update_stage_select():
+    eventId = input.season_round()
+    itineraryLegId = input.event_day()
+    itinerarySectionId = input.event_section()
+    if not eventId or not itineraryLegId or not itinerarySectionId:
+        ui.update_select("stage", choices={})
+        return
+
+    eventId = int(eventId)
+    itineraryLegId = int(itineraryLegId)
+    itinerarySectionId = int(itinerarySectionId)
+    
+    stages = wrc.getItineraryStages(
+        eventId=eventId,
+        itineraryLegId=itineraryLegId,
+        itinerarySectionId=itinerarySectionId,
+    )
 
     stages["label"] = stages.apply(lambda row: f"{row['code']} ({row['name']})", axis=1)
     stages = stages.set_index("stageId")["label"].to_dict()
@@ -296,6 +342,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
     stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
     stage_name = stage_["name"]
     stage_code = stage_["code"]
+
     # TO DO  - what if there is a joint position?
     def _get_hero_text(record):
         if not record.empty:
@@ -327,7 +374,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
         # p2pace = f'(Pace: {p2pace} s/km slower)'
         p2_ = overall_data[overall_data["position"] == 2]
         p2 = ui.value_box(
-            value= p2_.iloc[0]["diffFirst"],
+            value=p2_.iloc[0]["diffFirst"],
             title=_get_hero_text(p2_),
             theme="text-blue",
             # showcase=p2pace,
@@ -360,6 +407,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
 @reactive.event(input.season_round)
 def getStageWinners():
     return wrc.getStageWinners(raw=False)
+
 
 """
 @reactive.calc
