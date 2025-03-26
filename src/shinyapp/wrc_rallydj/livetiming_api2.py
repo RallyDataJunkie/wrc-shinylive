@@ -13,11 +13,580 @@ from wrc_rallydj.db_table_schemas import SETUP_V2_Q
 from pandas import read_sql, DataFrame, json_normalize, merge, concat
 
 
-# The WRCLiveTimingAPIClientV2() constructs state on a season basis
-class WRCLiveTimingAPIClientV2:
+class DatabaseManager:
+    def __init__(self, dbname, newdb=False, dbReadOnly=False):
+        self.dbname = dbname
+        self.conn = self.setup_db(newdb=newdb)
+        self.dbReadOnly = dbReadOnly
+
+    def setup_db(self, newdb=False):
+        logger.info("Initialising the database...")
+        if os.path.isfile(self.dbname) and newdb:
+            os.remove(self.dbname)
+
+        if not os.path.isfile(self.dbname):
+            newdb = True
+
+        conn = sqlite3.connect(self.dbname, timeout=10)
+
+        if newdb:
+            self.initialize_db(conn)
+
+        return conn
+
+    def initialize_db(self, conn):
+        logger.info("Creating new db tables...")
+        c = conn.cursor()
+        c.executescript(SETUP_V2_Q)
+
+    def read_sql(self, query):
+        return read_sql(query, self.conn)
+
+    def dbfy(self, df, table, if_exists="upsert", pk=None, index=False, clear=False):
+        if self.dbReadOnly:
+            return
+
+        if if_exists == "upsert" and not pk:
+            return
+
+        if if_exists == "replace":
+            clear = True
+            if_exists = "append"
+        if clear:
+            self.cleardbtable(table)
+
+        cols = read_sql(f"PRAGMA table_info({table})", self.conn)["name"].tolist()
+        for c in df.columns:
+            if c not in cols:
+                df.drop(columns=[c], inplace=True)
+
+        logger.info(f"Updating {table}...")
+
+        if if_exists == "upsert":
+            DB = Database(self.conn)
+            DB[table].upsert_all(df.to_dict(orient="records"), pk=pk)
+        else:
+            df.to_sql(table, self.conn, if_exists=if_exists, index=index)
+
+    def cleardbtable(self, table):
+        c = self.conn.cursor()
+        c.execute(f'DELETE FROM "{table}"')
+
+
+class APIClient:
     RED_BULL_LIVETIMING_API_BASE = (
         "https://p-p.redbull.com/rb-wrccom-lintegration-yv-prod/api/"
     )
+
+    def __init__(self, db_manager=None, use_cache=False, **cache_kwargs):
+        self.db_manager = db_manager
+        self.proxy = create_cached_proxy(**cache_kwargs) if use_cache else CorsProxy()
+
+    def dbfy(self, *args, **kwargs):
+        self.db_manager.dbfy(*args, **kwargs)
+
+    def _WRC_RedBull_json(self, path, base=None, retUrl=False):
+        """Return JSON from API."""
+        base = self.RED_BULL_LIVETIMING_API_BASE if base is None else base
+        url = urljoin(base, path)
+        print(url)
+        if retUrl:
+            return url
+        # print(f"Fetching: {url}")
+        try:
+            r = self.proxy.cors_proxy_get(url)
+        except:
+            print("Error trying to load data.")
+            return {}
+        # r = requests.get(url)
+        rj = r.json()
+        if "status" in rj and rj["status"] == "Not Found":
+            return {}
+        return r.json()
+
+    def _getSeasons(self, updateDB=False):
+        """The seasons feed is regularly updated throughout the season."""
+        stub = f"seasons.json"
+        json_data = self._WRC_RedBull_json(stub)
+        seasons_df = DataFrame(json_data)
+        if seasons_df.empty:
+            return DataFrame()
+
+        if updateDB:
+            self.dbfy(seasons_df, "seasons", pk="seasonId")
+
+        return seasons_df
+
+    def _getSeasonDetail(self, seasonId, updateDB=False):
+        stub = f"season-detail.json?seasonId={seasonId}"
+        json_data = self._WRC_RedBull_json(stub)
+        if "championships" not in json_data:
+            return DataFrame(), DataFrame(), DataFrame()
+
+        championships_df = DataFrame(json_data["championships"])
+        seasonRounds_df = DataFrame(json_data["seasonRounds"])
+        _seasonRounds_df = json_normalize(seasonRounds_df["event"])
+        _cols = [
+            "eventId",
+            "countryId",
+            "name",
+            "slug",
+            "location",
+            "startDate",
+            "finishDate",
+            "timeZoneId",
+            "timeZoneName",
+            "timeZoneOffset",
+            "surfaces",
+            "organiserUrl",
+            "categories",
+            "mode",
+            "trackingEventId",
+            "clerkOfTheCourse",
+            "stewards",
+            "templateFilename",
+            "country.countryId",
+            "country.name",
+            "country.iso2",
+            "country.iso3",
+            "seasonId",
+            "order",
+        ]
+        seasonRounds_df = merge(
+            _seasonRounds_df, seasonRounds_df[["eventId", "seasonId", "order"]]
+        )[_cols]
+        # TO DO - improve cleaning
+        seasonRounds_df["name"] = seasonRounds_df["name"].str.strip()
+
+        eligibilities_df = json_data["eligibilities"]
+
+        if updateDB:
+            self.dbfy(championships_df, "championship_lookup", pk="championshipId")
+            self.dbfy(seasonRounds_df, "season_rounds", pk="eventId")
+
+        return championships_df, seasonRounds_df, eligibilities_df
+
+    def _getChampionshipOverallResults(self, championshipId, seasonId, updateDB=False):
+        if not championshipId or not seasonId:
+            return DataFrame(), DataFrame()
+
+        stub = f"championship-overall-results.json?championshipId={championshipId}&seasonId={seasonId}"
+        json_data = self._WRC_RedBull_json(stub)
+        if "entryResults" not in json_data:
+            return DataFrame(), DataFrame()
+
+        _championshipEntryResultsOverall = []
+        _championshipEntryResultsByRound = []
+
+        for championshipEntry in json_data["entryResults"]:
+            _championshipEntry = {}
+            for k in ["championshipEntryId", "overallPosition", "overallPoints"]:
+                _championshipEntry[k] = championshipEntry[k]
+            _championshipEntryResultsOverall.append(_championshipEntry)
+            _championshipEntryResultsByRound.extend(championshipEntry["roundResults"])
+
+        championshipEntryResultsOverall_df = DataFrame(_championshipEntryResultsOverall)
+        championshipEntryResultsByRound_df = DataFrame(_championshipEntryResultsByRound)
+
+        if updateDB:
+            self.dbfy(
+                championshipEntryResultsOverall_df,
+                "championship_overall",
+                if_exists="replace",
+            )
+            self.dbfy(
+                championshipEntryResultsByRound_df,
+                "championship_results",
+                pk=("championshipEntryId", "eventId"),
+            )
+
+        return championshipEntryResultsOverall_df, championshipEntryResultsByRound_df
+
+    def _getChampionshipDetail(
+        self, year, championship, championshipId=None, seasonId=None, updateDB=False
+    ):
+        # If championshipId is None, try to find a championship Id
+        if not championshipId:
+
+            # Use WRC drivers as the default
+            _championship = self._getChampionshipName()
+
+            seasonId, championships_df, _, _ = self._getSeasonDetail()
+            championshipId = championships_df[
+                championships_df["name"] == _championship
+            ].iloc[0]["championshipId"]
+
+        if seasonId is None:
+            seasonId = self._getSeasons(championship, year).iloc[0]["seasonId"]
+
+        stub = f"championship-detail.json?championshipId={championshipId}&seasonId={seasonId}"
+        json_data = self._WRC_RedBull_json(stub)
+        if "championshipRounds" not in json_data:
+            return DataFrame(), DataFrame(), DataFrame()
+
+        rounds = [r["event"] for r in json_data["championshipRounds"]]
+        championshipRounds_df = DataFrame(rounds)
+        championshipCountries_df = json_normalize(
+            championshipRounds_df["country"]
+        ).drop_duplicates()
+        championshipRounds_df.drop(columns=["country"], inplace=True)
+
+        renamers = {
+            k.replace("Description", ""): json_data[k]
+            for k in json_data.keys()
+            if k.startswith("field") and k.endswith("Description")
+        }
+
+        _e = json_data["championshipEntries"]
+        championshipEntries_df = DataFrame(_e)
+        renamers["tyreManufacturer"] = "tyreManufacturerId"
+        championshipEntries_df.rename(columns=renamers, inplace=True)
+
+        if updateDB:
+            self.dbfy(
+                championshipRounds_df,
+                "championship_rounds_detail",
+                pk="eventId",
+            )
+            self.dbfy(
+                championshipCountries_df,
+                "championship_countries",
+                pk="countryId",
+            )
+            self.dbfy(
+                championshipEntries_df,
+                "championship_entries",
+                pk="championshipEntryId",
+            )
+
+        return championshipRounds_df, championshipEntries_df, championshipCountries_df
+
+    def _getEvent(self, eventId, updateDB=False):
+        stub = f"events/{eventId}.json"
+        json_data = self._WRC_RedBull_json(stub)
+        if "rallies" not in json_data:
+            return DataFrame(), DataFrame(), DataFrame()
+
+        eventRallies_df = DataFrame(json_data["rallies"])
+        eventRallies_df.drop(columns=["eventClasses"], inplace=True)
+        eventClasses_df = DataFrame(json_data["eventClasses"])
+        _data = {
+            k: json_data[k] for k in json_data if k not in ["rallies", "eventClasses"]
+        }
+        eventData_df = json_normalize(_data)
+
+        if updateDB:
+            self.dbfy(eventClasses_df, "event_classes", pk=("eventId", "eventClassId"))
+            self.dbfy(eventRallies_df, "event_rallies", pk="itineraryId")
+            self.dbfy(eventData_df, "event_date", pk="eventId")
+
+        return eventData_df, eventRallies_df, eventClasses_df
+
+    def _getEntries(self, eventId, rallyId, updateDB=False):
+        stub = f"events/{eventId}/rallies/{rallyId}/entries.json"
+        json_data = self._WRC_RedBull_json(stub)
+        entries_df = DataFrame(json_data)
+        if entries_df.empty:
+            return (
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+            )
+
+        entries_df["rallyId"] = rallyId
+        drivers_df = json_normalize(entries_df["driver"])
+        codrivers_df = json_normalize(entries_df["codriver"])
+        manufacturers_df = json_normalize(entries_df["manufacturer"]).drop_duplicates()
+        entrants_df = json_normalize(entries_df["entrant"]).drop_duplicates()
+        entryGroups_df = json_normalize(entries_df["group"]).drop_duplicates()
+        eventClasses_df = json_normalize(
+            entries_df.explode("eventClasses")["eventClasses"]
+        ).drop_duplicates()
+
+        entries_df.drop(
+            columns=[
+                "driver",
+                "codriver",
+                "manufacturer",
+                "entrant",
+                "group",
+                "eventClasses",
+                "tags",
+            ],
+            inplace=True,
+        )
+
+        if updateDB:
+            self.dbfy(entries_df, "entries", pk="entryId")
+            self.dbfy(drivers_df, "entries_drivers", pk="personId")
+            self.dbfy(codrivers_df, "entries_codrivers", pk="personId")
+            self.dbfy(entryGroups_df, "groups", pk="groupId")
+            self.dbfy(manufacturers_df, "manufacturers", pk="manufacturerId")
+            self.dbfy(entrants_df, "entrants", pk="entrantId")
+
+        return (
+            entries_df,
+            drivers_df,
+            codrivers_df,
+            manufacturers_df,
+            entrants_df,
+            entryGroups_df,
+            eventClasses_df,
+        )
+
+    def _getStartLists(self, eventId, startListId=None, updateDB=False):
+        if not startListId:
+            return DataFrame()
+
+        stub = f"events/{eventId}/startLists/{startListId}.json"
+        json_data = self._WRC_RedBull_json(stub)
+
+        startlist_df = json_normalize(json_data["startListItems"])
+        startlist_df["eventId"] = json_data["eventId"]
+        startlist_df["name"] = json_data["name"]
+
+        if updateDB:
+            self.dbfy(startlist_df, "startlists", pk="startListItemId")
+
+        return startlist_df
+
+    def _getEventGroups(self, eventId, updateDB=False):
+        stub = f"events/{eventId}/groups.json"
+        json_data = self._WRC_RedBull_json(stub)
+
+        eventGroups_df = DataFrame(json_data)
+        if eventGroups_df.empty:
+            return DataFrame()
+
+        if updateDB:
+            self.dbfy(eventGroups_df, "groups", pk="groupId")
+        return eventGroups_df
+
+    def _getEventItineraries(self, eventId, itineraryId, updateDB=False):
+        stub = f"events/{eventId}/itineraries/{itineraryId}.json"
+        json_data = self._WRC_RedBull_json(stub)
+        if "itineraryLegs" not in json_data:
+            return DataFrame(), DataFrame(), DataFrame(), DataFrame()
+
+        itineraryLegs_df = DataFrame(json_data["itineraryLegs"])
+        itineraryLegs_df["eventId"] = eventId
+
+        if "itinerarySections" not in itineraryLegs_df:
+            return itineraryLegs_df, DataFrame(), DataFrame(), DataFrame()
+
+        itinerarySections_df = itineraryLegs_df.explode("itinerarySections")
+
+        itinerarySections2_df = json_normalize(
+            itinerarySections_df["itinerarySections"]
+        )
+
+        itineraryControls_df = itinerarySections2_df.explode("controls").reset_index(
+            drop=True
+        )
+        _itineraryControls_df = json_normalize(itineraryControls_df["controls"])
+        itineraryControls_df = concat(
+            [itineraryControls_df.drop("controls", axis=1), _itineraryControls_df],
+            axis=1,
+        )
+        itineraryStages_df = itinerarySections2_df.explode("stages").reset_index(
+            drop=True
+        )
+        itineraryStages_df.rename(columns={"name": "name_"}, inplace=True)
+        _itineraryStages_df = json_normalize(itineraryStages_df["stages"])
+        itineraryStages_df = concat(
+            [itineraryStages_df.drop("stages", axis=1), _itineraryStages_df], axis=1
+        )
+        itineraryLegs_df.drop(columns=["itinerarySections"], inplace=True)
+        itinerarySections2_df.drop(columns=["controls", "stages"], inplace=True)
+        itineraryControls_df.drop(columns=["stages"], inplace=True)
+        itineraryStages_df.drop(columns=["controls"], inplace=True)
+
+        if updateDB:
+            self.dbfy(itineraryLegs_df, "itinerary_legs", pk="itineraryLegId")
+            self.dbfy(itineraryStages_df, "itinerary_stages", pk="stageId")
+            self.dbfy(
+                itinerarySections2_df, "itinerary_sections", pk="itinerarySectionId"
+            )
+            self.dbfy(itineraryControls_df, "itinerary_controls", pk="controlId")
+            for _, row in itineraryLegs_df.iterrows():
+                startListId = row["startListId"]
+                self._getStartLists(
+                    eventId=eventId, startListId=startListId, updateDB=updateDB
+                )
+
+        return (
+            itineraryLegs_df,
+            itinerarySections2_df,
+            itineraryControls_df,
+            itineraryStages_df,
+        )
+
+    def _getControlTimes(self, eventId, controlId, updateDB=False):
+        stub = f"events/{eventId}/controls/{controlId}/controlTimes.json"
+        json_data = self._WRC_RedBull_json(stub)
+        controlTimes_df = DataFrame(json_data)
+        if controlTimes_df.empty:
+            return DataFrame()
+
+        if updateDB:
+            self.dbfy(controlTimes_df, "controltimes", pk="controlTimeId")
+
+        return controlTimes_df
+
+    def _getEventShakeDownTimes(self, eventId, updateDB=False):
+        if not eventId:
+            return
+        stub = f"events/{eventId}/shakedowntimes.json?shakedownNumber=1"
+        json_data = self._WRC_RedBull_json(stub)
+        shakedownTimes_df = DataFrame(json_data)
+
+        if updateDB:
+            self.dbfy(shakedownTimes_df, "shakedown_times", pk="shakedownTimeId")
+
+        return shakedownTimes_df
+
+    def _getStages(self, eventId, updateDB=False):
+        stub = f"events/{eventId}/stages.json"
+        json_data = self._WRC_RedBull_json(stub)
+        stages_df = DataFrame(json_data)
+
+        if stages_df.empty:
+            return (DataFrame(), DataFrame(), DataFrame())
+
+        stage_split_points_df = (
+            stages_df[["splitPoints"]].explode("splitPoints").reset_index(drop=True)
+        )
+        stage_controls_df = json_normalize(
+            stages_df[["controls"]]
+            .explode("controls")
+            .reset_index(drop=True)["controls"]
+        )
+        stage_split_points_df = json_normalize(
+            stages_df[["splitPoints"]]
+            .explode("splitPoints")
+            .reset_index(drop=True)["splitPoints"]
+        )
+        stages_df.drop(columns=["splitPoints", "controls"], inplace=True)
+
+        if updateDB:
+            self.dbfy(stages_df, "stage_info", pk="stageId")
+            self.dbfy(stage_split_points_df, "split_points", pk="splitPointId")
+            self.dbfy(stage_controls_df, "stage_controls", pk="controlId")
+
+        return stages_df, stage_split_points_df, stage_controls_df
+
+    def _getStageTimes(self, eventId, rallyId, stageId=None, updateDB=False):
+        stub = f"events/{eventId}/stages/{stageId}/stagetimes.json?rallyId={rallyId}"
+        json_data = self._WRC_RedBull_json(stub)
+        stagetimes_df = DataFrame(json_data)
+        if stagetimes_df.empty:
+            return DataFrame()
+
+        stagetimes_df["eventId"] = eventId
+        stagetimes_df["rallyId"] = rallyId
+
+        if updateDB:
+            self.dbfy(stagetimes_df, "stage_times", pk="stageTimeId")
+
+        return stagetimes_df
+
+    def _getSplitTimes(self, eventId, rallyId, stageId=None, updateDB=False):
+        stageId = stageId if stageId else self.stageId
+        stub = f"events/{eventId}/stages/{stageId}/splittimes.json?rallyId={rallyId}"
+        json_data = self._WRC_RedBull_json(stub)
+        splitTimes_df = DataFrame(json_data)
+        if splitTimes_df.empty:
+            return DataFrame()
+
+        splitTimes_df["stageId"] = stageId
+        splitTimes_df["eventId"] = eventId
+        splitTimes_df["rallyId"] = rallyId
+
+        if updateDB:
+            self.dbfy(splitTimes_df, "split_times", pk="splitPointTimeId")
+
+        return splitTimes_df
+
+    def _getStageOverallResults(
+        self,
+        eventId,
+        rallyId,
+        championshipId=None,
+        stageId=None,
+        by_championship=False,
+        updateDB=False,
+    ):
+        """This is the overall result at the end of the stage. TO DO CHECK"""
+        # TO DO: if we select by championship, are these different?
+        # If so, do we need to set championship and championship Pos cols, maybe in a new table?
+        # The rallyId is optional? Or does it filter somehow?
+        stageId = stageId if stageId else self.stageId
+        stub = f"events/{eventId}/stages/{stageId}/results.json?rallyId={rallyId}"
+        if by_championship and championshipId:
+            stub = stub + f"&championshipId={championshipId}"
+        json_data = self._WRC_RedBull_json(stub)
+        stageResults_df = DataFrame(json_data)
+        if stageResults_df.empty:
+            return DataFrame()
+
+        stageResults_df["stageId"] = stageId
+        stageResults_df["eventId"] = eventId
+        stageResults_df["rallyId"] = rallyId
+
+        if updateDB:
+            self.dbfy(stageResults_df, "stage_overall", pk=("stageId", "entryId"))
+
+        return stageResults_df
+
+    def _getStageWinners(self, eventId, rallyId, updateDB=False):
+        stub = f"events/{eventId}/rallies/{rallyId}/stagewinners.json"
+        json_data = self._WRC_RedBull_json(stub)
+        stagewinners_df = DataFrame(json_data)
+        if stagewinners_df.empty:
+            return DataFrame()
+
+        stagewinners_df["eventId"] = eventId
+        stagewinners_df["rallyId"] = rallyId
+        if updateDB:
+            self.dbfy(stagewinners_df, "stagewinners", pk="stageId")
+
+        return stagewinners_df
+
+    def _getRetirements(self, eventId, updateDB=False):
+        if not eventId:
+            return
+        stub = f"events/{eventId}/retirements.json"
+        json_data = self._WRC_RedBull_json(stub)
+        retirements_df = DataFrame(json_data)
+        if retirements_df.empty:
+            return DataFrame()
+
+        retirements_df["eventId"] = eventId
+        if updateDB:
+            self.dbfy(retirements_df, "retirements", pk="retirementId")
+        return retirements_df
+
+    def _getPenalties(self, eventId, updateDB=False):
+        if not eventId:
+            return
+        stub = f"events/{eventId}/penalties.json"
+        json_data = self._WRC_RedBull_json(stub)
+        penalties_df = DataFrame(json_data)
+        if penalties_df.empty:
+            return DataFrame()
+
+        penalties_df["eventId"] = eventId
+        if updateDB:
+            self.dbfy(penalties_df, "penalties", pk="penaltyId")
+        return penalties_df
+
+
+# The WRCTimingResultsAPIClientV2() constructs state on a season basis
+class WRCTimingResultsAPIClientV2:
 
     def __init__(
         self,
@@ -26,6 +595,7 @@ class WRCLiveTimingAPIClientV2:
         category: str = "Drivers",
         group: str = "all",
         dbname: str = "wrcRbAPITiming.db",
+        dbReadOnly: bool = False,
         newDB: bool = False,
         use_cache: bool = False,
         **cache_kwargs,
@@ -53,10 +623,27 @@ class WRCLiveTimingAPIClientV2:
         self.stageCode = None
 
         # DB setup
-        self.conn = None
-        self.dbname = dbname
-        # In the DB initialise phase also set self.seasonId
-        self.setup_db(newdb=newDB)
+        self.dbReadOnly = dbReadOnly
+        self.db_manager = DatabaseManager(dbname, newdb=newDB, dbReadOnly=dbReadOnly)
+
+        self.api_client = APIClient(
+            db_manager=self.db_manager, use_cache=use_cache, **cache_kwargs
+        )
+
+        # DB initialise
+        if newDB:
+            self.seedDB()
+
+    def seedDB(self):
+        # Populate the database with seasons info
+        # self._getSeasons(updateDB=True)
+        # Initialise the seasonId
+        _seasons = self._getSeasons(updateDB=True)
+        self.seasonId = self._getSeasonsSubQuery(
+            _seasons, self.championship, self.year
+        ).iloc[0]["seasonId"]
+        # Update the season detail
+        self._getSeasonDetail(updateDB=True)
 
     def initialise(self, year=None, championship=None):
         if year:
@@ -73,126 +660,11 @@ class WRCLiveTimingAPIClientV2:
         # Set self.championshipId
         self.setChampionship()
 
-    # db utils
-    def cleardbtable(self, table, conn=None):
-        """Clear the table whilst retaining the table definition"""
-        conn = conn if conn else self.conn
+    def dbfy(self, *args, **kwargs):
+        self.db_manager.dbfy(*args, **kwargs)
 
-        c = conn.cursor()
-        c.execute('DELETE FROM "{}"'.format(table))
-
-    def dbfy(
-        self,
-        df,
-        table,
-        if_exists="upsert",
-        pk=None,
-        index=False,
-        clear=False,
-        conn=None,
-        **kwargs,
-    ):
-        """Save a dataframe as a SQLite table.
-        Clearing or replacing a table will first empty the table of entries but retain the structure.
-        """
-
-        conn = conn if conn else self.conn
-
-        # Upsert requires a PK
-        if if_exists == "upsert" and not pk:
-            return
-
-        # print('{}: {}'.format(table,df.columns))
-        if if_exists == "replace":
-            clear = True
-            if_exists = "append"
-        if clear:
-            self.cleardbtable(table)
-
-        # Get columns
-        q = "PRAGMA table_info({})".format(table)
-        cols = read_sql(q, conn)["name"].tolist()
-        for c in df.columns:
-            if c not in cols:
-                print(
-                    "Hmmm... column name `{}` appears in data but not {} table def?".format(
-                        c, table
-                    )
-                )
-                df.drop(columns=[c], inplace=True)
-
-        logger.info(f"Updating {table}...")
-
-        if if_exists == "upsert":
-            DB = Database(conn)
-            DB[table].upsert_all(df.to_dict(orient="records"), pk=pk)
-        else:
-            df.to_sql(table, conn, if_exists=if_exists, index=index)
-
-    def setup_db(self, dbname=None, newdb=False):
-        """Setup a database, if required, and return a connection."""
-        logger.info("Initialising the database...")
-
-        if dbname is not None:
-            self.dbname = dbname
-        dbname = self.dbname
-
-        # In some situations, we may want a fresh start
-        if os.path.isfile(dbname) and newdb:
-            os.remove(dbname)
-
-        if not os.path.isfile(dbname):
-            # No db exists, so we need to create and populate one
-            newdb = True
-
-        # Open database connection
-        self.conn = conn = sqlite3.connect(dbname, timeout=10)
-
-        if newdb:
-            logger.info("Creating new db tables...")
-            # Setup database tables
-            c = conn.cursor()
-            c.executescript(SETUP_V2_Q)
-            # c.executescript(SETUP_VIEWS_Q)
-
-            # Populate the database with seasons info
-            # self._getSeasons(updateDB=True)
-            # Initialise the seasonId
-            self.seasonId = self._getSeasons(
-                self.championship, self.year, updateDB=True
-            ).iloc[0]["seasonId"]
-            # Update the season detail
-            self._getSeasonDetail(updateDB=True)
-
-            # Populate the database with event metadata
-            # self.dbfy(conn, getEventMetadata(), "event_metadata", if_exists="replace")
-
-            # Get geo bits
-            # kml_processor(meta["event_meta"])
-
-            # Save the entry list, initial itinerary etc
-            # _save_rally_base(meta, conn)
-
-        return conn
-
-    def _WRC_RedBull_json(self, path, base=None, retUrl=False):
-        """Return JSON from API."""
-        base = self.RED_BULL_LIVETIMING_API_BASE if base is None else base
-        url = urljoin(base, path)
-        print(url)
-        if retUrl:
-            return url
-        # print(f"Fetching: {url}")
-        try:
-            r = self.proxy.cors_proxy_get(url)
-        except:
-            print("Error trying to load data.")
-            return {}
-        # r = requests.get(url)
-        rj = r.json()
-        if "status" in rj and rj["status"] == "Not Found":
-            return {}
-        return r.json()
+    def _WRC_RedBull_json(self, *args, **kwargs):
+        return self.api_client._WRC_RedBull_json(*args, **kwargs)
 
     @staticmethod
     def subtract_from_rows(df, colsList, ignore_first_row=True):
@@ -293,91 +765,36 @@ class WRCLiveTimingAPIClientV2:
             seasons_df = seasons_df[seasons_df["year"] == year]
         return seasons_df
 
-    def _getSeasons(self, championship=None, year=None, updateDB=False):
-        """The seasons feed is regularly updated throughout the season."""
-        stub = f"seasons.json"
-        json_data = self._WRC_RedBull_json(stub)
-        seasons_df = DataFrame(json_data)
-        if seasons_df.empty:
-            return DataFrame()
-
-        if updateDB:
-            self.dbfy(seasons_df, "seasons", pk="seasonId")
-
-        seasons_df = self._getSeasonsSubQuery(seasons_df, championship, year)
-        return seasons_df
+    def _getSeasons(self, *args, **kwargs):
+        return self.api_client._getSeasons(*args, **kwargs)
 
     def getSeasons(self, championship=None, year=None, updateDB=False):
         if updateDB:
-            self._getSeasons(championship, year, updateDB)
-
+            self._getSeasons(updateDB)
+        # TO DO need to filter with championship and year
         q = "SELECT * FROM seasons;"
-        seasons_df = read_sql(q, self.conn)
+        seasons_df = self.db_manager.read_sql(q)
 
         return self._getSeasonsSubQuery(seasons_df, championship, year)
 
     def setSeason(self):
-        self.seasonId = self._getSeasons(
-            self.championship, self.year, updateDB=True
+        _seasons = self._getSeasons(updateDB=True)
+        self.seasonId = self._getSeasonsSubQuery(
+            _seasons, self.championship, self.year
         ).iloc[0]["seasonId"]
 
     # This datafeed is partial at the start of the season
     # and needs to be regularly updated
-    def _getSeasonDetail(self, updateDB=False):
-        stub = f"season-detail.json?seasonId={self.seasonId}"
-        json_data = self._WRC_RedBull_json(stub)
-        if "championships" not in json_data:
-            return DataFrame(), DataFrame(), DataFrame()
-
-        championships_df = DataFrame(json_data["championships"])
-        seasonRounds_df = DataFrame(json_data["seasonRounds"])
-        _seasonRounds_df = json_normalize(seasonRounds_df["event"])
-        _cols = [
-            "eventId",
-            "countryId",
-            "name",
-            "slug",
-            "location",
-            "startDate",
-            "finishDate",
-            "timeZoneId",
-            "timeZoneName",
-            "timeZoneOffset",
-            "surfaces",
-            "organiserUrl",
-            "categories",
-            "mode",
-            "trackingEventId",
-            "clerkOfTheCourse",
-            "stewards",
-            "templateFilename",
-            "country.countryId",
-            "country.name",
-            "country.iso2",
-            "country.iso3",
-            "seasonId",
-            "order",
-        ]
-        seasonRounds_df = merge(
-            _seasonRounds_df, seasonRounds_df[["eventId", "seasonId", "order"]]
-        )[_cols]
-        # TO DO - improve cleaning
-        seasonRounds_df["name"] = seasonRounds_df["name"].str.strip()
-
-        eligibilities_df = json_data["eligibilities"]
-
-        if updateDB:
-            self.dbfy(championships_df, "championship_lookup", pk="championshipId")
-            self.dbfy(seasonRounds_df, "season_rounds", pk="eventId")
-
-        return championships_df, seasonRounds_df, eligibilities_df
+    def _getSeasonDetail(self, *args, **kwargs):
+        kwargs["seasonId"] = self.seasonId
+        return self.api_client._getSeasonDetail(*args, **kwargs)
 
     def getSeasonRounds(self, updateDB=False):
         if updateDB:
             self._getSeasonDetail(updateDB)
 
         q = "SELECT * FROM season_rounds;"
-        seasonRounds_df = read_sql(q, self.conn)
+        seasonRounds_df = self.db_manager.read_sql(q)
 
         return seasonRounds_df
 
@@ -408,48 +825,17 @@ class WRCLiveTimingAPIClientV2:
             _championship = f"FIA WRC Masters Cup for {category}"
         return _championship
 
-    def _getChampionshipOverallResults(self, updateDB=False):
-        if not self.championshipId or not self.seasonId:
-            return DataFrame(), DataFrame()
-
-        stub = f"championship-overall-results.json?championshipId={self.championshipId}&seasonId={self.seasonId}"
-        json_data = self._WRC_RedBull_json(stub)
-        if "entryResults" not in json_data:
-            return DataFrame(), DataFrame()
-
-        _championshipEntryResultsOverall = []
-        _championshipEntryResultsByRound = []
-
-        for championshipEntry in json_data["entryResults"]:
-            _championshipEntry = {}
-            for k in ["championshipEntryId", "overallPosition", "overallPoints"]:
-                _championshipEntry[k] = championshipEntry[k]
-            _championshipEntryResultsOverall.append(_championshipEntry)
-            _championshipEntryResultsByRound.extend(championshipEntry["roundResults"])
-
-        championshipEntryResultsOverall_df = DataFrame(_championshipEntryResultsOverall)
-        championshipEntryResultsByRound_df = DataFrame(_championshipEntryResultsByRound)
-
-        if updateDB:
-            self.dbfy(
-                championshipEntryResultsOverall_df,
-                "championship_overall",
-                if_exists="replace",
-            )
-            self.dbfy(
-                championshipEntryResultsByRound_df,
-                "championship_results",
-                pk=("championshipEntryId", "eventId"),
-            )
-
-        return championshipEntryResultsOverall_df, championshipEntryResultsByRound_df
+    def _getChampionshipOverallResults(self, *args, **kwargs):
+        kwargs["championshipId"] = self.championshipId
+        kwargs["seasonId"] = self.seasonId
+        return self.api_client._getChampionshipOverallResults(*args, **kwargs)
 
     def getChampionshipOverall(self, updateDB=False):
         if updateDB:
             self._getChampionshipOverallResults(updateDB)
 
         q = "SELECT * FROM championship_overall;"
-        championshipEntryResultsOverall_df = read_sql(q, self.conn)
+        championshipEntryResultsOverall_df = self.db_manager.read_sql(q)
 
         return championshipEntryResultsOverall_df
 
@@ -458,75 +844,23 @@ class WRCLiveTimingAPIClientV2:
             self._getChampionshipOverallResults(updateDB)
 
         q = "SELECT * FROM championship_results;"
-        championshipEntryResultsByRound_df = read_sql(q, self.conn)
+        championshipEntryResultsByRound_df = self.db_manager.read_sql(q)
 
         return championshipEntryResultsByRound_df
 
-    def _getChampionshipDetail(self, updateDB=False):
-        # If championshipId is None, try to find a championship Id
-        if not self.championshipId:
-
-            # Use WRC drivers as the default
-            _championship = self._getChampionshipName()
-
-            seasonId, championships_df, _, _ = self._getSeasonDetail()
-            championshipId = championships_df[
-                championships_df["name"] == _championship
-            ].iloc[0]["championshipId"]
-
-        if self.seasonId is None:
-            seasonId = self._getSeasons(self.championship, self.year).iloc[0][
-                "seasonId"
-            ]
-
-        stub = f"championship-detail.json?championshipId={self.championshipId}&seasonId={self.seasonId}"
-        json_data = self._WRC_RedBull_json(stub)
-        if "championshipRounds" not in json_data:
-            return DataFrame(), DataFrame(), DataFrame()
-
-        rounds = [r["event"] for r in json_data["championshipRounds"]]
-        championshipRounds_df = DataFrame(rounds)
-        championshipCountries_df = json_normalize(
-            championshipRounds_df["country"]
-        ).drop_duplicates()
-        championshipRounds_df.drop(columns=["country"], inplace=True)
-
-        renamers = {
-            k.replace("Description", ""): json_data[k]
-            for k in json_data.keys()
-            if k.startswith("field") and k.endswith("Description")
-        }
-
-        _e = json_data["championshipEntries"]
-        championshipEntries_df = DataFrame(_e)
-        renamers["tyreManufacturer"] = "tyreManufacturerId"
-        championshipEntries_df.rename(columns=renamers, inplace=True)
-
-        if updateDB:
-            self.dbfy(
-                championshipRounds_df,
-                "championship_rounds_detail",
-                pk="eventId",
-            )
-            self.dbfy(
-                championshipCountries_df,
-                "championship_countries",
-                pk="countryId",
-            )
-            self.dbfy(
-                championshipEntries_df,
-                "championship_entries",
-                pk="championshipEntryId",
-            )
-
-        return championshipRounds_df, championshipEntries_df, championshipCountries_df
+    def _getChampionshipDetail(self, *args, **kwargs):
+        kwargs["year"] = self.year
+        kwargs["championship"] = self.championship
+        kwargs["championshipId"] = self.championshipId
+        kwargs["seasonId"] = self.seasonId
+        return self.api_client._getChampionshipDetail(*args, **kwargs)
 
     def getChampionShipRounds(self, updateDB=False):
         if updateDB:
             self._getChampionshipDetail()
 
         q = "SELECT * FROM championship_rounds_detail;"
-        championshipRounds_df = read_sql(q, self.conn)
+        championshipRounds_df = self.db_manager.read_sql(q)
 
         return championshipRounds_df
 
@@ -535,7 +869,7 @@ class WRCLiveTimingAPIClientV2:
             self._getChampionshipDetail()
 
         q = "SELECT * FROM championship_entries;"
-        championshipEntries_df = read_sql(q, self.conn)
+        championshipEntries_df = self.db_manager.read_sql(q)
 
         return championshipEntries_df
 
@@ -544,7 +878,7 @@ class WRCLiveTimingAPIClientV2:
             self._getChampionshipDetail()
 
         q = "SELECT * FROM championship_countries;"
-        championships_df = read_sql(q, self.conn)
+        championships_df = self.db_manager.read_sql(q)
 
         return championships_df
 
@@ -553,78 +887,18 @@ class WRCLiveTimingAPIClientV2:
             self._getSeasonDetail(updateDB)
 
         q = "SELECT * FROM championship_lookup;"
-        championshipCountries_df = read_sql(q, self.conn)
+        championshipCountries_df = self.db_manager.read_sql(q)
 
         return championshipCountries_df
 
-    def _getEventGroups(self, updateDB=False):
-        stub = f"events/{self.eventId}/groups.json"
-        json_data = self._WRC_RedBull_json(stub)
+    def _getEventGroups(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        return self.api_client._getEventGroups(*args, **kwargs)
 
-        eventGroups_df = DataFrame(json_data)
-        if eventGroups_df.empty:
-            return DataFrame()
-
-        if updateDB:
-            self.dbfy(eventGroups_df, "groups", pk="groupId")
-        return eventGroups_df
-
-    def _getEventItineraries(self, updateDB=False):
-        stub = f"events/{self.eventId}/itineraries/{self.itineraryId}.json"
-        json_data = self._WRC_RedBull_json(stub)
-        if "itineraryLegs" not in json_data:
-            return DataFrame(), DataFrame(), DataFrame(), DataFrame()
-
-        itineraryLegs_df = DataFrame(json_data["itineraryLegs"])
-        itineraryLegs_df["eventId"] = self.eventId
-
-        if "itinerarySections" not in itineraryLegs_df:
-            return itineraryLegs_df, DataFrame(), DataFrame(), DataFrame()
-
-        itinerarySections_df = itineraryLegs_df.explode("itinerarySections")
-
-        itinerarySections2_df = json_normalize(
-            itinerarySections_df["itinerarySections"]
-        )
-
-        itineraryControls_df = itinerarySections2_df.explode("controls").reset_index(
-            drop=True
-        )
-        _itineraryControls_df = json_normalize(itineraryControls_df["controls"])
-        itineraryControls_df = concat(
-            [itineraryControls_df.drop("controls", axis=1), _itineraryControls_df],
-            axis=1,
-        )
-        itineraryStages_df = itinerarySections2_df.explode("stages").reset_index(
-            drop=True
-        )
-        itineraryStages_df.rename(columns={"name": "name_"}, inplace=True)
-        _itineraryStages_df = json_normalize(itineraryStages_df["stages"])
-        itineraryStages_df = concat(
-            [itineraryStages_df.drop("stages", axis=1), _itineraryStages_df], axis=1
-        )
-        itineraryLegs_df.drop(columns=["itinerarySections"], inplace=True)
-        itinerarySections2_df.drop(columns=["controls", "stages"], inplace=True)
-        itineraryControls_df.drop(columns=["stages"], inplace=True)
-        itineraryStages_df.drop(columns=["controls"], inplace=True)
-
-        if updateDB:
-            self.dbfy(itineraryLegs_df, "itinerary_legs", pk="itineraryLegId")
-            self.dbfy(itineraryStages_df, "itinerary_stages", pk="stageId")
-            self.dbfy(
-                itinerarySections2_df, "itinerary_sections", pk="itinerarySectionId"
-            )
-            self.dbfy(itineraryControls_df, "itinerary_controls", pk="controlId")
-            for _, row in itineraryLegs_df.iterrows():
-                startListId = row["startListId"]
-                self._getStartLists(startListId=startListId, updateDB=updateDB)
-
-        return (
-            itineraryLegs_df,
-            itinerarySections2_df,
-            itineraryControls_df,
-            itineraryStages_df,
-        )
+    def _getEventItineraries(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        kwargs["itineraryId"] = self.itineraryId
+        return self.api_client._getEventItineraries(*args, **kwargs)
 
     def getItineraryLegs(self, eventId=None, updateDB=False):
         if updateDB:
@@ -635,7 +909,7 @@ class WRCLiveTimingAPIClientV2:
         else:
             q = f"SELECT * FROM itinerary_legs WHERE eventId={int(eventId)};"
 
-        itineraryLegs_df = read_sql(q, self.conn)
+        itineraryLegs_df = self.db_manager.read_sql(q)
 
         return itineraryLegs_df
 
@@ -654,7 +928,7 @@ class WRCLiveTimingAPIClientV2:
         elif eventId:
             q = f"SELECT * FROM itinerary_stages WHERE eventId={int(eventId)};"
 
-        itinerarySections_df = read_sql(q, self.conn)
+        itinerarySections_df = self.db_manager.read_sql(q)
 
         return itinerarySections_df
 
@@ -669,7 +943,7 @@ class WRCLiveTimingAPIClientV2:
         elif eventId:
             q = f"SELECT * FROM itinerary_sections WHERE eventId={int(eventId)};"
 
-        itinerarySections_df = read_sql(q, self.conn)
+        itinerarySections_df = self.db_manager.read_sql(q)
 
         return itinerarySections_df
 
@@ -688,25 +962,13 @@ class WRCLiveTimingAPIClientV2:
         elif eventId:
             q = f"SELECT * FROM itinerary_controls WHERE eventId={int(eventId)};"
 
-        itineraryControls_df = read_sql(q, self.conn)
+        itineraryControls_df = self.db_manager.read_sql(q)
 
         return itineraryControls_df
 
-    def _getStartLists(self, startListId=None, updateDB=False):
-        if not startListId:
-            return DataFrame()
-
-        stub = f"events/{self.eventId}/startLists/{startListId}.json"
-        json_data = self._WRC_RedBull_json(stub)
-
-        startlist_df = json_normalize(json_data["startListItems"])
-        startlist_df["eventId"] = json_data["eventId"]
-        startlist_df["name"] = json_data["name"]
-
-        if updateDB:
-            self.dbfy(startlist_df, "startlists", pk="startListItemId")
-
-        return startlist_df
+    def _getStartLists(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        return self.api_client._getStartLists(*args, **kwargs)
 
     def getStartList(self, eventId=None, startListId=None, raw=True, updateDB=False):
         # TO DO  - offer e.g. a day instead of startListId
@@ -738,65 +1000,15 @@ class WRCLiveTimingAPIClientV2:
             # We can also escape order (reserved word as column name)
             # using eg sl.[order] or sl."order" or  sl.`order`
 
-        startlist_df = read_sql(q, self.conn)
+        startlist_df = self.db_manager.read_sql(q)
 
         return startlist_df
 
-    def _getEntries(self, updateDB=False):
-        stub = f"events/{self.eventId}/rallies/{self.rallyId}/entries.json"
-        json_data = self._WRC_RedBull_json(stub)
-        entries_df = DataFrame(json_data)
-        if entries_df.empty:
-            return (
-                DataFrame(),
-                DataFrame(),
-                DataFrame(),
-                DataFrame(),
-                DataFrame(),
-                DataFrame(),
-                DataFrame(),
-            )
+    def _getEntries(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        kwargs["rallyId"] = self.rallyId
 
-        entries_df["rallyId"] = self.rallyId
-        drivers_df = json_normalize(entries_df["driver"])
-        codrivers_df = json_normalize(entries_df["codriver"])
-        manufacturers_df = json_normalize(entries_df["manufacturer"]).drop_duplicates()
-        entrants_df = json_normalize(entries_df["entrant"]).drop_duplicates()
-        entryGroups_df = json_normalize(entries_df["group"]).drop_duplicates()
-        eventClasses_df = json_normalize(
-            entries_df.explode("eventClasses")["eventClasses"]
-        ).drop_duplicates()
-
-        entries_df.drop(
-            columns=[
-                "driver",
-                "codriver",
-                "manufacturer",
-                "entrant",
-                "group",
-                "eventClasses",
-                "tags",
-            ],
-            inplace=True,
-        )
-
-        if updateDB:
-            self.dbfy(entries_df, "entries", pk="entryId")
-            self.dbfy(drivers_df, "entries_drivers", pk="personId")
-            self.dbfy(codrivers_df, "entries_codrivers", pk="personId")
-            self.dbfy(entryGroups_df, "groups", pk="groupId")
-            self.dbfy(manufacturers_df, "manufacturers", pk="manufacturerId")
-            self.dbfy(entrants_df, "entrants", pk="entrantId")
-
-        return (
-            entries_df,
-            drivers_df,
-            codrivers_df,
-            manufacturers_df,
-            entrants_df,
-            entryGroups_df,
-            eventClasses_df,
-        )
+        return self.api_client._getEntries(*args, **kwargs)
 
     def getEntries(self, on_event=True, updateDB=False):
         if updateDB:
@@ -807,7 +1019,7 @@ class WRCLiveTimingAPIClientV2:
             else "1=1"
         )
         q = f"SELECT * FROM entries AS e WHERE {_on_event};"
-        entries_df = read_sql(q, self.conn)
+        entries_df = self.db_manager.read_sql(q)
 
         return entries_df
 
@@ -838,7 +1050,7 @@ class WRCLiveTimingAPIClientV2:
             where_clause = _on_event + " " + _by_championship
 
         q = f"SELECT d.* FROM entries_drivers AS d {where_clause};"
-        drivers_df = read_sql(q, self.conn)
+        drivers_df = self.db_manager.read_sql(q)
 
         return drivers_df
 
@@ -851,8 +1063,8 @@ class WRCLiveTimingAPIClientV2:
             else ""
         )
 
-        q = f"SELECT c.* FROM entries_codrivers AS cd {_on_event};"
-        codrivers_df = read_sql(q, self.conn)
+        q = f"SELECT cd.* FROM entries_codrivers AS cd {_on_event};"
+        codrivers_df = self.db_manager.read_sql(q)
 
         return codrivers_df
 
@@ -866,7 +1078,7 @@ class WRCLiveTimingAPIClientV2:
         )
 
         q = f"SELECT DISTINCT m.* FROM manufacturers AS m {_on_event};"
-        manufacturers_df = read_sql(q, self.conn)
+        manufacturers_df = self.db_manager.read_sql(q)
 
         return manufacturers_df
 
@@ -880,7 +1092,7 @@ class WRCLiveTimingAPIClientV2:
         )
 
         q = f"SELECT n.entrantId, n.name FROM entrants AS n {_on_event};"
-        entrants_df = read_sql(q, self.conn)
+        entrants_df = self.db_manager.read_sql(q)
 
         return entrants_df
 
@@ -890,63 +1102,51 @@ class WRCLiveTimingAPIClientV2:
         _on_event = f"" if on_event else ""
 
         q = f"SELECT * FROM groups;"
-        entryGroups_df = read_sql(q, self.conn)
+        entryGroups_df = self.db_manager.read_sql(q)
 
         return entryGroups_df
 
-    def _getEventShakeDownTimes(self, updateDB=False):
-        if not self.eventId:
-            return
-        stub = f"events/{self.eventId}/shakedowntimes.json?shakedownNumber=1"
-        json_data = self._WRC_RedBull_json(stub)
-        shakedownTimes_df = DataFrame(json_data)
+    def _getEventShakeDownTimes(self, *args, stageId=None, **kwargs):
+        kwargs["eventId"] = self.eventId
 
-        if updateDB:
-            self.dbfy(shakedownTimes_df, "shakedown_times", pk="shakedownTimeId")
+        return self.api_client._getS_getEventShakeDownTimestages(*args, **kwargs)
 
-        return shakedownTimes_df
+    def _getStages(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
 
-    def _getStages(self, updateDB=False):
-        stub = f"events/{self.eventId}/stages.json"
-        json_data = self._WRC_RedBull_json(stub)
-        stages_df = DataFrame(json_data)
+        return self.api_client._getStages(*args, **kwargs)
 
-        if stages_df.empty:
-            return (DataFrame(), DataFrame(), DataFrame())
-
-        stage_split_points_df = (
-            stages_df[["splitPoints"]].explode("splitPoints").reset_index(drop=True)
-        )
-        stage_controls_df = json_normalize(
-            stages_df[["controls"]]
-            .explode("controls")
-            .reset_index(drop=True)["controls"]
-        )
-        stage_split_points_df = json_normalize(
-            stages_df[["splitPoints"]]
-            .explode("splitPoints")
-            .reset_index(drop=True)["splitPoints"]
-        )
-        stages_df.drop(columns=["splitPoints", "controls"], inplace=True)
-
-        if updateDB:
-            self.dbfy(stages_df, "stage_info", pk="stageId")
-            self.dbfy(stage_split_points_df, "split_points", pk="splitPointId")
-            self.dbfy(stage_controls_df, "stage_controls", pk="controlId")
-
-        return stages_df, stage_split_points_df, stage_controls_df
-
-    def getStageInfo(self, on_event=True, raw=True, updateDB=False):
+    def getStageInfo(
+        self,
+        on_event=True,
+        itineraryLegId=None,
+        itinerarySectionId=None,
+        raw=True,
+        updateDB=False,
+    ):
         if updateDB:
             self._getStages(updateDB)
 
-        on_event_ = f"""eventId={self.eventId}""" if on_event else "1=1"
+        on_event_ = f"""si.eventId={self.eventId}""" if on_event else "1=1"
+        on_leg_ = (
+            f"""AND it_l.itineraryLegId={itineraryLegId}""" if itineraryLegId else ""
+        )
+        on_section_ = (
+            f"""AND it_se.itinerarySectionId={itinerarySectionId}"""
+            if itinerarySectionId
+            else ""
+        )
         if raw:
-            q = f"SELECT * FROM stage_info AS i WHERE {on_event_};"
+            q = f"SELECT * FROM stage_info AS si WHERE {on_event_};"
         else:
-            q = f"SELECT * FROM stage_info AS i WHERE {on_event_};"
+            _itinerary_stages_join = (
+                f"INNER JOIN itinerary_stages AS it_st ON it_st.stageId=si.stageId"
+            )
+            _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
+            _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
+            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {on_event_} {on_leg_} {on_section_};"
 
-        stages_df = read_sql(q, self.conn)
+        stages_df = self.db_manager.read_sql(q)
 
         return stages_df
 
@@ -955,7 +1155,7 @@ class WRCLiveTimingAPIClientV2:
             self._getStages(updateDB)
 
         q = "SELECT * FROM split_points;"
-        stage_split_points_df = read_sql(q, self.conn)
+        stage_split_points_df = self.db_manager.read_sql(q)
 
         return stage_split_points_df
 
@@ -967,33 +1167,21 @@ class WRCLiveTimingAPIClientV2:
             q = "SELECT * FROM stage_controls;"
         # TO DO a query that gives a "pretty" result
 
-        stage_controls_df = read_sql(q, self.conn)
+        stage_controls_df = self.db_manager.read_sql(q)
 
         return stage_controls_df
 
-    def _getEvent(self, updateDB=False):
+    def _getEvent(self, *args, **kwargs):
         """This also sets self.rallyId, self.itineraryId"""
-        stub = f"events/{self.eventId}.json"
-        json_data = self._WRC_RedBull_json(stub)
-        if "rallies" not in json_data:
-            return DataFrame(), DataFrame(), DataFrame()
+        kwargs["eventId"] = self.eventId
 
-        eventRallies_df = DataFrame(json_data["rallies"])
-        eventRallies_df.drop(columns=["eventClasses"], inplace=True)
-        eventClasses_df = DataFrame(json_data["eventClasses"])
-        _data = {
-            k: json_data[k] for k in json_data if k not in ["rallies", "eventClasses"]
-        }
-        eventData_df = json_normalize(_data)
+        eventData_df, eventRallies_df, eventClasses_df = self.api_client._getEvent(
+            *args, **kwargs
+        )
+
         _event_df = eventRallies_df[eventRallies_df["isMain"] == True].iloc[0]
-
         self.rallyId = int(_event_df["rallyId"])
         self.itineraryId = int(_event_df["itineraryId"])
-
-        if updateDB:
-            self.dbfy(eventClasses_df, "event_classes", pk=("eventId", "eventClassId"))
-            self.dbfy(eventRallies_df, "event_rallies", pk="itineraryId")
-            self.dbfy(eventData_df, "event_date", pk="eventId")
 
         return eventData_df, eventRallies_df, eventClasses_df
 
@@ -1012,7 +1200,7 @@ class WRCLiveTimingAPIClientV2:
             return
         # Do this as a fuzzy search?
         q = f'SELECT eventId, name FROM season_rounds WHERE eventId="{eventId}";'
-        r = read_sql(q, self.conn)
+        r = self.db_manager.read_sql(q)
         # HACK TO DO this is a fudge
         self._setEvent(r, updateDB)
 
@@ -1021,7 +1209,7 @@ class WRCLiveTimingAPIClientV2:
             return
         # Do this as a fuzzy search?
         q = f'SELECT eventId, name FROM season_rounds WHERE name="{name}";'
-        r = read_sql(q, self.conn)
+        r = self.db_manager.read_sql(q)
         # HACK TO DO this is a fudge
         self._setEvent(r, updateDB)
 
@@ -1055,7 +1243,7 @@ class WRCLiveTimingAPIClientV2:
             return
         # Do this as a fuzzy search?
         q = f'SELECT stageId, name, code FROM stage_info WHERE stageId="{int(stageId)}";'
-        r = read_sql(q, self.conn)
+        r = self.db_manager.read_sql(q)
         self._setStage(r, updateDB=updateDB)
 
     def setStageByCode(self, stageCode=None, updateDB=True):
@@ -1065,37 +1253,24 @@ class WRCLiveTimingAPIClientV2:
             return
         # Do this as a fuzzy search?
         q = f'SELECT stageId, name, code FROM stage_info WHERE code="{stageCode}";'
-        r = read_sql(q, self.conn)
+        r = self.db_manager.read_sql(q)
         self._setStage(r, updateDB=updateDB)
 
     # TO DO a way of setting self.controlId; also need strategies for invalidating Ids
-    def _getControlTimes(self, updateDB=False):
-        stub = f"events/{self.eventId}/controls/{self.controlId}/controlTimes.json"
-        json_data = self._WRC_RedBull_json(stub)
-        controlTimes_df = DataFrame(json_data)
-        if controlTimes_df.empty:
-            return DataFrame()
-
-        if updateDB:
-            self.dbfy(controlTimes_df, "controltimes", pk="controlTimeId")
-
-        return controlTimes_df
-
-    def _getStageTimes(self, stageId=None, updateDB=False):
+    def _getControlTimes(self, *args, stageId=None, **kwargs):
         stageId = stageId if stageId else self.stageId
-        stub = f"events/{self.eventId}/stages/{stageId}/stagetimes.json?rallyId={self.rallyId}"
-        json_data = self._WRC_RedBull_json(stub)
-        stagetimes_df = DataFrame(json_data)
-        if stagetimes_df.empty:
-            return DataFrame()
+        kwargs["eventId"] = self.eventId
+        kwargs["controlId"] = self.controlId
 
-        stagetimes_df["eventId"] = self.eventId
-        stagetimes_df["rallyId"] = self.rallyId
+        return self.api_client._getControlTimes(*args, **kwargs)
 
-        if updateDB:
-            self.dbfy(stagetimes_df, "stage_times", pk="stageTimeId")
+    def _getStageTimes(self, *args, stageId=None, **kwargs):
+        stageId = stageId if stageId else self.stageId
+        kwargs["eventId"] = self.eventId
+        kwargs["rallyId"] = self.rallyId
+        kwargs["stageId"] = stageId
 
-        return stagetimes_df
+        return self.api_client._getStageTimes(*args, **kwargs)
 
     def getStageTimes(self, stageId=None, raw=True, updateDB=False):
         if updateDB:
@@ -1111,38 +1286,79 @@ class WRCLiveTimingAPIClientV2:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
-                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, st.* FROM stage_times AS st {_entry_join} {_driver_join} WHERE {on_event_};"
+                _codriver_join = (
+                    f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+                )
+                _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+                _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
+                sql = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {on_event_};"
 
-            r = read_sql(sql, self.conn)
+            r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
                 self._getStageTimes(stageId=stageId, updateDB=True)
-                r = read_sql(sql, self.conn)
+                r = self.db_manager.read_sql(sql)
         else:
             print(f"No getStageTimes? {self.eventId} {self.stageId} {self.rallyId}")
             r = DataFrame()
-        return r
 
-    def _getSplitTimes(self, stageId=None, updateDB=False):
-        stageId = stageId if stageId else self.stageId
-        stub = f"events/{self.eventId}/stages/{stageId}/splittimes.json?rallyId={self.rallyId}"
-        json_data = self._WRC_RedBull_json(stub)
-        splitTimes_df = DataFrame(json_data)
-        if splitTimes_df.empty:
-            return DataFrame()
-        
-        splitTimes_df["stageId"] = stageId
-        splitTimes_df["eventId"] = self.eventId
-        splitTimes_df["rallyId"] = self.rallyId
+        df_stageTimes = r
 
-        if updateDB:
-            self.dbfy(splitTimes_df, "split_times", pk="splitPointTimeId")
+        if "pos" in df_stageTimes:
+            df_stageTimes["pos"] = df_stageTimes["pos"].astype("Int64")
 
-        return splitTimes_df
+        if "diffFirst" in df_stageTimes:
+            df_stageTimes["Gap"] = df_stageTimes["diffFirstMs"].apply(
+                lambda x: round(x / 1000, 1)
+            )
+        if "diffPrev" in df_stageTimes:
+            df_stageTimes["Diff"] = df_stageTimes["diffPrevMs"].apply(
+                lambda x: round(x / 1000, 1)
+            )
+        if "elapsedDurationMs" in df_stageTimes:
+            df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
+                lambda x: round(x / 1000, 1)
+            )
+            df_stageTimes["timeToCarBehind"] = (
+                df_stageTimes["timeInS"].diff(-1).round(1)
+            )
+            # Pace annotations
+
+            df_stageDetails = self.getStageInfo()
+            stage_dist = float(
+                df_stageDetails.loc[
+                    df_stageDetails["stageId"] == stageId, "distance"
+                ].iloc[0]
+            )
+            df_stageTimes["speed (km/h)"] = (
+                stage_dist / (df_stageTimes["timeInS"] / 3600)
+            ).round(1)
+            # Use .loc[] to modify the original DataFrame in place
+            df_stageTimes["pace (s/km)"] = (
+                df_stageTimes["timeInS"] / stage_dist
+            ).round(2)
+            p1_ = df_stageTimes[df_stageTimes["position"] == 1].iloc[0]
+            df_stageTimes["pace diff (s/km)"] = (
+                df_stageTimes["pace (s/km)"] - p1_["pace (s/km)"]
+            ).round(2)
+            # A percent diff is always relative to something
+            # In rebasing, we need to work with the actual times
+            # so handle percentage diffs in the display logic for now?
+            # df_stageTimes["percent"] = 100 * df_stageTimes["timeInS"] / df_stageTimes.loc[0,"timeInS"]
+        return df_stageTimes
+
+    def _getSplitTimes(self, *args, stageId=None, **kwargs):
+        kwargs["eventId"] = self.eventId
+        kwargs["rallyId"] = self.rallyId
+        kwargs["stageId"] = stageId
+
+        return self.api_client._getSplitTimes(*args, **kwargs)
 
     def getSplitTimes(self, stageId=None, raw=True, updateDB=False):
         if updateDB:
-            self._getSplitTimes(stageId=stageId)
+            self._getSplitTimes(stageId=stageId, updateDB=updateDB)
+        stageId = stageId if stageId else self.stageId
+
         if stageId and self.eventId and self.rallyId:
             on_event_ = f"sp.eventId={self.eventId} AND sp.stageId={stageId} AND sp.rallyId={self.rallyId}"
             if raw:
@@ -1154,11 +1370,11 @@ class WRCLiveTimingAPIClientV2:
                 )
                 sql = f"SELECT d.fullName AS driverName, e.vehicleModel, sp.* FROM split_times AS sp {_entry_join} {_driver_join} WHERE {on_event_};"
 
-            r = read_sql(sql, self.conn)
+            r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
                 self._getSplitTimes(stageId=stageId, updateDB=True)
-                r = read_sql(sql, self.conn)
+                r = self.db_manager.read_sql(sql)
         else:
             print(f"No getSplitTimes? {self.eventId} {self.stageId} {self.rallyId}")
             r = DataFrame()
@@ -1166,33 +1382,19 @@ class WRCLiveTimingAPIClientV2:
         return r
 
     def _getStageOverallResults(
-        self, stageId=None, by_championship=False, updateDB=False
+        self, *args, stageId=None, by_championship=False, **kwargs
     ):
-        """This is the overall result at the end of the stage. TO DO CHECK"""
-        # TO DO: if we select by championship, are these different?
-        # If so, do we need to set championship and championship Pos cols, maybe in a new table?
-        # The rallyId is optional? Or does it filter somehow?
-        stageId = stageId if stageId else self.stageId
-        stub = f"events/{self.eventId}/stages/{stageId}/results.json?rallyId={self.rallyId}"
-        if by_championship and self.championshipId:
-            stub = stub + f"&championshipId={self.championshipId}"
-        json_data = self._WRC_RedBull_json(stub)
-        stageResults_df = DataFrame(json_data)
-        if stageResults_df.empty:
-            return DataFrame()
+        kwargs["eventId"] = self.eventId
+        kwargs["rallyId"] = self.rallyId
+        kwargs["championshipId"] = self.championshipId
+        kwargs["stageId"] = stageId
+        kwargs["by_championship"] = by_championship
 
-        stageResults_df["stageId"] = stageId
-        stageResults_df["eventId"] = self.eventId
-        stageResults_df["rallyId"] = self.rallyId
-
-        if updateDB:
-            self.dbfy(stageResults_df, "stage_overall", pk=("stageId", "entryId"))
-
-        return stageResults_df
+        return self.api_client._getStageOverallResults(*args, **kwargs)
 
     def getStageOverallResults(self, stageId=None, raw=True, updateDB=False):
         if updateDB:
-            self._getStageOverallResults(stageId=stageId)
+            self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
 
         stageId = stageId if stageId else self.stageId
         if self.eventId and stageId and self.rallyId:
@@ -1204,12 +1406,17 @@ class WRCLiveTimingAPIClientV2:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
-                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, o.* FROM stage_overall AS o {_entry_join} {_driver_join} WHERE {on_event_};"
-            r = read_sql(sql, self.conn)
+                _codriver_join = (
+                    f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+                )
+                _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+                _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
+                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, e.identifier AS carNo, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.priority, e.eligibility, o.* FROM stage_overall AS o {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {on_event_};"
+            r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
                 self._getStageOverallResults(stageId=stageId, updateDB=True)
-                r = read_sql(sql, self.conn)
+                r = self.db_manager.read_sql(sql)
         else:
             print(
                 f"No getStageOverallResults? {self.eventId} {self.stageId} {self.rallyId}"
@@ -1217,47 +1424,18 @@ class WRCLiveTimingAPIClientV2:
             r = DataFrame()
         return r
 
-    def _getStageWinners(self, updateDB=False):
-        stub = f"events/{self.eventId}/rallies/{self.rallyId}/stagewinners.json"
-        json_data = self._WRC_RedBull_json(stub)
-        stagewinners_df = DataFrame(json_data)
-        if stagewinners_df.empty:
-            return DataFrame()
+    def _getStageWinners(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        kwargs["rallyId"] = self.rallyId
+        return self.api_client._getStageWinners(*args, **kwargs)
 
-        stagewinners_df["eventId"] = self.eventId
-        stagewinners_df["rallyId"] = self.rallyId
-        if updateDB:
-            self.dbfy(stagewinners_df, "stagewinners", pk="stageId")
+    def _getRetirements(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        return self.api_client._getRetirements(*args, **kwargs)
 
-        return stagewinners_df
-
-    def _getRetirements(self, updateDB=False):
-        if not self.eventId:
-            return
-        stub = f"events/{self.eventId}/retirements.json"
-        json_data = self._WRC_RedBull_json(stub)
-        retirements_df = DataFrame(json_data)
-        if retirements_df.empty:
-            return DataFrame()
-
-        retirements_df["eventId"] = self.eventId
-        if updateDB:
-            self.dbfy(retirements_df, "retirements", pk="retirementId")
-        return retirements_df
-
-    def _getPenalties(self, updateDB=False):
-        if not self.eventId:
-            return
-        stub = f"events/{self.eventId}/penalties.json"
-        json_data = self._WRC_RedBull_json(stub)
-        penalties_df = DataFrame(json_data)
-        if penalties_df.empty:
-            return DataFrame()
-
-        penalties_df["eventId"] = self.eventId
-        if updateDB:
-            self.dbfy(penalties_df, "penalties", pk="penaltyId")
-        return penalties_df
+    def _getPenalties(self, *args, **kwargs):
+        kwargs["eventId"] = self.eventId
+        return self.api_client._getPenalties(*args, **kwargs)
 
     def getStageWinners(self, on_event=True, raw=True):
         if not self.eventId or not self.rallyId:
@@ -1289,11 +1467,11 @@ class WRCLiveTimingAPIClientV2:
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
             sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {_on_event};"""
 
-        r = read_sql(sql, self.conn)
+        r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
         if r.empty:
             self._getStageWinners(updateDB=True)
-            r = read_sql(sql, self.conn)
+            r = self.db_manager.read_sql(sql)
         return r
 
     # TO DO - offer more search limits
@@ -1321,11 +1499,11 @@ class WRCLiveTimingAPIClientV2:
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
             sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
 
-        r = read_sql(sql, self.conn)
+        r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
         if r.empty:
             self._getRetirements(updateDB=True)
-            r = read_sql(sql, self.conn)
+            r = self.db_manager.read_sql(sql)
         return r
 
     # TO DO - offer more search limits
@@ -1353,13 +1531,13 @@ class WRCLiveTimingAPIClientV2:
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
             sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
 
-        r = read_sql(sql, self.conn)
+        r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
         if r.empty:
             self._getPenalties(updateDB=True)
-            r = read_sql(sql, self.conn)
+            r = self.db_manager.read_sql(sql)
         return r
 
     def query(self, sql):
-        r = read_sql(sql, self.conn)
+        r = self.db_manager.read_sql(sql)
         return r

@@ -7,7 +7,7 @@ import datetime
 from numpy import nan
 
 
-def format_timedelta(milliseconds):
+def format_timedelta(t, units="ms", addplus=False):
     """
     Convert seconds to a precise hh:mm:ss.tenth format string.
 
@@ -18,7 +18,9 @@ def format_timedelta(milliseconds):
     str: Formatted time string in hh:mm:ss.tenth format
     """
     # Create timedelta
-    td = timedelta(seconds=milliseconds/1000)
+    t = round(t/1000, 1) if units.lower() in ["ms", "milliseconds"] else t
+
+    td = timedelta(seconds=t)
 
     # Extract total seconds with high precision
     total_seconds = td.total_seconds()
@@ -31,13 +33,15 @@ def format_timedelta(milliseconds):
     whole_seconds = int(seconds)
     tenths = int((seconds - whole_seconds) * 10)
 
+    addplus = "+" if addplus else ""
+
     # Conditional formatting based on hours and minutes
     if hours:
-        return f"{int(hours):02d}:{int(minutes):02d}:{whole_seconds:02d}.{tenths:01d}"
+        return f"{addplus}{int(hours):02d}:{int(minutes):02d}:{whole_seconds:02d}.{tenths:01d}"
     elif minutes:
-        return f"{int(minutes):02d}:{whole_seconds:02d}.{tenths:01d}"
+        return f"{addplus}{int(minutes):01d}:{whole_seconds:02d}.{tenths:01d}"
     else:
-        return f"{whole_seconds:02d}.{tenths:01d}"
+        return f"{addplus}{whole_seconds:01d}.{tenths:01d}"
 
 
 # TO DO - refactor this into the WRCLiveTimingAPIClient class
@@ -217,7 +221,6 @@ def timeNow(typ="ms"):
     if typ == "ms":
         now *= 1000
     return now
-
 
 def time_to_seconds(time_str, retzero=False):
     if not time_str or not isinstance(time_str, str):

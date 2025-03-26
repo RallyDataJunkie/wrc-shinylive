@@ -1393,7 +1393,7 @@ def stage_winners_data():
     return stagewinners
 
 
-# TO DO - we whould have a single reactive value for wrc.rallyId
+# TO DO - we should have a single reactive value for wrc.rallyId
 @reactive.calc
 @reactive.event(input.event)
 def stages_data():

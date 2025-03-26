@@ -5,17 +5,18 @@ from wrc_rallydj.utils import enrich_stage_winners
 from wrc_rallydj.utils import format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
+from pandas import DataFrame
 
-from wrc_rallydj.livetiming_api2 import WRCLiveTimingAPIClientV2
+from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
-wrc = WRCLiveTimingAPIClientV2(use_cache=True, backend="memory", expire_after=6000)
+wrc = WRCTimingResultsAPIClientV2(use_cache=True, backend="memory", expire_after=6000)
 
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
 
-def seasonInfo():
-    return wrc.getSeasons()
+def seasonInfo(updateDB=False):
+    return wrc.getSeasons(updateDB=updateDB)
 
 
 with ui.sidebar(open="desktop"):
@@ -24,8 +25,7 @@ with ui.sidebar(open="desktop"):
     ui.input_select(
         "year",
         "Year:",
-        [str(i) for i in seasonInfo()["year"].unique()],
-        selected="2025",
+        {},
     )
 
     ui.input_select(
@@ -141,10 +141,15 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Stages info"):
 
                     @render.data_frame
-                    @reactive.event(input.stage)
+                    @reactive.event(input.stage, input.event_day, input.event_section)
                     def stages_frame():
                         setStageData()
-                        stages = wrc.getStageInfo()
+                        itineraryLegId = input.event_day()
+                        itinerarySectionId = input.event_section()
+                        if itineraryLegId:
+                            itineraryLegId = int(itineraryLegId)
+                            itinerarySectionId = int(itinerarySectionId)
+                        stages = wrc.getStageInfo(itineraryLegId=itineraryLegId, itinerarySectionId=itinerarySectionId, raw=False)
                         if stages.empty:
                             return
                         retcols = [
@@ -154,7 +159,10 @@ with ui.accordion(open=False):
                             "distance",
                             "stageType",
                             "status",
+                            "day",
+                            "sectionName"
                         ]
+
                         return render.DataGrid(stages[retcols])
 
                 with ui.accordion_panel(title="Itinerary"):
@@ -304,9 +312,76 @@ with ui.accordion(open=False):
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
 
-            """Stage hero here TO DO"""
+            @render.ui
+            def stageresult_hero():
+                setStageData()
+                stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
+                    by="number", ascending=True
+                )
+                stageId = input.stage()
+                if stageId and not stagesInfo.empty:
+                    stageId = int(stageId)
+                stage_times_data = wrc.getStageTimes(raw=False)
+                return get_stage_result_hero(stageId, stagesInfo, stage_times_data)
+
+            """Stage report here TO DO"""
 
             with ui.accordion(open=False, id="stage_review_accordion"):
+
+                with ui.accordion_panel("Stage notes"):
+
+                    @render.ui
+                    def stage_text_intro():
+                        md = []
+                        stageId = input.stage()
+                        if not stageId:
+                            return ui.markdown("No stage to report on...")
+                        stageId = int(stageId)
+
+                        stages_info = wrc.getStageInfo()
+                        stage_info = stages_info[stages_info["stageId"]==stageId].iloc[0]
+
+                        # Remark on stage name
+                        _md = f"""{stage_info["code"]} {stage_info["name"]} ({stage_info["distance"]}km)"""
+                        md.append(_md)
+
+                        # Remark on, or imply, the repeated run nature of this stage
+                        # TO DO
+
+                        # Remark on being the Nth stage of the day
+                        # TO DO
+
+                        # Remark on number of split points
+                        # TO DO
+                        # For example: There are three split points, at Pkm, Qkm and Rkm.
+
+                        # Remark on being the longest stage of the rally
+                        if (
+                            stage_info["distance"]
+                            == stages_info["distance"].max()
+                        ):
+                            _md = f"{_md} It is the longest stage on the rally."
+                            md.append(f"{_md}\n\n")
+
+                        # Remark on previous liaison stage
+                        # TO DO
+
+                        # Remark on stage status
+                        # TO DO
+
+                        # Remarks on stage result / items of interest
+                        # TO DO
+                        # Remark on stage winner and their overall position
+                        # Remark on stage winner's stage win stats.
+                        # Remark on rally leader at start of stage position if not stage winner.
+                        # Remark on rally leader at end of stage position if not stage winner.
+                        # Remark on person losing overall lead, if approppriate.
+                        # ... ?
+
+                        # Remark on following liason stage
+                        # TO DO
+
+                        return ui.markdown("\n\n".join(md))
 
                 with ui.accordion_panel("Overall position"):
 
@@ -323,29 +398,61 @@ with ui.accordion(open=False):
                         if overall_df.empty:
                             return
                         retcols = [
-                            k
-                            for k in overall_df.columns
-                            if k
-                            in [
-                                "pos",
-                                "carNo",
-                                "driver",
-                                "coDriver",
-                                "teamName",
-                                "stageTime",
-                                "diffFirst",
-                                "diffPrev",
-                                "penaltyTime",
-                                "totalTime",
-                                "groupClass",
-                                "eligibility",
-                            ]
-                            or k.startswith("round")
+                            "position",
+                            "carNo",
+                            "driverName",
+                            "codriverName",
+                            "entrantName",
+                            "stageTimeMs",
+                            "diffFirstMs",
+                            "diffPrevMs",
+                            "penaltyTimeMs",
+                            "totalTimeMs",
+                            "priority",
+                            "eligibility",
                         ]
-                        return render.DataGrid(overall_df)  # [retcols])
+                        retcols = [
+                            k
+                            for k in retcols
+                            + [k for k in overall_df.columns if k.startswith("round")]
+                            if k in overall_df.columns
+                        ]
+                        overall_df = overall_df[retcols]
+                        if "stageTimeMs" in overall_df:
+                            overall_df["stageTimeMs"] = overall_df["stageTimeMs"].apply(
+                                format_timedelta
+                            )
+                        if "diffFirstMs" in overall_df:
+                            overall_df["diffFirstMs"] = overall_df["diffFirstMs"].apply(
+                                lambda x: format_timedelta(x, addplus=True)
+                            )
+                        if "diffPrevMs" in overall_df:
+                            overall_df["diffPrevMs"] = overall_df["diffPrevMs"].apply(
+                                lambda x: format_timedelta(x, addplus=True)
+                            )
+                        if "penaltyTimeMs" in overall_df:
+                            overall_df["penaltyTimeMs"] = overall_df[
+                                "penaltyTimeMs"
+                            ].apply(format_timedelta)
+                        if "totalTimeMs" in overall_df:
+                            overall_df["totalTimeMs"] = overall_df["totalTimeMs"].apply(
+                                format_timedelta
+                            )
+
+                        overall_df.rename(
+                            columns={
+                                "stageTimeMs": "stageTime",
+                                "diffFirstMs": "diffFirst",
+                                "diffPrevMs": "diffPrev",
+                                "penaltyTimeMs": "penaltyTime",
+                                "totalTimeMs": "totalTime",
+                            },
+                            inplace=True,
+                        )
+                        return render.DataGrid(overall_df)
 
                 with ui.accordion_panel("Stage times"):
-                    """ TO DO rebase widget """
+                    """TO DO rebase widget"""
 
                     @render.data_frame
                     @reactive.event(input.stage_review_accordion, input.stage)
@@ -363,7 +470,7 @@ with ui.accordion(open=False):
     with ui.accordion_panel(title="Splits Analysis"):
         with ui.card(class_="mt-3"):
 
-            """ TO DO """
+            """TO DO"""
 
             with ui.accordion(open=False, id="splits_review_accordion"):
 
@@ -381,6 +488,7 @@ with ui.accordion(open=False):
                         if split_times_df.empty:
                             return
                         return render.DataGrid(split_times_df)
+
 
 @reactive.calc
 @reactive.event(input.season_round)
@@ -400,6 +508,17 @@ def setStageData():
 
 
 ## Update UI widgets
+
+
+def update_year_select():
+    season_info = seasonInfo()
+    if season_info.empty:
+        return
+    years = [str(i) for i in season_info["year"].unique()]
+
+    ui.update_select("year", choices=years, selected=years[-1])
+
+
 @reactive.effect
 @reactive.event(input.year)
 def update_rally_seasonId_select():
@@ -523,6 +642,41 @@ def update_stage_select():
     ui.update_select("stage", choices=stages)
 
 
+@reactive.calc
+@reactive.event(input.season_round)
+def getStageWinners():
+    stagewinners = wrc.getStageWinners(raw=False)
+    stagewinners = enrich_stage_winners(stagewinners)
+
+    return stagewinners
+
+
+@reactive.calc
+@reactive.event(
+    input.rally_seasonId, input.season_round, input.event_day, input.event_section
+)
+def getItinerary():
+    eventId = input.season_round()
+    itineraryLegId = input.event_day()
+    itinerarySectionId = input.event_section()
+
+    eventId = int(eventId) if eventId else eventId
+    itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
+    itinerarySectionId = (
+        int(itinerarySectionId) if itinerarySectionId else itinerarySectionId
+    )
+
+    itinerary = wrc.getItineraryControls(
+        eventId=eventId,
+        itineraryLegId=itineraryLegId,
+        itinerarySectionId=itinerarySectionId,
+    )
+    return itinerary
+
+
+## Heros and banners
+
+
 def get_overall_result_hero(stageId, stages_data, overall_data):
     stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
     stage_name = stage_["name"]
@@ -572,7 +726,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             # p3pace = f"(Pace: {p3pace} s/km slower)"
             p3_ = overall_data[overall_data["position"] == 3]
             p3 = ui.value_box(
-                value="+" + format_timedelta(p3_.iloc[0]["diffFirstMs"]),
+                value=format_timedelta(p3_.iloc[0]["diffFirstMs"], addplus=True),
                 title=_get_hero_text(p3_),
                 theme="text-purple",
                 # showcase=p3pace,
@@ -585,36 +739,72 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
     return p1
 
 
-# TO DO
+def get_stage_result_hero(stageId, stages_data, stage_times_data):
+    # TO DO - how do we know we're on shakedown?
+    if stageId == "SHD":
+        return None
 
+    if stage_times_data.empty:
+        print(f"No stage times in stage_times_data() for {stageId}")
+        return None
 
-@reactive.calc
-@reactive.event(input.season_round)
-def getStageWinners():
-    stagewinners = wrc.getStageWinners(raw=False)
-    stagewinners = enrich_stage_winners(stagewinners)
+    stage_name = stages_data.loc[stages_data["stageId"] == stageId, "name"].iloc[0]
 
-    return stagewinners
+    def _get_hero_text(p):
+        return ui.markdown(
+            f"""
+            __{p["driverName"]}__  
+            {format_timedelta(p["timeInS"], units="s")}  
+            """
+        )
 
-
-@reactive.calc
-@reactive.event(
-    input.rally_seasonId, input.season_round, input.event_day, input.event_section
-)
-def getItinerary():
-    eventId = input.season_round()
-    itineraryLegId = input.event_day()
-    itinerarySectionId = input.event_section()
-
-    eventId = int(eventId) if eventId else eventId
-    itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
-    itinerarySectionId = (
-        int(itinerarySectionId) if itinerarySectionId else itinerarySectionId
+    p1_ = stage_times_data[stage_times_data["position"] == 1].iloc[0]
+    # Positions are zero-indexed
+    averaging = p1_["speed (km/h)"]
+    # TO DO - if this is final result, we can use overall dist for speed
+    averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
+    p1 = ui.value_box(
+        title=stage_name,
+        value=_get_hero_text(p1_),
+        theme="text-green",
+        showcase=averaging,
+        showcase_layout="left center",
+        full_screen=True,
     )
 
-    itinerary = wrc.getItineraryControls(
-        eventId=eventId,
-        itineraryLegId=itineraryLegId,
-        itinerarySectionId=itinerarySectionId,
-    )
-    return itinerary
+    if len(stage_times_data) > 1:
+        p2_ = stage_times_data[stage_times_data["position"] == 2].iloc[0]
+        p2pace = p2_["pace diff (s/km)"]
+        p2pace = f"(Pace: {p2pace} s/km slower)"
+        p2 = ui.value_box(
+            value=format_timedelta(p2_["diffFirstMs"], addplus=True),
+            title=_get_hero_text(p2_),
+            theme="text-blue",
+            showcase=p2pace,
+            showcase_layout="bottom",
+            full_screen=True,
+        )
+        if len(stage_times_data) > 2:
+            p3_= stage_times_data[stage_times_data["position"] == 3].iloc[0]
+            p3pace = p3_["pace diff (s/km)"]
+            p3pace = p3pace if p3pace else ""
+            p3pace = f"(Pace: {p3pace} s/km slower)"
+            p3 = ui.value_box(
+                value=format_timedelta(
+                    p3_["diffFirstMs"], addplus=True
+                ),
+                title=_get_hero_text(p3_),
+                theme="text-purple",
+                showcase=p3pace,
+                showcase_layout="bottom",
+                full_screen=True,
+            )
+            return ui.TagList(p1, uis.layout_columns(p2, p3))
+        return ui.TagList(p1, p2)
+
+    return p1
+
+
+## Start the data collection
+wrc.seedDB()
+update_year_select()
