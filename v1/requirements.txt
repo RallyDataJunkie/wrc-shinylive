@@ -1,0 +1,12 @@
+jupyterlite_simple_cors_proxy
+shiny
+pandas
+requests
+requests-cache
+url-normalize
+parse
+seaborn
+sqlite_utils
+inflect
+adjustText
+sqlite3
