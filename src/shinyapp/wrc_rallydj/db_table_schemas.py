@@ -39,6 +39,7 @@ CREATE TABLE "championship_rounds_detail" (
   "location" TEXT,
   "startDate" TEXT,
   "finishDate" TEXT,
+  "year" INTEGER,
   "timeZoneId" TEXT,
   "timeZoneName" TEXT,
   "timeZoneOffset" INTEGER,

@@ -6,6 +6,8 @@ from wrc_rallydj.utils import format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame
+from matplotlib import pyplot as plt
+from seaborn import barplot
 
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
@@ -39,6 +41,8 @@ with ui.sidebar(open="desktop"):
         "Rounds:",
         {},
     )
+
+    ui.input_select("category", "Category:", {})
 
     ui.input_select("event_day", "Day:", {})
 
@@ -104,6 +108,10 @@ with ui.accordion(open=False):
             True,
         )
 
+        # TO DO - overall report
+        # TO DO - day report
+        # TO DO - section/loop report
+
         @render.ui
         @reactive.event(input.stage, input.display_latest_overall)
         def rally_overview_latest_hero():
@@ -149,7 +157,11 @@ with ui.accordion(open=False):
                         if itineraryLegId:
                             itineraryLegId = int(itineraryLegId)
                             itinerarySectionId = int(itinerarySectionId)
-                        stages = wrc.getStageInfo(itineraryLegId=itineraryLegId, itinerarySectionId=itinerarySectionId, raw=False)
+                        stages = wrc.getStageInfo(
+                            itineraryLegId=itineraryLegId,
+                            itinerarySectionId=itinerarySectionId,
+                            raw=False,
+                        )
                         if stages.empty:
                             return
                         retcols = [
@@ -160,7 +172,7 @@ with ui.accordion(open=False):
                             "stageType",
                             "status",
                             "day",
-                            "sectionName"
+                            "sectionName",
                         ]
 
                         return render.DataGrid(stages[retcols])
@@ -250,6 +262,46 @@ with ui.accordion(open=False):
                         # TO DO have option to limit view of stages up to and including selected stage
                         return render.DataGrid(stagewinners[retcols])
 
+                    @render.plot(alt="Bar chart of stage wins.")
+                    def plot_driver_stagewins():
+                        df = getStageWinners()
+                        if df.empty:
+                            return
+                        # TO DO - make use of commented out elements
+                        # which limit counts  up to and including current stage
+                        # df["_stagenum"] = df["stageNo"].str.replace("SS", "")
+                        # df["_stagenum"] = df["_stagenum"].astype(int)
+
+                        # idx = df[df["stageId"] == input.stage()].index
+                        # if len(idx) == 0:
+                        #    return]
+
+                        # Drop empty rows
+                        # df = df[df["carNo"].str.strip() != ""]
+                        # Get value counts and reset index to create a plotting dataframe
+                        stage_counts = (
+                            # df.iloc[: idx[0] + 1]
+                            df.groupby("driverName")["code"]
+                            .count()
+                            .sort_values(ascending=False)
+                            .reset_index()
+                        )
+
+                        # Create figure with larger size for better readability
+                        plt.figure(figsize=(10, 6))
+
+                        # Create horizontal bar plot
+                        ax = barplot(
+                            data=stage_counts,
+                            y="driverName",
+                            x="code",
+                            orient="h",
+                            color="steelblue",
+                        )
+                        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                        ax.set(xlabel=None, ylabel=None)
+                        return ax
+
                 with ui.accordion_panel("Retirements"):
                     # Try to be sensible about how often we call
                     # getRetirements and getPenalties
@@ -324,8 +376,6 @@ with ui.accordion(open=False):
                 stage_times_data = wrc.getStageTimes(raw=False)
                 return get_stage_result_hero(stageId, stagesInfo, stage_times_data)
 
-            """Stage report here TO DO"""
-
             with ui.accordion(open=False, id="stage_review_accordion"):
 
                 with ui.accordion_panel("Stage notes"):
@@ -339,7 +389,9 @@ with ui.accordion(open=False):
                         stageId = int(stageId)
 
                         stages_info = wrc.getStageInfo()
-                        stage_info = stages_info[stages_info["stageId"]==stageId].iloc[0]
+                        stage_info = stages_info[
+                            stages_info["stageId"] == stageId
+                        ].iloc[0]
 
                         # Remark on stage name
                         _md = f"""{stage_info["code"]} {stage_info["name"]} ({stage_info["distance"]}km)"""
@@ -356,10 +408,7 @@ with ui.accordion(open=False):
                         # For example: There are three split points, at Pkm, Qkm and Rkm.
 
                         # Remark on being the longest stage of the rally
-                        if (
-                            stage_info["distance"]
-                            == stages_info["distance"].max()
-                        ):
+                        if stage_info["distance"] == stages_info["distance"].max():
                             _md = f"{_md} It is the longest stage on the rally."
                             md.append(f"{_md}\n\n")
 
@@ -386,19 +435,24 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Overall position"):
 
                     @render.data_frame
-                    @reactive.event(input.stage_review_accordion, input.stage)
+                    @reactive.event(
+                        input.stage_review_accordion, input.category, input.stage
+                    )
                     def overall_short():
                         stageId = input.stage()
+                        priority = input.category()
                         if not stageId:
                             return
                         stageId = int(stageId)
                         overall_df = wrc.getStageOverallResults(
-                            stageId=stageId, raw=False
+                            stageId=stageId, priority=priority, raw=False
                         )
                         if overall_df.empty:
                             return
                         retcols = [
+                            "roadPos",
                             "position",
+                            "categoryPosition",
                             "carNo",
                             "driverName",
                             "codriverName",
@@ -452,19 +506,36 @@ with ui.accordion(open=False):
                         return render.DataGrid(overall_df)
 
                 with ui.accordion_panel("Stage times"):
-                    """TO DO rebase widget"""
+                    # Create stage driver rebase selector
+                    ui.input_select(
+                        "stage_rebase_driver",
+                        "Driver rebase:",
+                        {},
+                    )
 
                     @render.data_frame
-                    @reactive.event(input.stage_review_accordion, input.stage)
+                    @reactive.event(
+                        input.stage_review_accordion, input.category, input.stage
+                    )
                     def stage_results_short():
                         stageId = input.stage()
                         if not stageId:
                             return
                         stageId = int(stageId)
-
-                        stage_times_df = wrc.getStageTimes(stageId=stageId, raw=False)
+                        priority = input.category()
+                        stage_times_df = wrc.getStageTimes(
+                            stageId=stageId, priority=priority, raw=False
+                        )
                         if stage_times_df.empty:
                             return
+                        stage_times_df["roadPos"] = range(1, len(stage_times_df) + 1)
+                        stage_times_df["position_"] = stage_times_df["position"]
+                        if priority != "P0" and priority != "P1":
+                            stage_times_df.sort_values("position", inplace=True)
+                            stage_times_df["position"] = range(
+                                1, len(stage_times_df) + 1
+                            )
+                            stage_times_df.sort_values("roadPos", inplace=True)
                         return render.DataGrid(stage_times_df)
 
     with ui.accordion_panel(title="Splits Analysis"):
@@ -477,14 +548,18 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Split times"):
 
                     @render.data_frame
-                    @reactive.event(input.splits_review_accordion, input.stage)
+                    @reactive.event(
+                        input.splits_review_accordion, input.category, input.stage
+                    )
                     def split_results_short():
                         stageId = input.stage()
                         if not stageId:
                             return
                         stageId = int(stageId)
-
-                        split_times_df = wrc.getSplitTimes(stageId=stageId, raw=False)
+                        priority = input.category()
+                        split_times_df = wrc.getSplitTimes(
+                            stageId=stageId, priority=priority, raw=False
+                        )
                         if split_times_df.empty:
                             return
                         return render.DataGrid(split_times_df)
@@ -552,6 +627,30 @@ def update_season_round_select():
     )
 
     ui.update_select("season_round", choices=season_rounds)
+
+
+@reactive.effect
+@reactive.event(input.rally_seasonId, input.season_round, input.event_day)
+def update_category_select():
+    # eventId = input.season_round()
+    # input.event_day initialises data...
+    entries = wrc.getEntries(on_event=True)
+    eligibilities = entries["eligibility"].unique().tolist()
+    _categories = ["All"]
+    for c1 in eligibilities:
+        for c2 in c1.split():
+            c2 = c2.strip()
+            if c2.startswith("M"):
+                if "WRC" not in _categories:
+                    _categories.append("WRC")
+            elif c2 and c2 != "/" and not c2.startswith("(") and c2 not in _categories:
+                _categories.append(c2)
+
+    # TO DO - the downstream logic for this is wrong because
+    # JWRC is (or, wekaer, may also be?) WRC3
+    cmap = {"All": "P0", "WRC": "P1", "WRC2": "P2", "WRC3": "P3", "JWRC": "P4"}
+    categories = {cmap[c]: c for c in _categories}
+    ui.update_select("category", choices=categories)
 
 
 @reactive.effect
@@ -642,10 +741,32 @@ def update_stage_select():
     ui.update_select("stage", choices=stages)
 
 
+@reactive.effect
+@reactive.event(input.season_round, input.stage, input.category)
+def update_stages_driver_rebase_select():
+    priority = input.category()
+    stageId = input.stage()
+    if not stageId:
+        return
+    stageId = int(stageId)
+    stage_times_df = wrc.getStageTimes(stageId=stageId, priority=priority, raw=False)
+    if stage_times_df.empty:
+        return
+    rebase_drivers = (
+        stage_times_df[["carNo", "driverName"]].set_index("carNo")["driverName"].to_dict()
+    )
+    ui.update_select("stage_rebase_driver", choices=rebase_drivers)
+
+
+## Reactive calcs
+
 @reactive.calc
-@reactive.event(input.season_round)
+@reactive.event(input.season_round, input.category)
 def getStageWinners():
-    stagewinners = wrc.getStageWinners(raw=False)
+    # TO DO - this needs fixing to reflect category
+    priority = input.category()
+    # TO DO priority not yet handled below
+    stagewinners = wrc.getStageWinners(priority=priority, raw=False)
     stagewinners = enrich_stage_winners(stagewinners)
 
     return stagewinners
@@ -785,14 +906,12 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
             full_screen=True,
         )
         if len(stage_times_data) > 2:
-            p3_= stage_times_data[stage_times_data["position"] == 3].iloc[0]
+            p3_ = stage_times_data[stage_times_data["position"] == 3].iloc[0]
             p3pace = p3_["pace diff (s/km)"]
             p3pace = p3pace if p3pace else ""
             p3pace = f"(Pace: {p3pace} s/km slower)"
             p3 = ui.value_box(
-                value=format_timedelta(
-                    p3_["diffFirstMs"], addplus=True
-                ),
+                value=format_timedelta(p3_["diffFirstMs"], addplus=True),
                 title=_get_hero_text(p3_),
                 theme="text-purple",
                 showcase=p3pace,
