@@ -553,7 +553,74 @@ with ui.accordion(open=False):
                                 1, len(stage_times_df) + 1
                             )
                             stage_times_df.sort_values("roadPos", inplace=True)
-                        return render.DataGrid(stage_times_df)
+                        # Rebase element
+                        rebase_driver = input.stage_rebase_driver()
+                        rebase_driver = (
+                            int(rebase_driver) if rebase_driver else rebase_driver
+                        )
+                        if rebase_driver:
+                            # Add percentage time column using rebase driver time basis
+                            stage_times_df["Rebase %"] = (
+                                100
+                                * stage_times_df["timeInS"]
+                                / stage_times_df.loc[
+                                    stage_times_df["carNo"] == rebase_driver, "timeInS"
+                                ].iloc[0]
+                            ).round(1)
+
+                        rebase_gap_col = "Rebase Gap (s)"
+                        stage_times_df[rebase_gap_col] = stage_times_df["Gap"]
+
+                        stage_times_df.loc[:, rebase_gap_col] = wrc.rebaseTimes(
+                            stage_times_df, rebase_driver, "carNo", rebase_gap_col
+                        )
+
+                        rebase_pace_df = stage_times_df.loc[
+                            stage_times_df["carNo"] == rebase_driver, "pace (s/km)"
+                        ]
+
+                        if not rebase_pace_df.empty:
+                            rebase_pace = rebase_pace_df.iloc[0]
+                            stage_times_df["Rebase pace diff (s/km)"] = (
+                                stage_times_df["pace (s/km)"] - rebase_pace
+                            ).round(2)
+                        else:
+                            stage_times_df["Rebase pace diff (s/km)"] = (
+                                None  # Handle missing values gracefully
+                            )
+
+                        cols = [
+                            "carNo",
+                            "driverName",
+                            "roadPos",
+                            "position",
+                            "categoryPosition",
+                            "Gap",
+                            "Diff",
+                            "Rebase Gap (s)",
+                            "Rebase %",
+                            "Rebase pace diff (s/km)",
+                            "timeInS",
+                            "speed (km/h)",
+                            "pace (s/km)",
+                            "timeToCarBehind",
+                            "codriverName",
+                            "manufacturerName",
+                            "entrantName",
+                            "vehicleModel",
+                        ]
+                        # stage_results_short_.widget.update(
+                        #    stage_times_df[cols]
+                        # The style bar does not work with itables
+                        # .style.format(precision=1).bar(
+                        # subset=[rebase_gap_col],
+                        # align="zero",
+                        #  color=["#5fba7d", "#d65f5f"],
+                        # )
+                        # )
+
+                        # return ui.HTML(html)
+                        return render.DataGrid(stage_times_df[cols])
 
     with ui.accordion_panel(title="Splits Analysis"):
         with ui.card(class_="mt-3"):
