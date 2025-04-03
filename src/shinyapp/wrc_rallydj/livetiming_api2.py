@@ -1051,11 +1051,11 @@ class WRCTimingResultsAPIClientV2:
         if updateDB:
             self._getEntries(updateDB=updateDB)
         _on_event = (
-            f"eventId={self.eventId} AND rallyId={self.rallyId}"
+            f"AND eventId={self.eventId} AND rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
-            else "1=1"
+            else ""
         )
-        q = f"SELECT * FROM entries AS e WHERE {_on_event};"
+        q = f"SELECT * FROM entries AS e WHERE 1=1 {_on_event};"
         entries_df = self.db_manager.read_sql(q)
 
         return entries_df
@@ -1323,7 +1323,7 @@ class WRCTimingResultsAPIClientV2:
             on_event_ = f"AND st.eventId={self.eventId} AND st.stageId={stageId} AND st.rallyId={self.rallyId}"
             priority_ = f"""AND e.priority="{priority}" """ if priority else ""
             if raw:
-                sql = f"""SELECT * FROM stage_times AS st {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT * FROM stage_times AS st WHERE 1=1 {on_event_} {priority_};"""
             else:
                 _entry_join = f"INNER JOIN entries AS e ON st.entryId=e.entryId"
                 _driver_join = (
@@ -1332,9 +1332,7 @@ class WRCTimingResultsAPIClientV2:
                 _codriver_join = (
                     f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
                 )
-                _manufacturer_join = (
-                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
-            )
+                _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
                 sql = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
 
