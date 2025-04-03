@@ -1410,16 +1410,20 @@ class WRCTimingResultsAPIClientV2:
 
         if stageId and self.eventId and self.rallyId:
             priority = None if priority == "P0" else priority
-            on_event_ = f"AND sp.eventId={self.eventId} AND sp.stageId={stageId} AND sp.rallyId={self.rallyId}"
+            on_event_ = f"AND spt.eventId={self.eventId} AND spt.stageId={stageId} AND spt.rallyId={self.rallyId}"
             priority_ = f"""AND e.priority="{priority}" """ if priority else ""
+            split_points_join = (
+                "INNER JOIN split_points AS spp ON spp.splitPointId=spt.splitPointId"
+            )
+
             if raw:
-                sql = f"""SELECT * FROM split_times AS sp {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT spt.*, spp.number FROM split_times AS spt {split_points_join} WHERE 1=1 {on_event_} {priority_};"""
             else:
-                _entry_join = f"INNER JOIN entries AS e ON sp.entryId=e.entryId"
+                _entry_join = f"INNER JOIN entries AS e ON spt.entryId=e.entryId"
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
-                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, sp.* FROM split_times AS sp {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, spt.*, spp.number FROM split_times AS spt {split_points_join} {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
 
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
