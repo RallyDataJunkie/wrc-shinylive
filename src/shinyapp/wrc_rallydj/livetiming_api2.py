@@ -774,7 +774,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getSeasons(self, championship=None, year=None, updateDB=False):
         if updateDB:
-            self._getSeasons(updateDB)
+            self._getSeasons(updateDB=updateDB)
         # TO DO need to filter with championship and year
         q = "SELECT * FROM seasons;"
         seasons_df = self.db_manager.read_sql(q)
@@ -836,7 +836,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getChampionshipOverall(self, updateDB=False):
         if updateDB:
-            self._getChampionshipOverallResults(updateDB)
+            self._getChampionshipOverallResults(updateDB=updateDB)
 
         q = "SELECT * FROM championship_overall;"
         championshipEntryResultsOverall_df = self.db_manager.read_sql(q)
@@ -851,7 +851,7 @@ class WRCTimingResultsAPIClientV2:
         on_championship=False, updateDB=False,
     ):
         if updateDB:
-            self._getChampionshipOverallResults(updateDB)
+            self._getChampionshipOverallResults(updateDB=updateDB)
         if championshipId or on_championship:
             if on_championship and self.championshipId:
                 championshipId = self.championshipId
@@ -912,7 +912,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getChampionships(self, updateDB=False):
         if updateDB:
-            self._getSeasonDetail(updateDB)
+            self._getSeasonDetail(updateDB=updateDB)
 
         q = "SELECT * FROM championship_lookup;"
         championshipCountries_df = self.db_manager.read_sql(q)
@@ -930,7 +930,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getItineraryLegs(self, eventId=None, updateDB=False):
         if updateDB:
-            self._getEventItineraries(updateDB)
+            self._getEventItineraries(updateDB=updateDB)
 
         if eventId is None:
             q = "SELECT * FROM itinerary_legs;"
@@ -945,7 +945,7 @@ class WRCTimingResultsAPIClientV2:
         self, eventId=None, itineraryLegId=None, itinerarySectionId=None, updateDB=False
     ):
         if updateDB:
-            self._getEventItineraries(updateDB)
+            self._getEventItineraries(updateDB=updateDB)
 
         if not eventId and not itineraryLegId and not itinerarySectionId:
             q = "SELECT * FROM itinerary_stages;"
@@ -962,7 +962,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getItinerarySections(self, eventId=None, itineraryLegId=None, updateDB=False):
         if updateDB:
-            self._getEventItineraries(updateDB)
+            self._getEventItineraries(updateDB=updateDB)
 
         if not eventId and not itineraryLegId:
             q = "SELECT * FROM itinerary_sections;"
@@ -979,7 +979,7 @@ class WRCTimingResultsAPIClientV2:
         self, eventId=None, itineraryLegId=None, itinerarySectionId=None, updateDB=False
     ):
         if updateDB:
-            self._getEventItineraries(updateDB)
+            self._getEventItineraries(updateDB=updateDB)
 
         if not eventId and not itineraryLegId and not itinerarySectionId:
             q = "SELECT * FROM itinerary_controls;"
@@ -1040,7 +1040,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getEntries(self, on_event=True, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = (
             f"eventId={self.eventId} AND rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
@@ -1053,7 +1053,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getDrivers(self, on_event=True, by_championship=False, priority=None, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = (
             f"AND e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
@@ -1079,7 +1079,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getCoDrivers(self, on_event=True, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = (
             f"INNER JOIN entries AS e ON cd.personId=e.codriverId WHERE e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
@@ -1093,7 +1093,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getManufacturers(self, on_event=True, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = (
             f"INNER JOIN entries AS e ON m.manufacturerId=e.manufacturerId WHERE e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
@@ -1107,7 +1107,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getEntrants(self, on_event=True, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = (
             f"INNER JOIN entries AS e ON n.entrantId=e.entrantId WHERE e.eventId={self.eventId} AND e.rallyId={self.rallyId}"
             if on_event and self.eventId and self.rallyId
@@ -1121,7 +1121,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getGroups(self, on_event=True, updateDB=False):
         if updateDB:
-            self._getEntries(updateDB)
+            self._getEntries(updateDB=updateDB)
         _on_event = f"" if on_event else ""
 
         q = f"SELECT * FROM groups;"
@@ -1141,7 +1141,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getStageInfo(self, on_event=True, itineraryLegId=None, itinerarySectionId=None, raw=True, updateDB=False):
         if updateDB:
-            self._getStages(updateDB)
+            self._getStages(updateDB=updateDB)
 
         on_event_ = f"""si.eventId={self.eventId}""" if on_event else "1=1"
         on_leg_ = (
@@ -1168,7 +1168,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getStageSplitPoints(self, updateDB=False):
         if updateDB:
-            self._getStages(updateDB)
+            self._getStages(updateDB=updateDB)
 
         q = "SELECT * FROM split_points;"
         stage_split_points_df = self.db_manager.read_sql(q)
@@ -1177,7 +1177,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getStageControls(self, updateDB=False, raw=True):
         if updateDB:
-            self._getStages(updateDB)
+            self._getStages(updateDB=updateDB)
 
         if raw:
             q = "SELECT * FROM stage_controls;"
