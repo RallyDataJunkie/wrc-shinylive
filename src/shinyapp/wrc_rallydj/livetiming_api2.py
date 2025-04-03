@@ -848,7 +848,8 @@ class WRCTimingResultsAPIClientV2:
         championshipId=None,
         eventId=None,
         on_event=False,
-        on_championship=False, updateDB=False,
+        on_championship=False,
+        updateDB=False,
     ):
         if updateDB:
             self._getChampionshipOverallResults(updateDB=updateDB)
@@ -857,7 +858,7 @@ class WRCTimingResultsAPIClientV2:
                 championshipId = self.championshipId
             championship_ = f"""cr.championshipId={championshipId}"""
         else:
-            championship_=""
+            championship_ = ""
         if on_event or eventId:
             # TO DO what is best logic if noth are set?
             if on_event and self.eventId:
@@ -887,7 +888,9 @@ class WRCTimingResultsAPIClientV2:
 
         return championshipRounds_df
 
-    def getChampionshipEntries(self, championshipId=None, on_championship=False, updateDB=False):
+    def getChampionshipEntries(
+        self, championshipId=None, on_championship=False, updateDB=False
+    ):
         if updateDB:
             self._getChampionshipDetail()
         if championshipId or on_championship:
@@ -895,7 +898,7 @@ class WRCTimingResultsAPIClientV2:
                 championshipId = self.championshipId
             championship_ = f"""ce.championshipId={championshipId}"""
         else:
-            championship_=""
+            championship_ = ""
         q = f"""SELECT * FROM championship_entries AS ce WHERE 1=1 {championship_};"""
         championshipEntries_df = self.db_manager.read_sql(q)
 
@@ -1051,7 +1054,9 @@ class WRCTimingResultsAPIClientV2:
 
         return entries_df
 
-    def getDrivers(self, on_event=True, by_championship=False, priority=None, updateDB=False):
+    def getDrivers(
+        self, on_event=True, by_championship=False, priority=None, updateDB=False
+    ):
         if updateDB:
             self._getEntries(updateDB=updateDB)
         _on_event = (
@@ -1139,7 +1144,14 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStages(*args, **kwargs)
 
-    def getStageInfo(self, on_event=True, itineraryLegId=None, itinerarySectionId=None, raw=True, updateDB=False):
+    def getStageInfo(
+        self,
+        on_event=True,
+        itineraryLegId=None,
+        itinerarySectionId=None,
+        raw=True,
+        updateDB=False,
+    ):
         if updateDB:
             self._getStages(updateDB=updateDB)
 
@@ -1288,7 +1300,14 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageTimes(*args, **kwargs)
 
-    def getStageTimes(self, stageId=None, priority=None, rebaseToCategory=True, raw=True, updateDB=False):
+    def getStageTimes(
+        self,
+        stageId=None,
+        priority=None,
+        rebaseToCategory=True,
+        raw=True,
+        updateDB=False,
+    ):
         if updateDB:
             self._getStageTimes(stageId=stageId)
 
@@ -1324,7 +1343,7 @@ class WRCTimingResultsAPIClientV2:
 
         df_stageTimes = r
 
-        df_stageTimes["roadPos"] = range(1, len(df_stageTimes)+1)
+        df_stageTimes["roadPos"] = range(1, len(df_stageTimes) + 1)
         df_stageTimes.sort_values("position", inplace=True)
         df_stageTimes["categoryPosition"] = range(1, len(df_stageTimes) + 1)
         df_stageTimes.sort_values("roadPos", inplace=True)
@@ -1424,7 +1443,9 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageOverallResults(*args, **kwargs)
 
-    def getStageOverallResults(self, stageId=None, priority=None, raw=True, updateDB=False):
+    def getStageOverallResults(
+        self, stageId=None, priority=None, raw=True, updateDB=False
+    ):
         if updateDB:
             self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
 
@@ -1460,7 +1481,7 @@ class WRCTimingResultsAPIClientV2:
             )
             r = DataFrame()
         overall_df = r
-        overall_df["roadPos"] = range(1, len(overall_df)+1)
+        overall_df["roadPos"] = range(1, len(overall_df) + 1)
         overall_df.sort_values("position", inplace=True)
         overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
         overall_df.sort_values("roadPos", inplace=True)
@@ -1583,4 +1604,3 @@ class WRCTimingResultsAPIClientV2:
 
     def query(self, sql):
         r = self.db_manager.read_sql(sql)
-        return r
