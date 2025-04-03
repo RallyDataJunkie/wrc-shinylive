@@ -1342,8 +1342,11 @@ class WRCTimingResultsAPIClientV2:
                 self._getStageTimes(stageId=stageId, updateDB=True)
                 r = self.db_manager.read_sql(sql)
         else:
-            print(f"No getStageTimes? {self.eventId} {self.stageId} {self.rallyId}")
             r = DataFrame()
+
+        if r.empty:
+            print(f"No getStageTimes? {self.eventId} {self.stageId} {self.rallyId}")
+            return r
 
         df_stageTimes = r
 
