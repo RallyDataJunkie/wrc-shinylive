@@ -793,12 +793,18 @@ class WRCTimingResultsAPIClientV2:
         kwargs["seasonId"] = self.seasonId
         return self.api_client._getSeasonDetail(*args, **kwargs)
 
-    def getSeasonRounds(self, updateDB=False):
+    def getSeasonRounds(self, seasonId=None, on_season=True, updateDB=False):
         if updateDB:
-            self._getSeasonDetail(updateDB)
+            self._getSeasonDetail(updateDB=updateDB)
+        if on_season:
+            seasonId = seasonId if seasonId else self.seasonId
+        seasonId_ = f"""AND seasonId={seasonId}""" if seasonId else ""
 
-        q = "SELECT * FROM season_rounds;"
+        q = f"SELECT * FROM season_rounds WHERE 1=1 {seasonId_};"
         seasonRounds_df = self.db_manager.read_sql(q)
+        if seasonRounds_df.empty:
+            self._getSeasonDetail(updateDB=True)
+            seasonRounds_df = self.db_manager.read_sql(q)
 
         return seasonRounds_df
 
