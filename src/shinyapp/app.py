@@ -635,6 +635,43 @@ with ui.accordion(open=False):
                     @reactive.event(
                         input.splits_review_accordion, input.category, input.stage
                     )
+                    def split_results_wide():
+                        stageId = input.stage()
+                        if not stageId:
+                            return
+                        stageId = int(stageId)
+                        priority = input.category()
+                        split_times_df = wrc.getSplitTimes(
+                            stageId=stageId, priority=priority, raw=False
+                        )
+                        if split_times_df.empty:
+                            return
+                        split_times_df["number"] = "SP" + split_times_df[
+                            "number"
+                        ].astype(str)
+                        split_times_wide = pivot(
+                            split_times_df.dropna(
+                                subset=["number", "elapsedDurationMs"]
+                            ),
+                            index=["driverName", "entryId"],
+                            columns="number",
+                            values="elapsedDurationMs",
+                        )
+                        stage_times = wrc.getStageTimes(stageId=stageId)[
+                            ["entryId", "elapsedDurationMs"]
+                        ]
+                        stage_times.rename(
+                            columns={"elapsedDurationMs": "FINAL"}, inplace=True
+                        )
+                        split_times_wide = merge(
+                            split_times_wide, stage_times, on="entryId"
+                        )
+                        return render.DataGrid(split_times_wide.reset_index())
+
+                    @render.data_frame
+                    @reactive.event(
+                        input.splits_review_accordion, input.category, input.stage
+                    )
                     def split_results_short():
                         stageId = input.stage()
                         if not stageId:
