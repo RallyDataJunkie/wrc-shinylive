@@ -1608,3 +1608,4 @@ class WRCTimingResultsAPIClientV2:
 
     def query(self, sql):
         r = self.db_manager.read_sql(sql)
+        return r
