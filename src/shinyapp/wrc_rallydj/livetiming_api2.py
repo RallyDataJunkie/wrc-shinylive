@@ -386,6 +386,7 @@ class APIClient:
         itinerarySections2_df = json_normalize(
             itinerarySections_df["itinerarySections"]
         )
+        itinerarySections2_df["eventId"] = eventId
 
         itineraryControls_df = itinerarySections2_df.explode("controls").reset_index(
             drop=True
