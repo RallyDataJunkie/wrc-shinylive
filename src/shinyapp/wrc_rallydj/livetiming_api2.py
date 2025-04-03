@@ -591,11 +591,15 @@ class APIClient:
 
 # The WRCTimingResultsAPIClientV2() constructs state on a season basis
 class WRCTimingResultsAPIClientV2:
+    CHAMPIONSHIP_CODES = {
+        "World Rally Championship": "wrc",
+        "European Rally Championship": "erc",
+    }
 
     def __init__(
         self,
         year: int = datetime.date.today().year,
-        championship: str = "wrc",
+        championship: str = "wrc",  # wrc | erc
         category: str = "Drivers",
         group: str = "all",
         dbname: str = "wrcRbAPITiming.db",
@@ -613,7 +617,7 @@ class WRCTimingResultsAPIClientV2:
         self.year = year
         # TO DO - more logic yet surrounding championship
         self.championship = championship  # Informal: WRC, WRC2, WRC3, JWRC
-
+        self.championshipLookup = {}
         self.category = category
         self.seasonId = None
         self.rallyId = None
@@ -781,11 +785,16 @@ class WRCTimingResultsAPIClientV2:
 
         return self._getSeasonsSubQuery(seasons_df, championship, year)
 
-    def setSeason(self):
+    # TO DO Need to check this e.g. for WRC and ERC
+    # TO DO if we set from seasonId,
+    def setSeason(self, seasonId=None):
         _seasons = self._getSeasons(updateDB=True)
-        self.seasonId = self._getSeasonsSubQuery(
-            _seasons, self.championship, self.year
-        ).iloc[0]["seasonId"]
+        if seasonId:
+            self.seasonId = seasonId
+        else:
+            self.seasonId = self._getSeasonsSubQuery(
+                _seasons, self.championship, self.year
+            ).iloc[0]["seasonId"]
 
     # This datafeed is partial at the start of the season
     # and needs to be regularly updated
@@ -820,6 +829,9 @@ class WRCTimingResultsAPIClientV2:
         if category not in categories:
             return None
 
+        # TO DO - different for ERC
+        # TO DO need a muchg better way of handling this that also works with ERC
+        # TO DO - are we actually making use of this?
         _championship = "FIA World Rally Championship for Drivers"
         if championship.lower() == "wrc":
             _championship = f"FIA World Rally Championship for {category}"
@@ -1247,15 +1259,18 @@ class WRCTimingResultsAPIClientV2:
         # HACK TO DO this is a fudge
         self._setEvent(r, updateDB)
 
-    def setChampionship(self):
+    def setChampionship(self, championshipId=None):
         championships_df = self.getChampionships()
         self.championshipName = self._getChampionshipName()
         # TO DO - defend against brokenness here
-        self.championshipId = int(
-            championships_df[championships_df["name"] == self.championshipName].iloc[0][
-                "championshipId"
-            ]
-        )
+        if championshipId:
+            self.championshipId = championshipId
+        else:
+            self.championshipId = int(
+                championships_df[
+                    championships_df["name"] == self.championshipName
+                ].iloc[0]["championshipId"]
+            )
         if self.championshipId:
             self._getChampionshipOverallResults(updateDB=True)
             self._getChampionshipDetail(updateDB=True)

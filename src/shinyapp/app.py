@@ -5,9 +5,13 @@ from wrc_rallydj.utils import enrich_stage_winners
 from wrc_rallydj.utils import format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame
+from pandas import DataFrame, pivot, merge
 from matplotlib import pyplot as plt
 from seaborn import barplot
+
+# from shinywidgets import render_widget
+# from itables.widget import ITable
+
 
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
@@ -15,6 +19,9 @@ wrc = WRCTimingResultsAPIClientV2(use_cache=True, backend="memory", expire_after
 
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
+
+# TO DO - in creating dropdowns, where index values are integers they should be set to strings BUT
+# this should be done in an immutable way and not modify the original dict integer values
 
 
 def seasonInfo(updateDB=False):
@@ -513,9 +520,19 @@ with ui.accordion(open=False):
                         {},
                     )
 
+                    # @render.data_frame
+                    # @render.ui
+                    # @render_widget
+                    # def stage_results_short_():
+                    #    return ITable()
+
+                    # @reactive.effect
                     @render.data_frame
                     @reactive.event(
-                        input.stage_review_accordion, input.category, input.stage
+                        input.stage_review_accordion,
+                        input.category,
+                        input.stage,
+                        input.stage_rebase_driver,
                     )
                     def stage_results_short():
                         stageId = input.stage()
@@ -600,11 +617,20 @@ def update_rally_seasonId_select():
     season_info = seasonInfo()
     if season_info.empty:
         return
+
+    ui.update_select("category", choices={})
+    ui.update_select("event_day", choices={})
+    ui.update_select("stage", choices={})
+    ui.update_select("season_round", choices={})
+    ui.update_select("rally_seasonId", choices={})
+
     year = int(input.year())
 
     rally_seasonIds = (
         season_info[season_info["year"] == year].set_index("seasonId")["name"].to_dict()
     )
+
+    wrc.championshipLookup = rally_seasonIds
 
     ui.update_select("rally_seasonId", choices=rally_seasonIds)
 
@@ -612,45 +638,104 @@ def update_rally_seasonId_select():
 @reactive.effect
 @reactive.event(input.year, input.rally_seasonId)
 def update_season_round_select():
-    season_rounds = wrc.getSeasonRounds()
     seasonId = input.rally_seasonId()
-    if season_rounds.empty or not seasonId:
-        ui.update_select("season_round", choices={})
+    if not seasonId:
         return
+        # TO DO Reset downstream selectors
+
+    # Set Championship code as seasonId TO DO
+
+    ui.update_select("category", choices={})
+    ui.update_select("event_day", choices={})
+    ui.update_select("stage", choices={})
+    ui.update_select("season_round", choices={})
 
     seasonId = int(seasonId)
+    wrc.championship = wrc.CHAMPIONSHIP_CODES[wrc.championshipLookup[seasonId]]
+    wrc.setSeason(seasonId=seasonId)
+
+    season_rounds = wrc.getSeasonRounds(on_season=True)
+    if season_rounds.empty:
+        ui.update_select("season_round", choices={})
+        return
 
     season_rounds = (
         season_rounds[season_rounds["seasonId"] == seasonId]
         .set_index("eventId")["name"]
         .to_dict()
     )
+    # TO DO Reset downstream selectors
+    ui.update_select("category", choices={})
+    ui.update_select("event_day", choices={})
+    ui.update_select("stage", choices={})
 
     ui.update_select("season_round", choices=season_rounds)
 
 
 @reactive.effect
-@reactive.event(input.rally_seasonId, input.season_round, input.event_day)
+@reactive.event(input.rally_seasonId, input.season_round)
 def update_category_select():
-    # eventId = input.season_round()
-    # input.event_day initialises data...
+    seasonId = input.rally_seasonId()
+    eventId = input.season_round()
+    if not seasonId or not eventId:
+        ui.update_select("category", choices={})
+        return
+    # The eventId and rallyId need to be set by this point
+    getEventData()
+
     entries = wrc.getEntries(on_event=True)
     eligibilities = entries["eligibility"].unique().tolist()
     _categories = ["All"]
-    for c1 in eligibilities:
-        for c2 in c1.split():
-            c2 = c2.strip()
-            if c2.startswith("M"):
-                if "WRC" not in _categories:
-                    _categories.append("WRC")
-            elif c2 and c2 != "/" and not c2.startswith("(") and c2 not in _categories:
-                _categories.append(c2)
+
+    # HACK - the following coding is contrived
+    # TO DO - how is priority in api handled for ERC?
+    CMAP = {
+        "wrc": {"All": "P0", "WRC": "P1", "WRC2": "P2", "WRC3": "P3", "JWRC": "P4"},
+        "erc": {
+            "All": "P0",
+            "ERC": "ERC",
+            "ERC1": "ERC1",
+            "ERC3": "ERC3",
+            "ERC4": "ERC4",
+            "FIA_ERC1": "FIA/ ERC1",
+        },
+    }
+
+    # TO DO - set wrc or erc
+
+    cmap = CMAP[wrc.championship]
+    if wrc.championship == "wrc":
+        for c1 in eligibilities:
+            for c2 in c1.split():
+                c2 = c2.strip()
+                if c2.startswith("M"):
+                    if "WRC" not in _categories:
+                        _categories.append("WRC")
+                elif (
+                    c2
+                    and c2 != "/"
+                    and not c2.startswith("(")
+                    and c2 not in _categories
+                ):
+                    _categories.append(c2)
+    elif wrc.championship == "erc":
+        for c1 in eligibilities:  # eg ERC, T; ERC, M; ERC, T, M; ERC4 (J), T
+            for c2 in c1.split():
+                c2 = c2.strip().strip(",")
+                if "ERC" in c2 and c2 not in _categories:
+                    _categories.append(c2)
 
     # TO DO - the downstream logic for this is wrong because
-    # JWRC is (or, wekaer, may also be?) WRC3
-    cmap = {"All": "P0", "WRC": "P1", "WRC2": "P2", "WRC3": "P3", "JWRC": "P4"}
-    categories = {cmap[c]: c for c in _categories}
-    ui.update_select("category", choices=categories)
+    # JWRC is (or, weaker, may also be?) WRC3
+    # TO DO - this needs updating for ERC cf. WRC
+    categories = {cmap[c]: c for c in _categories if c in cmap}
+    # TO DO - set to WRC or ERC if available?
+    selected = ""
+    if "P1" in categories:
+        selected = "P1"
+    elif "ERC" in categories:
+        selected = "ERC"
+    ui.update_select("category", choices=categories, selected=selected)
 
 
 @reactive.effect
@@ -665,6 +750,7 @@ def update_day_select():
 
     days_ = wrc.getItineraryLegs(eventId=eventId)
     days = {0: "All"}
+
     days.update(days_.set_index("itineraryLegId")["name"].to_dict())
 
     ui.update_select("event_day", choices=days)
@@ -674,13 +760,15 @@ def update_day_select():
 @reactive.event(input.season_round, input.event_day)
 def update_section_select():
     itineraryLegId = input.event_day()
-    if not itineraryLegId:
+    eventId = input.season_round()
+    if not eventId or not itineraryLegId:
         ui.update_select("event_section", choices={})
         return
     # Ensure the event data is loaded
     getEventData()
+    eventId = int(eventId) if eventId else eventId
     itineraryLegId = int(itineraryLegId) if itineraryLegId else itineraryLegId
-    sections_ = wrc.getItinerarySections(itineraryLegId=itineraryLegId)
+    sections_ = wrc.getItinerarySections(itineraryLegId=itineraryLegId, eventId=eventId)
     sections = {0: "All"}
     sections.update(sections_.set_index("itinerarySectionId")["name"].to_dict())
 
@@ -753,12 +841,15 @@ def update_stages_driver_rebase_select():
     if stage_times_df.empty:
         return
     rebase_drivers = (
-        stage_times_df[["carNo", "driverName"]].set_index("carNo")["driverName"].to_dict()
+        stage_times_df[["carNo", "driverName"]]
+        .set_index("carNo")["driverName"]
+        .to_dict()
     )
     ui.update_select("stage_rebase_driver", choices=rebase_drivers)
 
 
 ## Reactive calcs
+
 
 @reactive.calc
 @reactive.event(input.season_round, input.category)
