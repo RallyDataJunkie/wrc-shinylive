@@ -4,9 +4,10 @@ from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, melt
+from pandas import DataFrame, melt, to_numeric, concat
 from matplotlib import pyplot as plt
-from seaborn import barplot, boxplot
+from seaborn import barplot, boxplot, heatmap
+from matplotlib.colors import LinearSegmentedColormap
 
 # from shinywidgets import render_widget
 # from itables.widget import ITable
@@ -840,6 +841,96 @@ with ui.accordion(open=False):
                         )
                         return pr
 
+                    with ui.accordion(open=False):
+                        with ui.accordion_panel("Heatmap"):
+
+                            with ui.tooltip(id="heatmap_outliers_tt"):
+                                ui.input_checkbox(
+                                    "heatmap_outliers",
+                                    "Heatmap outliers",
+                                    False,
+                                ),
+                                "Calculate diff to leader z-scores to identify outliers."
+
+                            with ui.card(class_="mt-3"):
+                                with ui.card_header():
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_section_delta_heatmap_tt",
+                                    ):
+                                        ui.span(
+                                            "Time gained / lost within each section in seconds relative to rebase driver (heatmap) ",
+                                            question_circle_fill,
+                                        )
+                                        "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+                                @render.plot(alt="Heatmap of within split delta times.")
+                                def seaborn_heatmap_splits():
+                                    stageId = input.stage()
+                                    if not stageId:
+                                        return
+                                    stageId = int(stageId)
+                                    priority = input.category()
+                                    rebase_driver = input.rebase_driver()
+
+                                    # print(f"Rebasing on {rebase_driver}")
+                                    if not rebase_driver:
+                                        return
+                                    
+                                    rebase_driver = int(rebase_driver) if rebase_driver!="ult" else rebase_driver
+
+                                    split_times_wide = wrc.getSplitTimesWide(
+                        stageId=stageId, priority=priority, extended=True
+                    )
+                                    if split_times_wide.empty:
+                                        return
+
+                                    output_, split_cols = _reshape_splits_wide_with_ult(
+                                        split_times_wide, rebase_driver
+                                    )
+
+                                    output_.set_index("carNo", inplace=True)
+                                    output_.columns = [
+                                        f"Split {i}"
+                                        for i in range(1, output_.shape[1] + 1)
+                                    ]  # [:-1] + ["Finish"]
+
+                                    if input.heatmap_outliers():
+                                        z_scores = (
+                                            output_ - output_.mean()
+                                        ) / output_.std()
+                                        output_ = z_scores
+                                        # A boolen throws an inconsistent type error
+                                        # output_.loc[:, split_cols] = (
+                                        #    abs(z_scores) > 3
+                                        # ).any(axis=1)
+
+                                    colors = (
+                                        ["red", "white", "green"]
+                                        if input.rebase_reverse_palette()
+                                        else ["green", "white", "red"]
+                                    )
+                                    cmap = LinearSegmentedColormap.from_list(
+                                        "custom_cmap", colors
+                                    )
+
+                                    output_.rename(
+                                        columns={
+                                            s: s.replace("Split ", "s")
+                                            for s in output_.columns
+                                        },
+                                        inplace=True,
+                                    )
+
+                                    return heatmap(
+                                        output_,
+                                        cmap=cmap,
+                                        fmt=".1f",
+                                        center=0,
+                                        annot=True,
+                                        cbar=False,
+                                    )
+
 
 @reactive.calc
 @reactive.event(input.season_round)
@@ -1276,6 +1367,31 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
         return ui.TagList(p1, p2)
 
     return p1
+
+
+def _reshape_splits_wide_with_ult(split_times_wide, rebase_driver):
+    split_cols = wrc.getSplitCols(split_times_wide)
+
+    # output_ = split_times_wide_numeric
+    output_ = wrc.getSplitDuration(
+        split_times_wide
+    )
+
+    # output_ = wrc.subtract_from_rows(
+    #    output_, split_cols, ignore_first_row=False
+    # )
+    ult_row = {"carNo": "ult"}
+
+    # Find minimum non-zero values for each round column
+    for col in split_cols:
+        # Convert to numeric, filter non-zero, find minimum
+        min_val = to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
+        ult_row[col] = min_val
+
+    output_ = concat([output_, DataFrame([ult_row])], ignore_index=True)
+    output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+    output_ = output_[output_["carNo"] != "ult"]
+    return output_, split_cols
 
 
 ## Start the data collection
