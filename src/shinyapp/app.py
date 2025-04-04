@@ -237,7 +237,81 @@ with ui.accordion(open=False):
                         startlist = startlist[startlist["name"] == input.startlist()]
                         return render.DataGrid(startlist[retcols])
 
-                # TO DO - shakedown report
+                with ui.accordion_panel("Shakedown"):
+
+                    @render.data_frame
+                    @reactive.event(
+                        input.stage_review_accordion, input.category, input.stage
+                    )
+                    def shakedown_short():
+                        eventId = input.season_round()
+                        priority = input.category()
+                        if not eventId:
+                            return
+                        eventId = int(eventId) if eventId else eventId
+
+                        shakedown_df = wrc.getEventShakeDownTimes(
+                            eventId=eventId, priority=priority, raw=False
+                        )
+                        if shakedown_df.empty:
+                            return
+                        shakedown_df["runDurationMs"] = shakedown_df[
+                            "runDurationMs"
+                        ].apply(format_timedelta)
+                        shakedown_df_wide = shakedown_df.pivot(
+                            index=[
+                                "driverCode",
+                                "driverName",
+                                "codriverName",
+                                "manufacturerName",
+                                "entrantName",
+                                "vehicleModel",
+                                "carNo",
+                            ],
+                            columns="runNumber",
+                            values="runDurationMs",
+                        )
+
+                        # Rename the columns to run1, run2, etc.
+                        shakedown_df_wide.columns = [
+                            f"run{col}" for col in shakedown_df_wide.columns
+                        ]
+                        shakedown_df_wide.reset_index(inplace=True)
+                        return render.DataGrid(shakedown_df_wide)
+
+                    @render.data_frame
+                    @reactive.event(
+                        input.stage_review_accordion, input.category, input.stage
+                    )
+                    def shakedown_long():
+                        eventId = input.season_round()
+                        priority = input.category()
+                        if not eventId:
+                            return
+                        eventId = int(eventId) if eventId else eventId
+
+                        shakedown_df = wrc.getEventShakeDownTimes(
+                            eventId=eventId, priority=priority, raw=False
+                        )
+                        if shakedown_df.empty:
+                            return
+                        shakedown_df = shakedown_df.sort_values("runDurationMs")
+                        shakedown_df["runTime"] = shakedown_df["runDurationMs"].apply(
+                            format_timedelta
+                        )
+                        cols = [
+                            "carNo",
+                            "driverCode",
+                            "shakedownNumber",
+                            "runNumber",
+                            "runTime",
+                            "driverName",
+                            "codriverName",
+                            "manufacturerName",
+                            "entrantName",
+                            "vehicleModel",
+                        ]
+                        return render.DataGrid(shakedown_df[cols])
 
                 with ui.accordion_panel("Stage winners"):
 
@@ -814,8 +888,12 @@ with ui.accordion(open=False):
                             )
 
                         def _get_showcase():
-                            diffFirst = format_timedelta(times_["diffFirstMs"], addplus=True)
-                            diffFirst = "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
+                            diffFirst = format_timedelta(
+                                times_["diffFirstMs"], addplus=True
+                            )
+                            diffFirst = (
+                                "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
+                            )
                             speed = times_["speed (km/h)"]
                             pace = times_["pace diff (s/km)"]
                             pace = (
@@ -878,11 +956,17 @@ with ui.accordion(open=False):
                                     if not rebase_driver:
                                         return
 
-                                    rebase_driver = int(rebase_driver) if rebase_driver!="ult" else rebase_driver
+                                    rebase_driver = (
+                                        int(rebase_driver)
+                                        if rebase_driver != "ult"
+                                        else rebase_driver
+                                    )
 
                                     split_times_wide = wrc.getSplitTimesWide(
-                        stageId=stageId, priority=priority, extended=True
-                    )
+                                        stageId=stageId,
+                                        priority=priority,
+                                        extended=True,
+                                    )
                                     if split_times_wide.empty:
                                         return
 
@@ -1001,7 +1085,8 @@ with ui.accordion(open=False):
                                         value_vars=split_cols,
                                         id_vars=["carNo"],
                                         var_name="roundN",
-                                        value_name="time")
+                                        value_name="time",
+                                    )
 
                                     colors = [
                                         "red" if val >= 0 else "green"
@@ -1102,14 +1187,15 @@ with ui.accordion(open=False):
                                         value_vars=split_cols,
                                         id_vars=["carNo"],
                                         var_name="roundN",
-                                        value_name="time")
+                                        value_name="time",
+                                    )
 
                                     split_dists_ = wrc.getStageSplitPoints(
-                                                            stageId=stageId, extended=True
-                                                        )
+                                        stageId=stageId, extended=True
+                                    )
                                     split_dists = split_dists_.set_index("name")[
-                                                            "distance"
-                                                        ].to_dict()
+                                        "distance"
+                                    ].to_dict()
 
                                     split_times_long["distance"] = split_times_long[
                                         "roundN"
@@ -1128,7 +1214,9 @@ with ui.accordion(open=False):
                                     texts = []
                                     for line, label in zip(
                                         g.get_lines(),
-                                        split_times_long.sort_values("carNo")["carNo"].unique(),
+                                        split_times_long.sort_values("carNo")[
+                                            "carNo"
+                                        ].unique(),
                                     ):
                                         x_data, y_data = (
                                             line.get_xdata(),
@@ -1614,9 +1702,7 @@ def _reshape_splits_wide_with_ult(split_times_wide, rebase_driver):
     split_cols = wrc.getSplitCols(split_times_wide)
 
     # output_ = split_times_wide_numeric
-    output_ = wrc.getSplitDuration(
-        split_times_wide
-    )
+    output_ = wrc.getSplitDuration(split_times_wide)
 
     # output_ = wrc.subtract_from_rows(
     #    output_, split_cols, ignore_first_row=False

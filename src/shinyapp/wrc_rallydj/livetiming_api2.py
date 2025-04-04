@@ -1169,10 +1169,45 @@ class WRCTimingResultsAPIClientV2:
 
         return entryGroups_df
 
-    def _getEventShakeDownTimes(self, *args, stageId=None, **kwargs):
-        kwargs["eventId"] = self.eventId
+    def _getEventShakeDownTimes(self, eventId=None, *args, **kwargs):
+        eventId = eventId if eventId else self.eventId
+        kwargs["eventId"] = eventId
 
-        return self.api_client._getS_getEventShakeDownTimestages(*args, **kwargs)
+        return self.api_client._getEventShakeDownTimes(*args, **kwargs)
+
+    def getEventShakeDownTimes(
+        self, eventId=None, on_event=True, priority=None, raw=True, updateDB=False
+    ):
+        if updateDB:
+            self._getEventShakeDownTimes(updateDB=updateDB)
+        if on_event and self.eventId:
+            eventId = self.eventId
+
+        on_event_ = f"""AND sh.eventId={self.eventId}""" if on_event else ""
+
+        if raw:
+            sql = f"SELECT * FROM shakedown_times AS sh WHERE 1=1 {on_event_};"
+        else:
+            _entry_join = f"INNER JOIN entries AS e ON sh.entryId=e.entryId"
+            _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
+            _codriver_join = (
+                f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
+            )
+            _manufacturer_join = (
+                f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
+            )
+            _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
+            priority = None if priority == "P0" else priority
+            priority_ = f"""AND e.priority="{priority}" """ if priority else ""
+            sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, sh.* FROM shakedown_times AS sh {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
+
+            r = self.db_manager.read_sql(sql)
+            # Hack to poll API if empty
+            if r.empty:
+                self._getEventShakeDownTimes(eventId=eventId, updateDB=True)
+                r = self.db_manager.read_sql(sql)
+
+        return r
 
     def _getStages(self, *args, **kwargs):
         kwargs["eventId"] = self.eventId
