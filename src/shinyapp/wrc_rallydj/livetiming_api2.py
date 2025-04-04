@@ -707,7 +707,7 @@ class WRCTimingResultsAPIClientV2:
     @staticmethod
     def rebaseTimes(times, rebaseId=None, idCol=None, rebaseCol=None):
         """Rebase times based on the time for a particular vehicle."""
-        if not rebaseId or rebaseId == "NONE" or idCol is None or rebaseCol is None:
+        if not rebaseId or rebaseId == "ult" or idCol is None or rebaseCol is None:
             return times
         return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
 
@@ -717,11 +717,11 @@ class WRCTimingResultsAPIClientV2:
     ):
         """Rebase times in several specified columns relative to a particular vehicle."""
         if not inplace:
-            if not rebaseId or rebaseId == "NONE":
+            if not rebaseId or rebaseId == "ult":
                 return times
             times = times.copy()
 
-        if rebaseId and rebaseId != "NONE":
+        if rebaseId and rebaseId != "ult":
             # Ensure rebaseCols is a list
             rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
@@ -1198,7 +1198,7 @@ class WRCTimingResultsAPIClientV2:
             else ""
         )
 
-        if stage_code and isinstance(stage_code, str):
+        if stage_code and not isinstance(stage_code, list):
             stage_code = [stage_code]
         else:
             stage_code = []
@@ -1217,11 +1217,11 @@ class WRCTimingResultsAPIClientV2:
 
         # TO DO move this into the SQL query
         if stage_code:
-            # Try to be flexible with stage codes as code or stageId
-            if stage_code[0].startswith("SS"):
-                stages_df = stages_df[stages_df["code"].isin(stage_code)]
-            elif isinstance(stage_code[0], int):
+            # Try to be flexible with stage codes as code or stageID
+            if isinstance(stage_code[0], int):
                 stages_df = stages_df[stages_df["stageId"].isin(stage_code)]
+            elif isinstance(stage_code[0], str) and stage_code[0].startswith("SS"):
+                stages_df = stages_df[stages_df["code"].isin(stage_code)]
 
         return stages_df
 

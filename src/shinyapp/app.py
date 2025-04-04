@@ -624,131 +624,221 @@ with ui.accordion(open=False):
                         return render.DataGrid(stage_times_df[cols])
 
     with ui.accordion_panel(title="Splits Analysis"):
-        with ui.card(class_="mt-3"):
 
-            with ui.accordion(open=False, id="splits_review_accordion"):
+        with ui.accordion(open=False, id="splits_review_accordion"):
 
-                with ui.accordion_panel("Split times"):
+            with ui.accordion_panel("Split times"):
 
+                @render.data_frame
+                @reactive.event(
+                    input.splits_review_accordion, input.category, input.stage
+                )
+                def split_results_wide():
+                    stageId = input.stage()
+                    if not stageId:
+                        return
+                    stageId = int(stageId)
+                    priority = input.category()
+                    split_times_wide = wrc.getSplitTimesWide(
+                        stageId=stageId, priority=priority, extended=True
+                    )
+                    return render.DataGrid(split_times_wide)
+
+            with ui.accordion_panel("Split times detail"):
+
+                with ui.card(class_="mt-3"):
+                    with ui.card_header():
+                        with ui.tooltip(
+                            placement="right", id="splits_section_report_tt"
+                        ):
+                            ui.span(
+                                "Split section report ",
+                                question_circle_fill,
+                            )
+                            "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
+
+                    @render.ui
+                    @reactive.event(input.stage, input.splits_section_view)
+                    def split_report_view():
+                        view = input.splits_section_view()
+                        typ = {
+                            "time": "Time (s) within each split (*lower* is better).",
+                            "speed": "Speed (km/h) within each split (*higher* is better).",
+                            "pace": "Pace (s/km) within each split (*lower* is better.)",
+                            "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
+                            "pos_within": "Rank position within split (*lower* is better).",
+                            "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
+                        }
+                        return ui.markdown(typ[view])
+
+                    with ui.tooltip(id="splits_section_view_tt"):
+                        ui.input_select(
+                            "splits_section_view",
+                            "Section report view",
+                            {
+                                "time": "Section time (s)",
+                                "pace": "Av. pace in section (s/km)",
+                                "speed": "Av. speed in section (km/h)",
+                                "time_acc": "Acc. time over sections (s)",
+                                "pos_within": "Section time rank",
+                                "pos_acc": "Acc. time rank",
+                            },
+                            selected="time",
+                        ),
+                        "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
+                        # Scope the view if data available
+
+                    # @render.table
                     @render.data_frame
                     @reactive.event(
-                        input.splits_review_accordion, input.category, input.stage
+                        input.splits_section_view, input.stage, input.category
                     )
-                    def split_results_wide():
+                    def split_report():
                         stageId = input.stage()
                         if not stageId:
                             return
                         stageId = int(stageId)
+
                         priority = input.category()
-                        split_times_wide = wrc.getSplitTimesWide(
-                            stageId=stageId, priority=priority, extended=True
+                        view = input.splits_section_view()
+
+                        scaled_splits_wide = wrc.getScaledSplits(
+                            stageId, priority, view
                         )
-                        return render.DataGrid(split_times_wide)
 
-                with ui.accordion_panel("Split times detail"):
+                        if not scaled_splits_wide.empty:
+                            return render.DataGrid(scaled_splits_wide)
 
-                    with ui.card(class_="mt-3"):
-                        with ui.card_header():
-                            with ui.tooltip(
-                                placement="right", id="splits_section_report_tt"
-                            ):
-                                ui.span(
-                                    "Split section report ",
-                                    question_circle_fill,
-                                )
-                                "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
+                with ui.accordion(open=False):
+                    with ui.accordion_panel("Split section speed/pace distributions"):
 
-                        @render.ui
+                        @render.plot(
+                            alt="Box plot of split section speed/pace distributions."
+                        )
                         @reactive.event(input.stage, input.splits_section_view)
-                        def split_report_view():
-                            view = input.splits_section_view()
-                            typ = {
-                                "time": "Time (s) within each split (*lower* is better).",
-                                "speed": "Speed (km/h) within each split (*higher* is better).",
-                                "pace": "Pace (s/km) within each split (*lower* is better.)",
-                                "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
-                                "pos_within": "Rank position within split (*lower* is better).",
-                                "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
-                            }
-                            return ui.markdown(typ[view])
-
-                        with ui.tooltip(id="splits_section_view_tt"):
-                            ui.input_select(
-                                "splits_section_view",
-                                "Section report view",
-                                {
-                                    "time": "Section time (s)",
-                                    "pace": "Av. pace in section (s/km)",
-                                    "speed": "Av. speed in section (km/h)",
-                                    "time_acc": "Acc. time over sections (s)",
-                                    "pos_within": "Section time rank",
-                                    "pos_acc": "Acc. time rank",
-                                },
-                                selected="time",
-                            ),
-                            "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
-                            # Scope the view if data available
-
-                        # @render.table
-                        @render.data_frame
-                        @reactive.event(input.splits_section_view, input.stage, input.category)
-                        def split_report():
+                        def plot_split_dists():
                             stageId = input.stage()
                             if not stageId:
                                 return
                             stageId = int(stageId)
-
                             priority = input.category()
                             view = input.splits_section_view()
 
                             scaled_splits_wide = wrc.getScaledSplits(
                                 stageId, priority, view
                             )
-
-                            if not scaled_splits_wide.empty:
-                                return render.DataGrid(scaled_splits_wide)
-
-                    with ui.accordion(open=False):
-                        with ui.accordion_panel(
-                            "Split section speed/pace distributions"
-                        ):
-
-                            @render.plot(
-                                alt="Box plot of split section speed/pace distributions."
+                            if scaled_splits_wide.empty:
+                                return
+                            split_cols = wrc.getSplitCols(scaled_splits_wide)
+                            scaled_splits_long = melt(
+                                scaled_splits_wide,
+                                id_vars=["carNo", "driverName"],
+                                value_vars=split_cols,
+                                var_name="roundN",
+                                value_name="value",
                             )
-                            @reactive.event(input.stage, input.splits_section_view)
-                            def plot_split_dists():
-                                stageId = input.stage()
-                                if not stageId:
-                                    return
-                                stageId = int(stageId)
-                                priority = input.category()
-                                view = input.splits_section_view()
+                            ylabel = "Time in section (s)"
+                            if view == "pace":
+                                ylabel = "Pace (s/km)"
+                            elif view == "speed":
+                                ylabel = "Speed (km/h)"
 
-                                scaled_splits_wide = wrc.getScaledSplits(
-                                    stageId, priority, view
-                                )
-                                if scaled_splits_wide.empty:
-                                    return
-                                split_cols = wrc.getSplitCols(scaled_splits_wide)
-                                scaled_splits_long = melt(
-                                    scaled_splits_wide,
-                                    id_vars=["carNo", "driverName"],
-                                    value_vars=split_cols,
-                                    var_name="roundN",
-                                    value_name="value",
-                                )
-                                ylabel = "Time in section (s)"
-                                if view == "pace":
-                                    ylabel = "Pace (s/km)"
-                                elif view == "speed":
-                                    ylabel = "Speed (km/h)"
+                            ax = boxplot(data=scaled_splits_long, x="roundN", y="value")
+                            ax.set(xlabel=None, ylabel=ylabel)
+                            return ax
 
-                                ax = boxplot(
-                                    data=scaled_splits_long, x="roundN", y="value"
-                                )
-                                ax.set(xlabel=None, ylabel=ylabel)
-                                return ax
+            with ui.accordion_panel("Rebased driver reports"):
+                with ui.card(class_="mt-3"):
+                    with ui.card_header():
+
+                        with ui.tooltip(
+                            placement="right", id="rebased_driver_report_tt"
+                        ):
+                            ui.span(
+                                "Rebased driver report ",
+                                question_circle_fill,
+                            )
+                            'Rebased delta times and pace are calculated relative to the selected "rebase" driver.'
+
+                        with ui.tooltip(id="rebase_reverse_palette_tt"):
+                            ui.input_checkbox(
+                                "rebase_reverse_palette",
+                                "Reverse rebase palette",
+                                False,
+                            ),
+                            "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+
+                    # Create driver rebase selector
+                    with ui.tooltip(id="rebase_driver_tt"):
+                        ui.input_select(
+                            "rebase_driver",
+                            "Driver rebase:",
+                            {},
+                        ),
+                        '"Rebase" times relative to a nominated driver. The "ULTIMATE" driver is derived from the quickest times within each split sector .'
+
+                    @render.ui
+                    @reactive.event(input.stage, input.rebase_driver)
+                    def rebase_driver_info():
+                        stageId = input.stage()
+                        if not stageId:
+                            return
+                        stageId = int(stageId)
+                        rebase_driver = input.rebase_driver()
+                        # TO DO: provide ult view if rebase_driver=="ult"
+                        if not rebase_driver or rebase_driver == "ult":
+                            return
+                        rebase_driver = int(rebase_driver)
+                        stages = wrc.getStageInfo(stage_code=stageId, raw=False)
+                        times = wrc.getStageTimes(stageId=stageId, raw=False)
+                        if stages.empty or times.empty:
+                            return ui.markdown("*No data available.*")
+
+                        stage_name = stages.loc[
+                            stages["stageId"] == stageId, "name"
+                        ].iloc[0]
+
+                        times_ = times[times["carNo"] == rebase_driver]
+                        if times.empty:
+                            return
+                        times_ = times_.iloc[0]
+
+                        def _get_hero_text():
+                            return ui.markdown(
+                                f"""
+                        __{times_["driverName"]}__  
+                        {format_timedelta(times_["elapsedDurationMs"])}  
+                        """
+                            )
+
+                        def _get_showcase():
+                            diffFirst = format_timedelta(times_["diffFirstMs"], addplus=True)
+                            diffFirst = "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
+                            speed = times_["speed (km/h)"]
+                            pace = times_["pace diff (s/km)"]
+                            pace = (
+                                f"""{times_["pace (s/km)"]} s/km"""
+                                if times_["position"] == 1
+                                else f"*{round(pace, 2)} s/km off-pace*"
+                            )
+                            return ui.markdown(
+                                f"""
+                __P{times_["position"]}__ {diffFirst}  
+                
+                {round(speed,1)} km/h  
+                {pace}
+                """
+                            )
+
+                        pr = ui.value_box(
+                            title=stage_name,
+                            value=_get_hero_text(),
+                            theme="text-black",
+                            showcase=_get_showcase(),
+                            showcase_layout="left center",
+                            full_screen=True,
+                        )
+                        return pr
 
 
 @reactive.calc
@@ -1014,7 +1104,11 @@ def update_stages_driver_rebase_select():
         .set_index("carNo")["driverName"]
         .to_dict()
     )
+
     ui.update_select("stage_rebase_driver", choices=rebase_drivers)
+
+    rebase_drivers["ult"] = "ULTIMATE"
+    ui.update_select("rebase_driver", choices=rebase_drivers)
 
 
 ## Reactive calcs
