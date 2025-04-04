@@ -794,9 +794,9 @@ with ui.accordion(open=False):
                         if stages.empty or times.empty:
                             return ui.markdown("*No data available.*")
 
-                        stage_name = stages.loc[
-                            stages["stageId"] == stageId, "name"
-                        ].iloc[0]
+                        stages_ = stages[stages["stageId"] == stageId].iloc[0]
+                        stage_name = stages_["name"]
+                        stage_code = stages_["code"]
 
                         times_ = times[times["carNo"] == rebase_driver]
                         if times.empty:
@@ -831,7 +831,7 @@ with ui.accordion(open=False):
                             )
 
                         pr = ui.value_box(
-                            title=stage_name,
+                            title=f"{stage_code} {stage_name}",
                             value=_get_hero_text(),
                             theme="text-black",
                             showcase=_get_showcase(),
