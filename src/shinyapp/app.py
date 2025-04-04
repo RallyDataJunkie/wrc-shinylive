@@ -876,7 +876,7 @@ with ui.accordion(open=False):
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
                                         return
-                                    
+
                                     rebase_driver = int(rebase_driver) if rebase_driver!="ult" else rebase_driver
 
                                     split_times_wide = wrc.getSplitTimesWide(
@@ -930,6 +930,122 @@ with ui.accordion(open=False):
                                         annot=True,
                                         cbar=False,
                                     )
+
+                        with ui.accordion_panel("Split times group barplots"):
+                            with ui.tooltip(id="splits_section_plot_tt"):
+                                ui.input_select(
+                                    "splits_section_plot",
+                                    "Section plot view",
+                                    {
+                                        "bysplit": "Split section groups",
+                                        "bydriver": "Driver groups",
+                                    },
+                                    selected="time",
+                                ),
+                                "Select split section report group; view split section difference by split sections group or driver group. Split section group is good for showing strong/weak sections; driver grouping is good for showing split section comparisons relative to each other driver."
+                                # Scope the view if data available
+
+                            with ui.card(class_="mt-3"):
+                                with ui.card_header():
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_section_delta_barplot_tt",
+                                    ):
+                                        ui.span(
+                                            "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
+                                            question_circle_fill,
+                                        )
+                                        "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+                                @render.plot(alt="Barplot of within split delta times.")
+                                def seaborn_barplot_splits():
+                                    stageId = input.stage()
+                                    if not stageId:
+                                        return
+                                    stageId = int(stageId)
+                                    priority = input.category()
+                                    rebase_driver = input.rebase_driver()
+                                    # print(f"Rebasing on {rebase_driver}")
+                                    if not rebase_driver:
+                                        return
+
+                                    rebase_driver = (
+                                        int(rebase_driver)
+                                        if rebase_driver != "ult"
+                                        else rebase_driver
+                                    )
+
+                                    split_times_wide = wrc.getSplitTimesWide(
+                                        stageId=stageId,
+                                        priority=priority,
+                                        extended=True,
+                                    )
+                                    if split_times_wide.empty:
+                                        return
+
+                                    colors = (
+                                        ["red", "white", "green"]
+                                        if input.rebase_reverse_palette()
+                                        else ["green", "white", "red"]
+                                    )
+
+                                    split_times_wide_, split_cols = (
+                                        _reshape_splits_wide_with_ult(
+                                            split_times_wide, rebase_driver
+                                        )
+                                    )
+
+                                    split_times_long = melt(
+                                        split_times_wide_,
+                                        value_vars=split_cols,
+                                        id_vars=["carNo"],
+                                        var_name="roundN",
+                                        value_name="time")
+
+                                    colors = [
+                                        "red" if val >= 0 else "green"
+                                        for val in split_times_long["time"]
+                                    ]
+                                    if input.splits_section_plot() == "bydriver":
+                                        ax = barplot(
+                                            split_times_long,
+                                            orient="h",
+                                            hue="roundN",
+                                            x="time",
+                                            y="carNo",
+                                            palette=colors,
+                                            legend=False,
+                                        )
+                                    else:
+                                        ax = barplot(
+                                            split_times_long,
+                                            orient="h",
+                                            y="roundN",
+                                            x="time",
+                                            hue="carNo",
+                                            palette=colors,
+                                            legend=False,
+                                        )
+
+                                    # Get all the bars from the plot
+                                    bars = [patch for patch in ax.patches]
+
+                                    # Color each bar based on its height
+                                    for bar in bars:
+                                        if input.rebase_reverse_palette():
+                                            bar.set_color(
+                                                "#2ecc71"
+                                                if bar.get_width() > 0
+                                                else "#e74c3c"
+                                            )
+                                        else:
+                                            bar.set_color(
+                                                "#2ecc71"
+                                                if bar.get_width() <= 0
+                                                else "#e74c3c"
+                                            )
+                                    ax.invert_xaxis()
+                                    return ax
 
 
 @reactive.calc
