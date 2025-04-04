@@ -807,7 +807,7 @@ with ui.accordion(open=False):
                         def _get_hero_text():
                             return ui.markdown(
                                 f"""
-                        __{times_["driverName"]}__  
+                        __#{times_["carNo"]} {times_["driverName"]}__  
                         {format_timedelta(times_["elapsedDurationMs"])}  
                         """
                             )
