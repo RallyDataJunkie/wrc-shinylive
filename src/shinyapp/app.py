@@ -1,12 +1,12 @@
 from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
-from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, scaled_splits
+from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame
+from pandas import DataFrame, melt
 from matplotlib import pyplot as plt
-from seaborn import barplot
+from seaborn import barplot, boxplot
 
 # from shinywidgets import render_widget
 # from itables.widget import ITable
@@ -699,38 +699,56 @@ with ui.accordion(open=False):
                             stageId = int(stageId)
 
                             priority = input.category()
-
-                            split_dists_ = wrc.getStageSplitPoints(
-                                stageId=stageId, extended=True
-                            )
-
-                            split_dists = split_dists_.set_index("name")[
-                                "distance_"
-                            ].to_dict()
-                            # TO DO - add stage distance for FINAL
-                            # split_dists["FINAL"] =
-
                             view = input.splits_section_view()
 
-                            split_times_wide = wrc.getSplitTimesWide(
-                                stageId=stageId, priority=priority, extended=True, timeInS=True
+                            scaled_splits_wide = wrc.getScaledSplits(
+                                stageId, priority, view
                             )
 
-                            split_cols = wrc.getSplitCols(split_times_wide)
+                            if not scaled_splits_wide.empty:
+                                return render.DataGrid(scaled_splits_wide)
 
-                            split_durations = wrc.getSplitDuration(
-                                split_times_wide, id_col=["carNo", "driverName"]
-                            )
+                    with ui.accordion(open=False):
+                        with ui.accordion_panel(
+                            "Split section speed/pace distributions"
+                        ):
 
-                            output_ = scaled_splits(
-                                split_times_wide,
-                                split_dists,
-                                split_cols,
-                                split_durations,
-                                view,
+                            @render.plot(
+                                alt="Box plot of split section speed/pace distributions."
                             )
-                            if not output_.empty:
-                                return render.DataGrid(output_)
+                            @reactive.event(input.stage, input.splits_section_view)
+                            def plot_split_dists():
+                                stageId = input.stage()
+                                if not stageId:
+                                    return
+                                stageId = int(stageId)
+                                priority = input.category()
+                                view = input.splits_section_view()
+
+                                scaled_splits_wide = wrc.getScaledSplits(
+                                    stageId, priority, view
+                                )
+                                if scaled_splits_wide.empty:
+                                    return
+                                split_cols = wrc.getSplitCols(scaled_splits_wide)
+                                scaled_splits_long = melt(
+                                    scaled_splits_wide,
+                                    id_vars=["carNo", "driverName"],
+                                    value_vars=split_cols,
+                                    var_name="roundN",
+                                    value_name="value",
+                                )
+                                ylabel = "Time in section (s)"
+                                if view == "pace":
+                                    ylabel = "Pace (s/km)"
+                                elif view == "speed":
+                                    ylabel = "Speed (km/h)"
+
+                                ax = boxplot(
+                                    data=scaled_splits_long, x="roundN", y="value"
+                                )
+                                ax.set(xlabel=None, ylabel=ylabel)
+                                return ax
 
 
 @reactive.calc

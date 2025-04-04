@@ -1621,6 +1621,71 @@ class WRCTimingResultsAPIClientV2:
 
         return diff_df
 
+    def getScaledSplits(self, stageId, priority, view):
+
+        split_times_wide = self.getSplitTimesWide(
+            stageId=stageId, priority=priority, extended=True, timeInS=True
+        )
+
+        if split_times_wide.empty:
+            return
+
+        split_cols = self.getSplitCols(split_times_wide)
+
+        if view in ["time_acc", "pos_acc"]:
+            # TO DO  precision number format formatting
+            # styles = {c: "{0:0.1f}" for c in split_cols}
+            # return split_times_wide.style.format(styles)
+
+            split_times_wide.loc[:, split_cols] = split_times_wide[split_cols].round(1)
+
+            if view == "pos_acc":
+                split_times_wide.loc[:, split_cols] = split_times_wide[split_cols].rank(
+                    method="min", na_option="keep"
+                )
+
+            # split_times_wide.columns = (
+            #    ["Driver", "TeamName", "RoadPos"]
+            #    + [f"Split {i}" for i in range(1, len(split_cols))]
+            #    + ["Finish"]
+            # )
+            return split_times_wide
+
+        split_durations = self.getSplitDuration(
+            split_times_wide, id_col=["carNo", "driverName"]
+        )
+
+        split_dists_ = self.getStageSplitPoints(stageId=stageId, extended=True)
+        split_dists = split_dists_.set_index("name")["distance_"].to_dict()
+
+        if split_dists:
+            scaled_splits_wide = split_durations.copy()
+            if view == "pos_within":
+                scaled_splits_wide.loc[:, split_cols] = scaled_splits_wide[
+                    split_cols
+                ].rank(method="min", na_option="keep")
+            elif view == "pace":
+                scaled_splits_wide.update(
+                    scaled_splits_wide.loc[:, split_dists.keys()].apply(
+                        lambda s: s / split_dists[s.name]
+                    )
+                )
+            elif view == "speed":
+                scaled_splits_wide.update(
+                    scaled_splits_wide.loc[:, split_dists.keys()].apply(
+                        lambda s: 3600 * split_dists[s.name] / s
+                    )
+                )
+
+        # styles = {c: "{0:0.1f}" for c in split_cols}
+
+        if not view.startswith("pos_"):
+            scaled_splits_wide.loc[:, split_cols] = scaled_splits_wide[
+                split_cols
+            ].round(1)
+
+        return scaled_splits_wide
+
     def _getStageOverallResults(
         self, *args, stageId=None, by_championship=False, **kwargs
     ):
