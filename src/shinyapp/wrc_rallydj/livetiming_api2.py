@@ -355,8 +355,11 @@ class APIClient:
 
         stub = f"events/{eventId}/startLists/{startListId}.json"
         json_data = self._WRC_RedBull_json(stub)
+        if "startListItems" not in json_data:
+            return DataFrame()
 
         startlist_df = json_normalize(json_data["startListItems"])
+
         startlist_df["eventId"] = json_data["eventId"]
         startlist_df["name"] = json_data["name"]
 
@@ -1056,7 +1059,7 @@ class WRCTimingResultsAPIClientV2:
                 f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
             )
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-            q = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event}"
+            q = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId};"
             q = f"{q} ORDER BY sl.[order] ASC;"
@@ -1403,13 +1406,13 @@ class WRCTimingResultsAPIClientV2:
 
         stageId = stageId if stageId else self.stageId
         if stageId and self.eventId and self.rallyId:
+            _entry_join = f"INNER JOIN entries AS e ON st.entryId=e.entryId"
             priority = None if priority == "P0" else priority
             on_event_ = f"AND st.eventId={self.eventId} AND st.stageId={stageId} AND st.rallyId={self.rallyId}"
             priority_ = f"""AND e.priority="{priority}" """ if priority else ""
             if raw:
-                sql = f"""SELECT * FROM stage_times AS st WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT st.* FROM stage_times AS st {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
             else:
-                _entry_join = f"INNER JOIN entries AS e ON st.entryId=e.entryId"
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
@@ -1418,7 +1421,7 @@ class WRCTimingResultsAPIClientV2:
                 )
                 _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-                sql = f"SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
 
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
@@ -1514,7 +1517,7 @@ class WRCTimingResultsAPIClientV2:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
-                sql = f"SELECT d.fullName AS driverName, e.identifier as carNo, e.vehicleModel, spt.*, ROUND(spt.elapsedDurationMs/1000, 2) AS elapsedTimeInS, spp.number FROM split_times AS spt {split_points_join} {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, e.identifier as carNo, e.vehicleModel, spt.*, ROUND(spt.elapsedDurationMs/1000, 2) AS elapsedTimeInS, spp.number FROM split_times AS spt {split_points_join} {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
 
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
@@ -1564,6 +1567,7 @@ class WRCTimingResultsAPIClientV2:
             stage_times.rename(
                 columns={"elapsedDurationMs": self.SPLIT_FINAL}, inplace=True
             )
+
             split_times_wide = merge(split_times_wide, stage_times, on="entryId")
 
         if timeInS:
@@ -1723,7 +1727,7 @@ class WRCTimingResultsAPIClientV2:
                 )
                 _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, e.identifier AS carNo, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.priority, e.eligibility, o.* FROM stage_overall AS o {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, e.vehicleModel, e.identifier AS carNo, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.priority, e.eligibility, o.* FROM stage_overall AS o {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
@@ -1783,7 +1787,7 @@ class WRCTimingResultsAPIClientV2:
             )
             _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
-            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {_on_event};"""
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
@@ -1815,7 +1819,7 @@ class WRCTimingResultsAPIClientV2:
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON r.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
@@ -1847,7 +1851,7 @@ class WRCTimingResultsAPIClientV2:
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON p.controlId=c.controlId"
             _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty

@@ -6,8 +6,9 @@ from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame, melt, to_numeric, concat
 from matplotlib import pyplot as plt
-from seaborn import barplot, boxplot, heatmap
+from seaborn import barplot, boxplot, heatmap, lineplot
 from matplotlib.colors import LinearSegmentedColormap
+from adjustText import adjust_text
 
 # from shinywidgets import render_widget
 # from itables.widget import ITable
@@ -1047,6 +1048,124 @@ with ui.accordion(open=False):
                                     ax.invert_xaxis()
                                     return ax
 
+                        with ui.accordion_panel("Split times linecharts"):
+                            with ui.card(class_="mt-3"):
+                                with ui.card_header():
+                                    with ui.tooltip(
+                                        placement="right",
+                                        id="splits_in_sectionlineplot_tt",
+                                    ):
+                                        ui.span(
+                                            "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
+                                            question_circle_fill,
+                                        )
+                                        "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+
+                                @render.plot(
+                                    alt="Line chart of within split delta times."
+                                )
+                                def seaborn_linechart_splits():
+                                    stageId = input.stage()
+                                    if not stageId:
+                                        return
+                                    stageId = int(stageId)
+                                    priority = input.category()
+                                    rebase_driver = input.rebase_driver()
+                                    # print(f"Rebasing on {rebase_driver}")
+                                    if not rebase_driver:
+                                        return
+
+                                    rebase_driver = (
+                                        int(rebase_driver)
+                                        if rebase_driver != "ult"
+                                        else rebase_driver
+                                    )
+
+                                    split_times_wide = wrc.getSplitTimesWide(
+                                        stageId=stageId,
+                                        priority=priority,
+                                        extended=True,
+                                    )
+                                    if split_times_wide.empty:
+                                        return
+                                    split_cols = wrc.getSplitCols(split_times_wide)
+
+                                    split_times_wide_ = wrc.rebaseManyTimes(
+                                        split_times_wide,
+                                        rebase_driver,
+                                        "carNo",
+                                        split_cols,
+                                    )
+
+                                    split_times_long = melt(
+                                        split_times_wide_,
+                                        value_vars=split_cols,
+                                        id_vars=["carNo"],
+                                        var_name="roundN",
+                                        value_name="time")
+
+                                    split_dists_ = wrc.getStageSplitPoints(
+                                                            stageId=stageId, extended=True
+                                                        )
+                                    split_dists = split_dists_.set_index("name")[
+                                                            "distance"
+                                                        ].to_dict()
+
+                                    split_times_long["distance"] = split_times_long[
+                                        "roundN"
+                                    ].map(split_dists)
+
+                                    g = lineplot(
+                                        data=split_times_long.sort_values("carNo"),
+                                        x="distance",
+                                        y="time",
+                                        hue="carNo",
+                                    )
+
+                                    if rebase_driver and rebase_driver != "ult":
+                                        g.set_ylim(g.get_ylim()[::-1])
+
+                                    texts = []
+                                    for line, label in zip(
+                                        g.get_lines(),
+                                        split_times_long.sort_values("carNo")["carNo"].unique(),
+                                    ):
+                                        x_data, y_data = (
+                                            line.get_xdata(),
+                                            line.get_ydata(),
+                                        )
+                                        x_last, y_last = x_data[-1], y_data[-1]
+                                        text = g.text(
+                                            x_data[-1],
+                                            y_data[-1],
+                                            f" {label}",
+                                            ha="left",
+                                            verticalalignment="center",
+                                        )
+                                        texts.append(text)
+
+                                    # Adjust labels to avoid overlap
+                                    adjust_text(
+                                        texts,
+                                        only_move={
+                                            "text": "y",
+                                            "static": "y",
+                                            "explode": "y",
+                                            "pull": "y",
+                                        },
+                                        arrowprops=dict(
+                                            arrowstyle="-", color="gray", lw=0.5
+                                        ),
+                                    )
+
+                                    g.set_xlim(
+                                        split_times_long["distance"].min(),
+                                        split_times_long["distance"].max() * 1.15,
+                                    )
+
+                                    g.legend_.remove()
+                                    return g
+
 
 @reactive.calc
 @reactive.event(input.season_round)
@@ -1073,6 +1192,8 @@ def update_year_select():
     if season_info.empty:
         return
     years = [str(i) for i in season_info["year"].unique()]
+
+    # HACK
 
     ui.update_select("year", choices=years, selected=years[-1])
 
@@ -1117,7 +1238,11 @@ def update_season_round_select():
     ui.update_select("season_round", choices={})
 
     seasonId = int(seasonId)
-    wrc.championship = wrc.CHAMPIONSHIP_CODES[wrc.championshipLookup[seasonId]]
+    if not seasonId:
+        return
+    if seasonId in wrc.championshipLookup:
+        wrc.championship = wrc.CHAMPIONSHIP_CODES[wrc.championshipLookup[seasonId]]
+
     wrc.setSeason(seasonId=seasonId)
 
     season_rounds = wrc.getSeasonRounds(on_season=True)
