@@ -1,11 +1,10 @@
 from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
-from wrc_rallydj.utils import enrich_stage_winners
-from wrc_rallydj.utils import format_timedelta
+from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, scaled_splits
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, pivot, merge
+from pandas import DataFrame
 from matplotlib import pyplot as plt
 from seaborn import barplot
 
@@ -235,6 +234,8 @@ with ui.accordion(open=False):
                         ]
                         startlist = startlist[startlist["name"] == input.startlist()]
                         return render.DataGrid(startlist[retcols])
+
+                # TO DO - shakedown report
 
                 with ui.accordion_panel("Stage winners"):
 
@@ -625,8 +626,6 @@ with ui.accordion(open=False):
     with ui.accordion_panel(title="Splits Analysis"):
         with ui.card(class_="mt-3"):
 
-            """TO DO"""
-
             with ui.accordion(open=False, id="splits_review_accordion"):
 
                 with ui.accordion_panel("Split times"):
@@ -641,49 +640,97 @@ with ui.accordion(open=False):
                             return
                         stageId = int(stageId)
                         priority = input.category()
-                        split_times_df = wrc.getSplitTimes(
-                            stageId=stageId, priority=priority, raw=False
+                        split_times_wide = wrc.getSplitTimesWide(
+                            stageId=stageId, priority=priority, extended=True
                         )
-                        if split_times_df.empty:
-                            return
-                        split_times_df["number"] = "SP" + split_times_df[
-                            "number"
-                        ].astype(str)
-                        split_times_wide = pivot(
-                            split_times_df.dropna(
-                                subset=["number", "elapsedDurationMs"]
-                            ),
-                            index=["driverName", "entryId"],
-                            columns="number",
-                            values="elapsedDurationMs",
-                        )
-                        stage_times = wrc.getStageTimes(stageId=stageId)[
-                            ["entryId", "elapsedDurationMs"]
-                        ]
-                        stage_times.rename(
-                            columns={"elapsedDurationMs": "FINAL"}, inplace=True
-                        )
-                        split_times_wide = merge(
-                            split_times_wide, stage_times, on="entryId"
-                        )
-                        return render.DataGrid(split_times_wide.reset_index())
+                        return render.DataGrid(split_times_wide)
 
-                    @render.data_frame
-                    @reactive.event(
-                        input.splits_review_accordion, input.category, input.stage
-                    )
-                    def split_results_short():
-                        stageId = input.stage()
-                        if not stageId:
-                            return
-                        stageId = int(stageId)
-                        priority = input.category()
-                        split_times_df = wrc.getSplitTimes(
-                            stageId=stageId, priority=priority, raw=False
-                        )
-                        if split_times_df.empty:
-                            return
-                        return render.DataGrid(split_times_df)
+                with ui.accordion_panel("Split times detail"):
+
+                    with ui.card(class_="mt-3"):
+                        with ui.card_header():
+                            with ui.tooltip(
+                                placement="right", id="splits_section_report_tt"
+                            ):
+                                ui.span(
+                                    "Split section report ",
+                                    question_circle_fill,
+                                )
+                                "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
+
+                        @render.ui
+                        @reactive.event(input.stage, input.splits_section_view)
+                        def split_report_view():
+                            view = input.splits_section_view()
+                            typ = {
+                                "time": "Time (s) within each split (*lower* is better).",
+                                "speed": "Speed (km/h) within each split (*higher* is better).",
+                                "pace": "Pace (s/km) within each split (*lower* is better.)",
+                                "time_acc": "Accumulated time (s) across all splits (*lower* is better).",
+                                "pos_within": "Rank position within split (*lower* is better).",
+                                "pos_acc": "Rank position of accumulated time at each split (*lower* is better).",
+                            }
+                            return ui.markdown(typ[view])
+
+                        with ui.tooltip(id="splits_section_view_tt"):
+                            ui.input_select(
+                                "splits_section_view",
+                                "Section report view",
+                                {
+                                    "time": "Section time (s)",
+                                    "pace": "Av. pace in section (s/km)",
+                                    "speed": "Av. speed in section (km/h)",
+                                    "time_acc": "Acc. time over sections (s)",
+                                    "pos_within": "Section time rank",
+                                    "pos_acc": "Acc. time rank",
+                                },
+                                selected="time",
+                            ),
+                            "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
+                            # Scope the view if data available
+
+                        # @render.table
+                        @render.data_frame
+                        @reactive.event(input.splits_section_view, input.stage, input.category)
+                        def split_report():
+                            stageId = input.stage()
+                            if not stageId:
+                                return
+                            stageId = int(stageId)
+
+                            priority = input.category()
+
+                            split_dists_ = wrc.getStageSplitPoints(
+                                stageId=stageId, extended=True
+                            )
+
+                            split_dists = split_dists_.set_index("name")[
+                                "distance_"
+                            ].to_dict()
+                            # TO DO - add stage distance for FINAL
+                            # split_dists["FINAL"] =
+
+                            view = input.splits_section_view()
+
+                            split_times_wide = wrc.getSplitTimesWide(
+                                stageId=stageId, priority=priority, extended=True, timeInS=True
+                            )
+
+                            split_cols = wrc.getSplitCols(split_times_wide)
+
+                            split_durations = wrc.getSplitDuration(
+                                split_times_wide, id_col=["carNo", "driverName"]
+                            )
+
+                            output_ = scaled_splits(
+                                split_times_wide,
+                                split_dists,
+                                split_cols,
+                                split_durations,
+                                view,
+                            )
+                            if not output_.empty:
+                                return render.DataGrid(output_)
 
 
 @reactive.calc

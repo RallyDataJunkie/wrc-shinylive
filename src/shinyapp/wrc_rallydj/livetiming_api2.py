@@ -10,7 +10,15 @@ from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_pr
 import os
 import sqlite3
 from wrc_rallydj.db_table_schemas import SETUP_V2_Q
-from pandas import read_sql, DataFrame, json_normalize, merge, concat, to_datetime
+from pandas import (
+    read_sql,
+    DataFrame,
+    json_normalize,
+    merge,
+    pivot,
+    concat,
+    to_datetime,
+)
 
 
 class DatabaseManager:
@@ -386,7 +394,6 @@ class APIClient:
         itinerarySections2_df = json_normalize(
             itinerarySections_df["itinerarySections"]
         )
-        itinerarySections2_df["eventId"] = eventId
 
         itineraryControls_df = itinerarySections2_df.explode("controls").reset_index(
             drop=True
@@ -399,11 +406,15 @@ class APIClient:
         itineraryStages_df = itinerarySections2_df.explode("stages").reset_index(
             drop=True
         )
+
         itineraryStages_df.rename(columns={"name": "name_"}, inplace=True)
         _itineraryStages_df = json_normalize(itineraryStages_df["stages"])
         itineraryStages_df = concat(
             [itineraryStages_df.drop("stages", axis=1), _itineraryStages_df], axis=1
         )
+
+        itinerarySections2_df["eventId"] = eventId
+
         itineraryLegs_df.drop(columns=["itinerarySections"], inplace=True)
         itinerarySections2_df.drop(columns=["controls", "stages"], inplace=True)
         itineraryControls_df.drop(columns=["stages"], inplace=True)
@@ -474,6 +485,7 @@ class APIClient:
             .explode("splitPoints")
             .reset_index(drop=True)["splitPoints"]
         )
+
         stages_df.drop(columns=["splitPoints", "controls"], inplace=True)
 
         if updateDB:
@@ -595,6 +607,8 @@ class WRCTimingResultsAPIClientV2:
         "World Rally Championship": "wrc",
         "European Rally Championship": "erc",
     }
+    SPLIT_PREFIX = "SP"
+    SPLIT_FINAL = "FINAL"
 
     def __init__(
         self,
@@ -1167,6 +1181,7 @@ class WRCTimingResultsAPIClientV2:
         on_event=True,
         itineraryLegId=None,
         itinerarySectionId=None,
+        stage_code=None,
         raw=True,
         updateDB=False,
     ):
@@ -1182,6 +1197,12 @@ class WRCTimingResultsAPIClientV2:
             if itinerarySectionId
             else ""
         )
+
+        if stage_code and isinstance(stage_code, str):
+            stage_code = [stage_code]
+        else:
+            stage_code = []
+
         if raw:
             q = f"SELECT * FROM stage_info AS si WHERE {on_event_};"
         else:
@@ -1194,14 +1215,62 @@ class WRCTimingResultsAPIClientV2:
 
         stages_df = self.db_manager.read_sql(q)
 
+        # TO DO move this into the SQL query
+        if stage_code:
+            # Try to be flexible with stage codes as code or stageId
+            if stage_code[0].startswith("SS"):
+                stages_df = stages_df[stages_df["code"].isin(stage_code)]
+            elif isinstance(stage_code[0], int):
+                stages_df = stages_df[stages_df["stageId"].isin(stage_code)]
+
         return stages_df
 
-    def getStageSplitPoints(self, updateDB=False):
+    def getStageSplitPoints(
+        self, stageId=None, raw=False, extended=False, updateDB=False
+    ):
+        # TO DO - also support eventId?
+        # TO DO also support raw
         if updateDB:
             self._getStages(updateDB=updateDB)
+        if not stageId:
+            q = "SELECT * FROM split_points;"
+        else:
+            q = f"SELECT * FROM split_points WHERE stageId={stageId};"
 
-        q = "SELECT * FROM split_points;"
         stage_split_points_df = self.db_manager.read_sql(q)
+
+        if raw and not extended:
+            return stage_split_points_df
+
+        # Optionally add in the final stage distance
+        final_ = len(stage_split_points_df) + 1
+        if extended:
+            stage_info_ = self.getStageInfo(stage_code=stageId)
+            if not stage_info_.empty:
+                final_distance = stage_info_["distance"].iloc[0]
+                final_row = DataFrame(
+                    [{"stageId": stageId, "number": final_, "distance": final_distance}]
+                )
+                stage_split_points_df = concat(
+                    [stage_split_points_df, final_row], ignore_index=True
+                )
+
+        stage_split_points_df = stage_split_points_df.sort_values("number")
+        stage_split_points_df["distance_"] = (
+            stage_split_points_df["distance"]
+            .diff()
+            .fillna(stage_split_points_df["distance"])
+            .round(2)
+        )
+
+        stage_split_points_df["name"] = self.SPLIT_PREFIX + stage_split_points_df[
+            "number"
+        ].astype(str)
+
+        if extended:
+            stage_split_points_df["name"] = stage_split_points_df["name"].replace(
+                f"{self.SPLIT_PREFIX}{final_}", "FINAL"
+            )
 
         return stage_split_points_df
 
@@ -1445,7 +1514,7 @@ class WRCTimingResultsAPIClientV2:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
-                sql = f"SELECT d.fullName AS driverName, e.vehicleModel, spt.*, spp.number FROM split_times AS spt {split_points_join} {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.fullName AS driverName, e.identifier as carNo, e.vehicleModel, spt.*, ROUND(spt.elapsedDurationMs/1000, 2) AS elapsedTimeInS, spp.number FROM split_times AS spt {split_points_join} {_entry_join} {_driver_join} WHERE 1=1 {on_event_} {priority_};"
 
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
@@ -1457,6 +1526,100 @@ class WRCTimingResultsAPIClientV2:
             r = DataFrame()
 
         return r
+
+    def getSplitTimesWide(
+        self,
+        stageId=None,
+        priority=None,
+        extended=False,
+        timeInS=True,
+        split_cols=None,
+        updateDB=None,
+    ):
+        if updateDB:
+            self._getSplitTimes(stageId=stageId, updateDB=updateDB)
+
+        split_times_df = self.getSplitTimes(
+            stageId=stageId, priority=priority, raw=False
+        )
+
+        if split_times_df.empty:
+            return
+
+        split_times_df["number"] = self.SPLIT_PREFIX + split_times_df["number"].astype(
+            str
+        )
+        split_times_wide = pivot(
+            split_times_df.dropna(subset=["number", "elapsedDurationMs"]),
+            index=["driverName", "entryId", "carNo"],
+            columns="number",
+            values="elapsedDurationMs",
+        ).reset_index()
+
+        # Optionally add in the final stage time
+        if extended:
+            stage_times = self.getStageTimes(stageId=stageId)[
+                ["entryId", "elapsedDurationMs"]
+            ]
+            stage_times.rename(
+                columns={"elapsedDurationMs": self.SPLIT_FINAL}, inplace=True
+            )
+            split_times_wide = merge(split_times_wide, stage_times, on="entryId")
+
+        if timeInS:
+            split_cols = (
+                self.getSplitCols(split_times_wide) if not split_cols else split_cols
+            )
+            split_times_wide[split_cols] = (split_times_wide[split_cols] / 1000).round(
+                1
+            )
+
+        split_times_wide.drop(columns=["entryId"], inplace=True)
+
+        return split_times_wide
+
+    def getSplitCols(self, split_times_wide):
+        """Get the split time columns from the wide splits dataframe."""
+        split_cols = [
+            c
+            for c in split_times_wide.columns
+            if c.startswith(self.SPLIT_PREFIX) or c == self.SPLIT_FINAL
+        ]
+        return split_cols
+
+    def getSplitDuration(
+        self, split_times_wide, split_cols=None, ret_id=True, id_col=None
+    ):
+        """The time it takes a car to traverse a split section (split_times_wide)."""
+        id_col = "carNo" if not id_col else id_col
+        id_col = [id_col] if isinstance(id_col, str) else id_col
+
+        # Ensure split_cols are strings
+        split_cols = (
+            self.getSplitCols(split_times_wide) if not split_cols else split_cols
+        )
+
+        # Create a copy of the dataframe with selected columns
+        df_ = split_times_wide[split_cols].copy()
+
+        # Calculate differences between consecutive columns
+        diff_df = df_[split_cols[1:]].values - df_[split_cols[:-1]].values
+
+        # Convert back to dataframe
+        diff_df = DataFrame(diff_df, columns=split_cols[1:], index=df_.index)
+
+        # Add first split column back
+        diff_df[split_cols[0]] = df_[split_cols[0]]
+
+        if ret_id:
+            # Add entryId column
+            diff_df[id_col] = split_times_wide[id_col]
+
+            # Reorder columns
+            cols = id_col + split_cols
+            return diff_df[cols]
+
+        return diff_df
 
     def _getStageOverallResults(
         self, *args, stageId=None, by_championship=False, **kwargs
