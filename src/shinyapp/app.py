@@ -16,7 +16,9 @@ from adjustText import adjust_text
 
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
-wrc = WRCTimingResultsAPIClientV2(use_cache=True, backend="memory", expire_after=30, liveCatchup=True)
+wrc = WRCTimingResultsAPIClientV2(
+    use_cache=True, backend="memory", expire_after=30, liveCatchup=True
+)
 
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
@@ -686,7 +688,7 @@ with ui.accordion(open=False):
                             "entrantName",
                             "vehicleModel",
                             "priority",
-                            "eligibility"
+                            "eligibility",
                         ]
                         # stage_results_short_.widget.update(
                         #    stage_times_df[cols]
@@ -712,15 +714,10 @@ with ui.accordion(open=False):
                     input.splits_review_accordion, input.category, input.stage
                 )
                 def split_results_wide():
-                    stageId = input.stage()
-                    if not stageId:
+                    split_times_data = cached_split_times_wide()
+                    if split_times_data is None or split_times_data.empty:
                         return
-                    stageId = int(stageId)
-                    priority = input.category()
-                    split_times_wide = wrc.getSplitTimesWide(
-                        stageId=stageId, priority=priority, extended=True
-                    )
-                    return render.DataGrid(split_times_wide)
+                    return render.DataGrid(split_times_data)
 
             with ui.accordion_panel("Split times detail"):
 
@@ -772,20 +769,10 @@ with ui.accordion(open=False):
                         input.splits_section_view, input.stage, input.category
                     )
                     def split_report():
-                        stageId = input.stage()
-                        if not stageId:
+                        scaled_splits = cached_scaled_splits()
+                        if scaled_splits is None or scaled_splits.empty:
                             return
-                        stageId = int(stageId)
-
-                        priority = input.category()
-                        view = input.splits_section_view()
-
-                        scaled_splits_wide = wrc.getScaledSplits(
-                            stageId, priority, view
-                        )
-
-                        if not scaled_splits_wide.empty:
-                            return render.DataGrid(scaled_splits_wide)
+                        return render.DataGrid(scaled_splits)
 
                 with ui.accordion(open=False):
                     with ui.accordion_panel("Split section speed/pace distributions"):
@@ -795,18 +782,10 @@ with ui.accordion(open=False):
                         )
                         @reactive.event(input.stage, input.splits_section_view)
                         def plot_split_dists():
-                            stageId = input.stage()
-                            if not stageId:
+                            scaled_splits_wide = cached_scaled_splits()
+                            if scaled_splits_wide is None or scaled_splits_wide.empty:
                                 return
-                            stageId = int(stageId)
-                            priority = input.category()
-                            view = input.splits_section_view()
 
-                            scaled_splits_wide = wrc.getScaledSplits(
-                                stageId, priority, view
-                            )
-                            if scaled_splits_wide.empty:
-                                return
                             split_cols = wrc.getSplitCols(scaled_splits_wide)
                             scaled_splits_long = melt(
                                 scaled_splits_wide,
@@ -816,6 +795,7 @@ with ui.accordion(open=False):
                                 value_name="value",
                             )
                             ylabel = "Time in section (s)"
+                            view = input.splits_section_view()
                             if view == "pace":
                                 ylabel = "Pace (s/km)"
                             elif view == "speed":
@@ -947,14 +927,7 @@ with ui.accordion(open=False):
 
                                 @render.plot(alt="Heatmap of within split delta times.")
                                 def seaborn_heatmap_splits():
-                                    stageId = input.stage()
-                                    if not stageId:
-                                        return
-                                    stageId = int(stageId)
-                                    priority = input.category()
                                     rebase_driver = input.rebase_driver()
-
-                                    # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
                                         return
 
@@ -964,14 +937,13 @@ with ui.accordion(open=False):
                                         else rebase_driver
                                     )
 
-                                    split_times_wide = wrc.getSplitTimesWide(
-                                        stageId=stageId,
-                                        priority=priority,
-                                        extended=True,
-                                    )
-                                    if split_times_wide.empty:
+                                    # Get the cached split times data
+                                    split_times_wide = cached_split_times_wide()
+                                    if (
+                                        split_times_wide is None
+                                        or split_times_wide.empty
+                                    ):
                                         return
-
                                     output_, split_cols = _reshape_splits_wide_with_ult(
                                         split_times_wide, rebase_driver
                                     )
@@ -1155,8 +1127,7 @@ with ui.accordion(open=False):
                                     stageId = input.stage()
                                     if not stageId:
                                         return
-                                    stageId = int(stageId)
-                                    priority = input.category()
+
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
@@ -1168,13 +1139,13 @@ with ui.accordion(open=False):
                                         else rebase_driver
                                     )
 
-                                    split_times_wide = wrc.getSplitTimesWide(
-                                        stageId=stageId,
-                                        priority=priority,
-                                        extended=True,
-                                    )
-                                    if split_times_wide.empty:
+                                    split_times_wide = cached_split_times_wide()
+                                    if (
+                                        split_times_wide is None
+                                        or split_times_wide.empty
+                                    ):
                                         return
+
                                     split_cols = wrc.getSplitCols(split_times_wide)
 
                                     split_times_wide_ = wrc.rebaseManyTimes(
@@ -1378,7 +1349,7 @@ def update_category_select():
             "ERC1": "ERC1",
             "ERC3": "ERC3",
             "ERC4": "ERC4",
-            #"FIA_ERC1": "FIA/ ERC1",
+            # "FIA_ERC1": "FIA/ ERC1",
         },
     }
 
@@ -1404,7 +1375,7 @@ def update_category_select():
             c1 = c1.replace("FIA/", "").strip()
             # eligibilities: eg ERC, T; ERC, M; ERC, T, M; ERC4 (J), T
             if c1 not in _categories:
-                    _categories.append(c1)
+                _categories.append(c1)
 
     # TO DO - the downstream logic for this is wrong because
     # JWRC is (or, weaker, may also be?) WRC3
@@ -1571,6 +1542,33 @@ def getItinerary():
     return itinerary
 
 
+@reactive.calc
+@reactive.event(input.stage, input.category)
+def cached_split_times_wide():
+    """Cache for split times wide data"""
+    stageId = input.stage()
+    if not stageId:
+        return None
+    stageId = int(stageId)
+    priority = input.category()
+
+    return wrc.getSplitTimesWide(stageId=stageId, priority=priority, extended=True)
+
+
+@reactive.calc
+@reactive.event(input.stage, input.category, input.splits_section_view)
+def cached_scaled_splits():
+    """Cache for scaled splits data"""
+    stageId = input.stage()
+    if not stageId:
+        return None
+    stageId = int(stageId)
+    priority = input.category()
+    view = input.splits_section_view()
+
+    return wrc.getScaledSplits(stageId, priority, view)
+
+
 ## Heros and banners
 
 
@@ -1654,7 +1652,7 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
             {format_timedelta(p["timeInS"], units="s")}  
             """
         )
-    
+
     stage_times_data_p1 = stage_times_data[stage_times_data["position"] == 1]
     if stage_times_data_p1.empty:
         return
