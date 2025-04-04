@@ -16,7 +16,7 @@ from adjustText import adjust_text
 
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
-wrc = WRCTimingResultsAPIClientV2(use_cache=True, backend="memory", expire_after=6000)
+wrc = WRCTimingResultsAPIClientV2(use_cache=True, backend="memory", expire_after=30, liveCatchup=True)
 
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
@@ -685,6 +685,8 @@ with ui.accordion(open=False):
                             "manufacturerName",
                             "entrantName",
                             "vehicleModel",
+                            "priority",
+                            "eligibility"
                         ]
                         # stage_results_short_.widget.update(
                         #    stage_times_df[cols]
@@ -695,7 +697,7 @@ with ui.accordion(open=False):
                         #  color=["#5fba7d", "#d65f5f"],
                         # )
                         # )
-
+                        cols = [c for c in cols if c in stage_times_df.columns]
                         # return ui.HTML(html)
                         return render.DataGrid(stage_times_df[cols])
 
@@ -1364,6 +1366,7 @@ def update_category_select():
 
     entries = wrc.getEntries(on_event=True)
     eligibilities = entries["eligibility"].unique().tolist()
+    priorities = entries["priority"].unique().tolist()
     _categories = ["All"]
 
     # HACK - the following coding is contrived
@@ -1372,11 +1375,10 @@ def update_category_select():
         "wrc": {"All": "P0", "WRC": "P1", "WRC2": "P2", "WRC3": "P3", "JWRC": "P4"},
         "erc": {
             "All": "P0",
-            "ERC": "ERC",
             "ERC1": "ERC1",
             "ERC3": "ERC3",
             "ERC4": "ERC4",
-            "FIA_ERC1": "FIA/ ERC1",
+            #"FIA_ERC1": "FIA/ ERC1",
         },
     }
 
@@ -1398,11 +1400,11 @@ def update_category_select():
                 ):
                     _categories.append(c2)
     elif wrc.championship == "erc":
-        for c1 in eligibilities:  # eg ERC, T; ERC, M; ERC, T, M; ERC4 (J), T
-            for c2 in c1.split():
-                c2 = c2.strip().strip(",")
-                if "ERC" in c2 and c2 not in _categories:
-                    _categories.append(c2)
+        for c1 in priorities:
+            c1 = c1.replace("FIA/", "").strip()
+            # eligibilities: eg ERC, T; ERC, M; ERC, T, M; ERC4 (J), T
+            if c1 not in _categories:
+                    _categories.append(c1)
 
     # TO DO - the downstream logic for this is wrong because
     # JWRC is (or, weaker, may also be?) WRC3
@@ -1412,8 +1414,8 @@ def update_category_select():
     selected = ""
     if "P1" in categories:
         selected = "P1"
-    elif "ERC" in categories:
-        selected = "ERC"
+    elif "ERC1" in categories:
+        selected = "ERC1"
     ui.update_select("category", choices=categories, selected=selected)
 
 
@@ -1652,8 +1654,12 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
             {format_timedelta(p["timeInS"], units="s")}  
             """
         )
+    
+    stage_times_data_p1 = stage_times_data[stage_times_data["position"] == 1]
+    if stage_times_data_p1.empty:
+        return
+    p1_ = stage_times_data_p1.iloc[0]
 
-    p1_ = stage_times_data[stage_times_data["position"] == 1].iloc[0]
     # Positions are zero-indexed
     averaging = p1_["speed (km/h)"]
     # TO DO - if this is final result, we can use overall dist for speed
