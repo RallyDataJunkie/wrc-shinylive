@@ -70,12 +70,12 @@ class DatabaseManager:
             if c not in cols:
                 df.drop(columns=[c], inplace=True)
 
-        logger.info(f"Updating {table}...")
-
         if if_exists == "upsert":
+            logger.info(f"Upserting {table}...")
             DB = Database(self.conn)
             DB[table].upsert_all(df.to_dict(orient="records"), pk=pk)
         else:
+            logger.info(f"Inserrting {table} (if_exists: {if_exists})...")
             df.to_sql(table, self.conn, if_exists=if_exists, index=index)
 
     def cleardbtable(self, table):
@@ -536,8 +536,8 @@ class APIClient:
         self,
         eventId,
         rallyId,
+        stageId,
         championshipId=None,
-        stageId=None,
         by_championship=False,
         updateDB=False,
     ):
@@ -545,7 +545,8 @@ class APIClient:
         # TO DO: if we select by championship, are these different?
         # If so, do we need to set championship and championship Pos cols, maybe in a new table?
         # The rallyId is optional? Or does it filter somehow?
-        stageId = stageId if stageId else self.stageId
+        # We have no self.stageId here
+        # stageId = stageId if stageId else self.stageId
         stub = f"events/{eventId}/stages/{stageId}/results.json?rallyId={rallyId}"
         if by_championship and championshipId:
             stub = stub + f"&championshipId={championshipId}"
@@ -612,6 +613,7 @@ class WRCTimingResultsAPIClientV2:
         "World Rally Championship": "wrc",
         "European Rally Championship": "erc",
     }
+    STAGE_PREFIX = "SS"
     SPLIT_PREFIX = "SP"
     SPLIT_FINAL = "FINAL"
 
@@ -1052,9 +1054,9 @@ class WRCTimingResultsAPIClientV2:
             self._getStartLists(startListId=startListId)
 
         eventId = eventId if eventId else self.eventId
-        _on_event = f"sl.eventId={eventId}" if eventId else "1=1"
+        _on_event = f"AND sl.eventId={eventId}" if eventId else ""
         if raw:
-            q = f"SELECT * FROM startlists AS sl WHERE {_on_event}"
+            q = f"SELECT * FROM startlists AS sl WHERE 1=1 {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId}"
             q = f"{q};"
@@ -1068,7 +1070,7 @@ class WRCTimingResultsAPIClientV2:
                 f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
             )
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-            q = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE {_on_event}"
+            q = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, e.priority, e.eligibility, sl.* FROM startlists AS sl {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId};"
             q = f"{q} ORDER BY sl.[order] ASC;"
@@ -1230,6 +1232,7 @@ class WRCTimingResultsAPIClientV2:
         itinerarySectionId=None,
         stageId=None,
         stage_code=None,
+        completed=False,
         raw=True,
         updateDB=False,
         noLiveCheck=False,
@@ -1241,7 +1244,7 @@ class WRCTimingResultsAPIClientV2:
                 )
             self._getStages(updateDB=updateDB)
 
-        on_event_ = f"""si.eventId={self.eventId}""" if on_event else "1=1"
+        on_event_ = f"""AND si.eventId={self.eventId}""" if on_event else ""
         on_leg_ = (
             f"""AND it_l.itineraryLegId={itineraryLegId}""" if itineraryLegId else ""
         )
@@ -1257,15 +1260,17 @@ class WRCTimingResultsAPIClientV2:
         else:
             stage_code = []
 
+        completed_ = """AND si.status="Completed" """ if completed else ""
+
         if raw:
-            q = f"SELECT * FROM stage_info AS si WHERE {on_event_} {on_stage_};"
+            q = f"SELECT * FROM stage_info AS si WHERE 1=1 {on_event_} {on_stage_} {completed_};"
         else:
             _itinerary_stages_join = (
                 f"INNER JOIN itinerary_stages AS it_st ON it_st.stageId=si.stageId"
             )
             _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
-            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {on_event_} {on_leg_} {on_section_} {on_stage_};"
+            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {on_event_} {on_leg_} {on_section_} {on_stage_} {completed_};"
 
         stages_df = self.db_manager.read_sql(q)
 
@@ -1540,9 +1545,13 @@ class WRCTimingResultsAPIClientV2:
                 lambda x: round(x / 1000, 1) if notnull(x) else nan
             )
         if "elapsedDurationMs" in df_stageTimes:
-            df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
-                lambda x: round(x / 1000, 1) if notnull(x) else nan
-            )
+            # df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
+            #    lambda x: x / 1000 if notnull(x) else nan
+            # ).round(1)
+            df_stageTimes["timeInS"] = (
+                df_stageTimes["elapsedDurationMs"] / 1000
+            ).round(1)
+
             df_stageTimes["timeToCarBehind"] = (
                 df_stageTimes["timeInS"].diff(-1).round(1)
             )
@@ -1666,6 +1675,46 @@ class WRCTimingResultsAPIClientV2:
 
         return split_times_wide
 
+    def getStageOverallWide(
+        self,
+        stageId=None,
+        priority=None,
+        completed=False,
+        typ="position",
+        updateDB=False,
+    ):
+        # typ: position, totalTimeInS
+        if self.eventId and self.rallyId and stageId:
+            priority = None if priority == "P0" else priority
+        overall_times = self.getStageOverallResults(
+            raw=False,
+            stageId=stageId,
+            priority=priority,
+            completed=completed,
+            updateDB=updateDB,
+        )
+        stage_order = overall_times["stageCode"].unique()
+        # Optionally return just up to and including specified stageId
+        # TO DO
+        # if stageId:
+
+        overall_times_wide = pivot(
+            overall_times.dropna(subset=["position"]),
+            index=["driverName", "entryId", "carNo"],
+            columns="stageCode",
+            values=typ,
+        ).reset_index()
+        cols_ = [c for c in overall_times_wide.columns if c not in stage_order]
+        cols_ = cols_ + [c for c in stage_order if c in overall_times_wide.columns]
+        return overall_times_wide[cols_]
+
+    def getOverallStageCols(self, overall_times_wide):
+        """Get special stage columns."""
+        stage_cols = [
+            c for c in overall_times_wide.columns if c.startswith(self.STAGE_PREFIX)
+        ]
+        return stage_cols
+
     def getSplitCols(self, split_times_wide):
         """Get the split time columns from the wide splits dataframe."""
         split_cols = [
@@ -1785,25 +1834,55 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageOverallResults(*args, **kwargs)
 
+    def getCompletedStages(self, stageId=None):
+        # stageId is the up to an including stageId, else all TO DO still
+        completed_stages = (
+            self.getStageInfo(raw=False, completed=True)
+            .sort_values("number")[["stageId", "code"]]
+            .set_index("stageId")["code"]
+            .to_dict()
+        )
+        return completed_stages
+
     def getStageOverallResults(
-        self, stageId=None, priority=None, raw=True, updateDB=False
+        self, stageId=None, priority=None, completed=False, raw=True, updateDB=False
     ):
+
+        stageIds = (
+            self.getCompletedStages(stageId=stageId)
+            if completed
+            else {}  # TO DO map for the default stageId
+        )
         if updateDB or self.liveCatchup:
-            updateDB = updateDB or self.isStageLive(stageId=stageId)
-            self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
+            if completed:
+                # Check availability of every stage required
+                for stageId in stageIds:
+                    updateDB = updateDB or self.isStageLive(stageId=stageId)
+                    self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
+            else:
+                updateDB = updateDB or self.isStageLive(stageId=stageId)
+                self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
 
         stageId = stageId if stageId else self.stageId
-        if self.eventId and stageId and self.rallyId:
+        # TO DO if stageId and completed treat that as up to?
+        if self.eventId and self.rallyId and (stageId or completed):
             priority = None if priority == "P0" else priority
             _entry_join = f"INNER JOIN entries AS e ON o.entryId=e.entryId"
-            on_event_ = f"AND o.eventId={self.eventId} AND o.stageId={stageId} AND o.rallyId={self.rallyId}"
+            _stage_info_join = f"INNER JOIN stage_info AS si ON si.stageId=o.stageId"
 
+            on_event_ = f"AND o.eventId={self.eventId} AND o.rallyId={self.rallyId}"
+            if completed and stageIds:
+                stage_ids_str = ",".join(str(sid) for sid in stageIds)
+                on_stage_ = f"AND o.stageId IN ({stage_ids_str})"
+            else:
+                on_stage_ = f"AND o.stageId={stageId}" if stageId else ""
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
+            completed_ = """AND si.status="Completed" """ if completed else ""
+
             if raw:
-                sql = f"""SELECT * FROM stage_overall AS o {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT * FROM stage_overall AS o {_entry_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_};"""
             else:
-                _entry_join = f"INNER JOIN entries AS e ON o.entryId=e.entryId"
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
                 )
@@ -1812,11 +1891,19 @@ class WRCTimingResultsAPIClientV2:
                 )
                 _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-                sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, e.vehicleModel, e.identifier AS carNo, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.priority, e.eligibility, o.* FROM stage_overall AS o {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"
+                sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, e.vehicleModel, e.identifier AS carNo, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.priority, e.eligibility, si.code AS stageCode, si.number AS stageOrder, o.* FROM stage_overall AS o {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_} ORDER BY stageOrder, o.position ASC;"
+
             r = self.db_manager.read_sql(sql)
+
             # Hack to poll API if empty
-            if r.empty:
-                self._getStageOverallResults(stageId=stageId, updateDB=True)
+            if r.empty or (
+                completed and len(r["stageCode"].unique().tolist()) < len(stageIds)
+            ):
+                if completed:
+                    for stageId in stageIds:
+                        self._getStageOverallResults(stageId=stageId, updateDB=True)
+                else:
+                    self._getStageOverallResults(stageId=stageId, updateDB=True)
                 r = self.db_manager.read_sql(sql)
         else:
             print(
@@ -1828,6 +1915,9 @@ class WRCTimingResultsAPIClientV2:
         overall_df.sort_values("position", inplace=True)
         overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
         overall_df.sort_values("roadPos", inplace=True)
+
+        if completed:
+            overall_df.rename(columns=stageIds, inplace=True)
         return r
 
     def _getStageWinners(self, *args, **kwargs):
@@ -1849,13 +1939,13 @@ class WRCTimingResultsAPIClientV2:
 
         # TO DO - handle priority; maybe create a category_stagewinners db table?
         _on_event = (
-            f"""w.eventId={self.eventId} AND w.rallyId={self.rallyId}"""
+            f"""AND w.eventId={self.eventId} AND w.rallyId={self.rallyId}"""
             if on_event
             else ""
         )
 
         if raw:
-            sql = f"""SELECT * FROM stagewinners AS w WHERE {_on_event};"""
+            sql = f"""SELECT * FROM stagewinners AS w WHERE 1=1 {_on_event};"""
         else:
             _entry_join = f"INNER JOIN entries AS e ON w.entryId=e.entryId"
             _stages_join = f"INNER JOIN stage_info AS st ON st.stageId=w.stageId"
@@ -1872,7 +1962,7 @@ class WRCTimingResultsAPIClientV2:
             )
             _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
-            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE {_on_event};"""
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, it_st.code, it_se.name AS sectionName, it_l.name AS day, st.distance, w.* FROM stagewinners AS w {_entry_join} {_stages_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
@@ -1887,11 +1977,10 @@ class WRCTimingResultsAPIClientV2:
             updateDB = updateDB or self.isRallyLive()
             self._getRetirements(updateDB=updateDB)
 
-        _on_event = f"r.eventId={self.eventId}" if on_event and self.eventId else ""
+        _on_event = f"AND r.eventId={self.eventId}" if on_event and self.eventId else ""
 
         if raw:
-            _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT * FROM retirements r {_on_event};"""
+            sql = f"""SELECT * FROM retirements r WHERE 1=1 {_on_event};"""
         else:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON r.entryId=e.entryId"
@@ -1904,8 +1993,8 @@ class WRCTimingResultsAPIClientV2:
             )
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON r.controlId=c.controlId"
-            _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, r.reason, c.location, c.type, r.retirementDateTime, r.status FROM retirements r {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} WHERE 1=1 {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty
@@ -1920,11 +2009,10 @@ class WRCTimingResultsAPIClientV2:
             updateDB = updateDB or self.isRallyLive()
             self._getPenalties(updateDB=updateDB)
 
-        _on_event = f"p.eventId={self.eventId}" if on_event and self.eventId else ""
+        _on_event = f"AND p.eventId={self.eventId}" if on_event and self.eventId else ""
 
         if raw:
-            _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT * FROM penalties AS p {_on_event};"""
+            sql = f"""SELECT * FROM penalties AS p WHERE 1=1 {_on_event};"""
         else:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON p.entryId=e.entryId"
@@ -1937,8 +2025,7 @@ class WRCTimingResultsAPIClientV2:
             )
             _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
             _control_join = f"INNER JOIN stage_controls AS c ON p.controlId=c.controlId"
-            _on_event = f"WHERE {_on_event}" if _on_event else _on_event
-            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} {_on_event};"""
+            sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.identifier AS carNo, e.vehicleModel, c.code, p.penaltyDuration, p.Reason, c.location, c.type FROM penalties AS p {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_control_join} WHERE 1=1 {_on_event};"""
 
         r = self.db_manager.read_sql(sql)
         # Hack to poll API if empty

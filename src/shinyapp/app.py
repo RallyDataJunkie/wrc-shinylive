@@ -145,6 +145,93 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
+        ui.markdown("*Progress across stages.*")
+
+        @render.data_frame
+        @reactive.event(input.stage, input.event_day, input.event_section)
+        def stage_progress_frame():
+            overall_times_wide = get_overall_pos_wide()
+            if overall_times_wide.empty:
+                return
+
+            return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
+
+        @render.plot(
+            alt="Line chart of overall rally positions."
+        )
+        @reactive.event(
+            input.splits_review_accordion, input.category, input.stage
+        )
+        def seaborn_linechart_stage_progress_positions():
+            overall_times_wide = get_overall_pos_wide()
+            if overall_times_wide.empty:
+                return
+
+            overall_cols = wrc.getOverallStageCols(overall_times_wide)
+            overall_times_wide[overall_cols] = overall_times_wide[overall_cols].apply(
+                lambda col: col.rank(method="min", ascending=True)
+            )
+            overall_times_pos_long = melt(
+                overall_times_wide,
+                id_vars=["carNo", "driverName"],
+                value_vars=overall_cols,
+                var_name="roundN",
+                value_name="position",
+            )
+            ax = lineplot(
+                data=overall_times_pos_long,
+                x="roundN",
+                y="position",
+                hue="carNo",
+                legend=False,
+            )
+            x_min, x_max = ax.get_xlim()
+            for car in overall_times_pos_long["carNo"].unique():
+                # Filter data for this car and get the last round's position
+                first_point = overall_times_pos_long[
+                    (overall_times_pos_long["carNo"] == car)
+                    & (
+                        overall_times_pos_long["roundN"]
+                        == overall_times_pos_long["roundN"]
+                    .iloc[0])
+                ]
+                if not first_point.empty:
+                    # Get position value for the last point
+                    y_pos = first_point["position"].values[0]
+
+                    # Add text slightly to the right of the maximum round
+                    ax.text(
+                        x_min - 0.1,
+                        y_pos,
+                        f"#{car}",
+                        verticalalignment="center",
+                        fontsize=9,
+                    )
+                last_point = overall_times_pos_long[
+                    (overall_times_pos_long["carNo"] == car)
+                    & (
+                        overall_times_pos_long["roundN"]
+                        == overall_times_pos_long["roundN"].iloc[-1]
+                    )
+                ]
+
+                if not last_point.empty:
+                    # Get position value for the last point
+                    y_pos = last_point["position"].values[0]
+
+                    # Add text slightly to the right of the maximum round
+                    ax.text(
+                        x_max + 0.05,
+                        y_pos,
+                        f"#{car}",
+                        verticalalignment="center",
+                        fontsize=9,
+                    )
+            ax.set(xlabel=None, ylabel="Position")
+            ax.invert_yaxis()
+            plt.xlim(x_min - 0.5, x_max + 0.5)
+            return ax
+
         with ui.card(class_="mt-3"):
             with ui.card_header():
                 with ui.tooltip(placement="right", id="rally_stages_overview_tt"):
@@ -599,13 +686,40 @@ with ui.accordion(open=False):
                         {},
                     )
 
-                    # @render.data_frame
-                    # @render.ui
-                    # @render_widget
-                    # def stage_results_short_():
-                    #    return ITable()
+                    @render.plot(alt="Barplot of stage times.")
+                    @reactive.event(
+                        input.stage_review_accordion,
+                        input.category,
+                        input.stage,
+                        input.stage_rebase_driver,
+                    )
+                    def seaborn_barplot_stagetimes():
+                        stage_times_df = get_rebased_data()
+                        if stage_times_df is None:
+                            return
 
-                    # @reactive.effect
+                        rebase_gap_col = "Rebase Gap (s)"
+
+                        ax = barplot(
+                            stage_times_df,
+                            orient="h",
+                            y="carNo",
+                            x=rebase_gap_col,
+                            legend=False,
+                        )
+
+                        # Get all the bars from the plot
+                        bars = [patch for patch in ax.patches]
+
+                        # Color each bar based on its height
+                        for bar in bars:
+                            if input.rebase_reverse_palette():
+                                bar.set_color("#2ecc71" if bar.get_width() > 0 else "#e74c3c")
+                            else:
+                                bar.set_color("#2ecc71" if bar.get_width() <= 0 else "#e74c3c")
+                        ax.invert_xaxis()
+                        return ax
+
                     @render.data_frame
                     @reactive.event(
                         input.stage_review_accordion,
@@ -614,59 +728,9 @@ with ui.accordion(open=False):
                         input.stage_rebase_driver,
                     )
                     def stage_results_short():
-                        stageId = input.stage()
-                        if not stageId:
+                        stage_times_df = get_rebased_data()
+                        if stage_times_df is None:
                             return
-                        stageId = int(stageId)
-                        priority = input.category()
-                        stage_times_df = wrc.getStageTimes(
-                            stageId=stageId, priority=priority, raw=False
-                        )
-                        if stage_times_df.empty:
-                            return
-                        stage_times_df["roadPos"] = range(1, len(stage_times_df) + 1)
-                        stage_times_df["position_"] = stage_times_df["position"]
-                        if priority != "P0" and priority != "P1":
-                            stage_times_df.sort_values("position", inplace=True)
-                            stage_times_df["position"] = range(
-                                1, len(stage_times_df) + 1
-                            )
-                            stage_times_df.sort_values("roadPos", inplace=True)
-                        # Rebase element
-                        rebase_driver = input.stage_rebase_driver()
-                        rebase_driver = (
-                            int(rebase_driver) if rebase_driver else rebase_driver
-                        )
-                        if rebase_driver:
-                            # Add percentage time column using rebase driver time basis
-                            stage_times_df["Rebase %"] = (
-                                100
-                                * stage_times_df["timeInS"]
-                                / stage_times_df.loc[
-                                    stage_times_df["carNo"] == rebase_driver, "timeInS"
-                                ].iloc[0]
-                            ).round(1)
-
-                        rebase_gap_col = "Rebase Gap (s)"
-                        stage_times_df[rebase_gap_col] = stage_times_df["Gap"]
-
-                        stage_times_df.loc[:, rebase_gap_col] = wrc.rebaseTimes(
-                            stage_times_df, rebase_driver, "carNo", rebase_gap_col
-                        )
-
-                        rebase_pace_df = stage_times_df.loc[
-                            stage_times_df["carNo"] == rebase_driver, "pace (s/km)"
-                        ]
-
-                        if not rebase_pace_df.empty:
-                            rebase_pace = rebase_pace_df.iloc[0]
-                            stage_times_df["Rebase pace diff (s/km)"] = (
-                                stage_times_df["pace (s/km)"] - rebase_pace
-                            ).round(2)
-                        else:
-                            stage_times_df["Rebase pace diff (s/km)"] = (
-                                None  # Handle missing values gracefully
-                            )
 
                         cols = [
                             "carNo",
@@ -690,31 +754,81 @@ with ui.accordion(open=False):
                             "priority",
                             "eligibility",
                         ]
-                        # stage_results_short_.widget.update(
-                        #    stage_times_df[cols]
-                        # The style bar does not work with itables
-                        # .style.format(precision=1).bar(
-                        # subset=[rebase_gap_col],
-                        # align="zero",
-                        #  color=["#5fba7d", "#d65f5f"],
-                        # )
-                        # )
+
                         cols = [c for c in cols if c in stage_times_df.columns]
-                        # return ui.HTML(html)
                         return render.DataGrid(stage_times_df[cols])
 
     with ui.accordion_panel(title="Splits Analysis"):
 
         with ui.accordion(open=False, id="splits_review_accordion"):
 
-            with ui.accordion_panel("Split times"):
+            with ui.accordion_panel("Split times summary"):
+
+                ui.markdown("*Position / elapsed time across the split sections.*")
+
+                @render.plot(
+                    alt="Line chart of elapsed split positions."
+                )
+                @reactive.event(
+                    input.splits_review_accordion, input.category, input.stage
+                )
+                def seaborn_linechart_split_positions():
+                    split_times_wide = get_split_times_wide().copy()
+                    split_cols = wrc.getSplitCols(split_times_wide)
+                    split_times_wide[split_cols] = split_times_wide[split_cols].apply(lambda col: col.rank(method='min', ascending=True))
+                    split_times_pos_long = melt(
+                        split_times_wide,
+                        id_vars=["carNo", "driverName"],
+                        value_vars=split_cols,
+                        var_name="roundN",
+                        value_name="position",
+                    )
+                    ax = lineplot(data=split_times_pos_long, x="roundN", y="position", hue="carNo", legend=False)
+                    x_min, x_max = ax.get_xlim()
+                    for car in split_times_pos_long["carNo"].unique():
+                        # Filter data for this car and get the last round's position
+                        first_point = split_times_pos_long[
+                            (split_times_pos_long["carNo"] == car)
+                            & (split_times_pos_long["roundN"] == f"{wrc.SPLIT_PREFIX}1")
+                        ]
+                        if not first_point.empty:
+                            # Get position value for the last point
+                            y_pos = first_point["position"].values[0]
+
+                            # Add text slightly to the right of the maximum round
+                            ax.text(
+                                x_min - 0.1,
+                                y_pos,
+                                f"#{car}",
+                                verticalalignment="center",
+                                fontsize=9,
+                            )
+                        last_point = split_times_pos_long[(split_times_pos_long["carNo"] == car) & 
+                                                        (split_times_pos_long["roundN"] == wrc.SPLIT_FINAL)]
+
+                        if not last_point.empty:
+                            # Get position value for the last point
+                            y_pos = last_point["position"].values[0]
+
+                            # Add text slightly to the right of the maximum round
+                            ax.text(
+                                x_max + 0.05,
+                                y_pos,
+                                f"#{car}",
+                                verticalalignment="center",
+                                fontsize=9,
+                            )
+                    ax.set(xlabel=None, ylabel="Position")
+                    ax.invert_yaxis()
+                    plt.xlim(x_min - 0.5, x_max + 0.5)
+                    return ax
 
                 @render.data_frame
                 @reactive.event(
                     input.splits_review_accordion, input.category, input.stage
                 )
                 def split_results_wide():
-                    split_times_data = cached_split_times_wide()
+                    split_times_data = get_split_times_wide()
                     if split_times_data is None or split_times_data.empty:
                         return
                     return render.DataGrid(split_times_data)
@@ -769,7 +883,7 @@ with ui.accordion(open=False):
                         input.splits_section_view, input.stage, input.category
                     )
                     def split_report():
-                        scaled_splits = cached_scaled_splits()
+                        scaled_splits = get_scaled_splits()
                         if scaled_splits is None or scaled_splits.empty:
                             return
                         return render.DataGrid(scaled_splits)
@@ -782,7 +896,7 @@ with ui.accordion(open=False):
                         )
                         @reactive.event(input.stage, input.splits_section_view)
                         def plot_split_dists():
-                            scaled_splits_wide = cached_scaled_splits()
+                            scaled_splits_wide = get_scaled_splits()
                             if scaled_splits_wide is None or scaled_splits_wide.empty:
                                 return
 
@@ -938,7 +1052,7 @@ with ui.accordion(open=False):
                                     )
 
                                     # Get the cached split times data
-                                    split_times_wide = cached_split_times_wide()
+                                    split_times_wide = get_split_times_wide()
                                     if (
                                         split_times_wide is None
                                         or split_times_wide.empty
@@ -1018,11 +1132,6 @@ with ui.accordion(open=False):
 
                                 @render.plot(alt="Barplot of within split delta times.")
                                 def seaborn_barplot_splits():
-                                    stageId = input.stage()
-                                    if not stageId:
-                                        return
-                                    stageId = int(stageId)
-                                    priority = input.category()
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
@@ -1034,19 +1143,13 @@ with ui.accordion(open=False):
                                         else rebase_driver
                                     )
 
-                                    split_times_wide = wrc.getSplitTimesWide(
-                                        stageId=stageId,
-                                        priority=priority,
-                                        extended=True,
-                                    )
-                                    if split_times_wide.empty:
+                                    # Get the cached split times data
+                                    split_times_wide = get_split_times_wide()
+                                    if (
+                                        split_times_wide is None
+                                        or split_times_wide.empty
+                                    ):
                                         return
-
-                                    colors = (
-                                        ["red", "white", "green"]
-                                        if input.rebase_reverse_palette()
-                                        else ["green", "white", "red"]
-                                    )
 
                                     split_times_wide_, split_cols = (
                                         _reshape_splits_wide_with_ult(
@@ -1062,10 +1165,6 @@ with ui.accordion(open=False):
                                         value_name="time",
                                     )
 
-                                    colors = [
-                                        "red" if val >= 0 else "green"
-                                        for val in split_times_long["time"]
-                                    ]
                                     if input.splits_section_plot() == "bydriver":
                                         ax = barplot(
                                             split_times_long,
@@ -1073,7 +1172,6 @@ with ui.accordion(open=False):
                                             hue="roundN",
                                             x="time",
                                             y="carNo",
-                                            palette=colors,
                                             legend=False,
                                         )
                                     else:
@@ -1083,7 +1181,6 @@ with ui.accordion(open=False):
                                             y="roundN",
                                             x="time",
                                             hue="carNo",
-                                            palette=colors,
                                             legend=False,
                                         )
 
@@ -1139,12 +1236,29 @@ with ui.accordion(open=False):
                                         else rebase_driver
                                     )
 
-                                    split_times_wide = cached_split_times_wide()
+                                    # We don't want to modify the cached split times df
+                                    split_times_wide = get_split_times_wide().copy()
                                     if (
                                         split_times_wide is None
                                         or split_times_wide.empty
                                     ):
                                         return
+
+                                    insert_point = f"{wrc.SPLIT_PREFIX}1"
+                                    insert_loc = None
+                                    if insert_point in split_times_wide.columns:
+                                        insert_loc = split_times_wide.columns.get_loc(insert_point)
+                                    elif wrc.SPLIT_FINAL in split_times_wide.columns:
+                                        insert_loc = split_times_wide.columns.get_loc(
+                                            wrc.SPLIT_FINAL
+                                        )
+                                    start_col = f"{wrc.SPLIT_PREFIX}0"
+                                    if insert_loc is not None and start_col not in split_times_wide:
+                                        split_times_wide.insert(
+                                            loc=insert_loc,
+                                            column=start_col,
+                                            value=0,
+                                        )
 
                                     split_cols = wrc.getSplitCols(split_times_wide)
 
@@ -1170,12 +1284,15 @@ with ui.accordion(open=False):
                                         "distance"
                                     ].to_dict()
 
+                                    # Add start point
+                                    split_dists[f"{wrc.SPLIT_PREFIX}0"] = 0
+
                                     split_times_long["distance"] = split_times_long[
                                         "roundN"
                                     ].map(split_dists)
 
                                     g = lineplot(
-                                        data=split_times_long.sort_values("carNo"),
+                                        data=split_times_long.sort_values(["carNo", ]),
                                         x="distance",
                                         y="time",
                                         hue="carNo",
@@ -1544,7 +1661,21 @@ def getItinerary():
 
 @reactive.calc
 @reactive.event(input.stage, input.category)
-def cached_split_times_wide():
+def get_overall_pos_wide():
+    stageId = input.stage()
+    if not stageId:
+        return DataFrame()
+    stageId = int(stageId)
+    # TO DO - up to
+    stageId=None
+    priority = input.category()
+    overall_times_wide = wrc.getStageOverallWide(stageId=stageId, priority=priority, completed=True, typ="position") # typ: position, totalTimeInS
+
+    return overall_times_wide
+
+@reactive.calc
+@reactive.event(input.stage, input.category)
+def get_split_times_wide():
     """Cache for split times wide data"""
     stageId = input.stage()
     if not stageId:
@@ -1557,7 +1688,7 @@ def cached_split_times_wide():
 
 @reactive.calc
 @reactive.event(input.stage, input.category, input.splits_section_view)
-def cached_scaled_splits():
+def get_scaled_splits():
     """Cache for scaled splits data"""
     stageId = input.stage()
     if not stageId:
@@ -1568,6 +1699,81 @@ def cached_scaled_splits():
 
     return wrc.getScaledSplits(stageId, priority, view)
 
+
+@reactive.calc
+@reactive.event(
+    input.stage_review_accordion,
+    input.category,
+    input.stage,
+)
+def get_stage_data():
+    stageId = input.stage()
+    if not stageId:
+        return None
+    stageId = int(stageId)
+    priority = input.category()
+    stage_times_df = wrc.getStageTimes(
+        stageId=stageId, priority=priority, raw=False
+    )
+    if stage_times_df.empty:
+        return None
+    
+    # Add position and road position processing
+    stage_times_df["roadPos"] = range(1, len(stage_times_df) + 1)
+    stage_times_df["position_"] = stage_times_df["position"]
+    if priority != "P0" and priority != "P1":
+        stage_times_df.sort_values("position", inplace=True)
+        stage_times_df["position"] = range(1, len(stage_times_df) + 1)
+        stage_times_df.sort_values("roadPos", inplace=True)
+    
+    return stage_times_df
+
+# Create a reactive cached function for rebased calculations
+@reactive.calc
+@reactive.event(
+    input.stage_review_accordion,
+    input.category,
+    input.stage,
+    input.stage_rebase_driver,
+)
+def get_rebased_data():
+    stage_times_df = get_stage_data()
+    if stage_times_df is None:
+        return None
+    
+    # Get rebase driver
+    rebase_driver = input.stage_rebase_driver()
+    rebase_driver = int(rebase_driver) if rebase_driver else rebase_driver
+    
+    # Return if no rebase driver selected
+    if not rebase_driver:
+        return stage_times_df
+    
+    # Add percentage time column using rebase driver time basis
+    rebase_time = stage_times_df.loc[stage_times_df["carNo"] == rebase_driver, "timeInS"].iloc[0]
+    stage_times_df["Rebase %"] = (100 * stage_times_df["timeInS"] / rebase_time).round(1)
+
+    # Calculate rebased gap
+    rebase_gap_col = "Rebase Gap (s)"
+    stage_times_df[rebase_gap_col] = stage_times_df["Gap"].round(1)
+    stage_times_df.loc[:, rebase_gap_col] = wrc.rebaseTimes(
+        stage_times_df, rebase_driver, "carNo", rebase_gap_col
+    )
+    
+    # Calculate rebased pace difference
+    rebase_pace_df = stage_times_df.loc[
+        stage_times_df["carNo"] == rebase_driver, "pace (s/km)"
+    ]
+    
+    if not rebase_pace_df.empty:
+        rebase_pace = rebase_pace_df.iloc[0]
+        stage_times_df["Rebase pace diff (s/km)"] = (
+            stage_times_df["pace (s/km)"] - rebase_pace
+        ).round(2)
+    else:
+        stage_times_df["Rebase pace diff (s/km)"] = None
+    
+    return stage_times_df
 
 ## Heros and banners
 
@@ -1583,7 +1789,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             record = record.iloc[0]
             return ui.markdown(
                 f"""
-                __{record["driverName"]}__  
+                __{record["driverName"]} #{record["carNo"]}__  
                 {format_timedelta(record["stageTimeMs"])}  
                 """
             )
@@ -1635,20 +1841,19 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
 
 
 def get_stage_result_hero(stageId, stages_data, stage_times_data):
-    # TO DO - how do we know we're on shakedown?
-    if stageId == "SHD":
-        return None
 
     if stage_times_data.empty:
         print(f"No stage times in stage_times_data() for {stageId}")
         return None
 
-    stage_name = stages_data.loc[stages_data["stageId"] == stageId, "name"].iloc[0]
+    stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
+    stage_name = stage_["name"]
+    stage_code = stage_["code"]
 
     def _get_hero_text(p):
         return ui.markdown(
             f"""
-            __{p["driverName"]}__  
+            __{p["driverName"]} #{p["carNo"]}__  
             {format_timedelta(p["timeInS"], units="s")}  
             """
         )
@@ -1660,10 +1865,11 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
 
     # Positions are zero-indexed
     averaging = p1_["speed (km/h)"]
+    pace = p1_["pace (s/km)"]
     # TO DO - if this is final result, we can use overall dist for speed
-    averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
+    averaging = f"Averaging  \n  \n{averaging} km/h  \n{pace} s/km" if averaging else ""
     p1 = ui.value_box(
-        title=stage_name,
+        title=f"{stage_code}: {stage_name}",
         value=_get_hero_text(p1_),
         theme="text-green",
         showcase=averaging,
@@ -1673,26 +1879,29 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
 
     if len(stage_times_data) > 1:
         p2_ = stage_times_data[stage_times_data["position"] == 2].iloc[0]
+        p2speed = p2_["speed (km/h)"]
         p2pace = p2_["pace diff (s/km)"]
-        p2pace = f"(Pace: {p2pace} s/km slower)"
+        p2speedpace = f"({p2speed} km/h, {p2pace} s/km off the pace)" if p2speed else ""
         p2 = ui.value_box(
             value=format_timedelta(p2_["diffFirstMs"], addplus=True),
             title=_get_hero_text(p2_),
             theme="text-blue",
-            showcase=p2pace,
+            showcase=p2speedpace,
             showcase_layout="bottom",
             full_screen=True,
         )
         if len(stage_times_data) > 2:
             p3_ = stage_times_data[stage_times_data["position"] == 3].iloc[0]
+            p3speed = p3_["speed (km/h)"]
             p3pace = p3_["pace diff (s/km)"]
-            p3pace = p3pace if p3pace else ""
-            p3pace = f"(Pace: {p3pace} s/km slower)"
+            p3speedpace = (
+                f"({p3speed} km/h, {p3pace} s/km off the pace)" if p3speed else ""
+            )
             p3 = ui.value_box(
                 value=format_timedelta(p3_["diffFirstMs"], addplus=True),
                 title=_get_hero_text(p3_),
                 theme="text-purple",
-                showcase=p3pace,
+                showcase=p3speedpace,
                 showcase_layout="bottom",
                 full_screen=True,
             )
@@ -1706,6 +1915,7 @@ def _reshape_splits_wide_with_ult(split_times_wide, rebase_driver):
     split_cols = wrc.getSplitCols(split_times_wide)
 
     # output_ = split_times_wide_numeric
+    # Use the split durations rather than split elapsed times
     output_ = wrc.getSplitDuration(split_times_wide)
 
     # output_ = wrc.subtract_from_rows(
