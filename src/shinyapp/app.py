@@ -4,14 +4,12 @@ from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, melt
+from pandas import DataFrame
 from matplotlib import pyplot as plt
-from seaborn import barplot, boxplot, heatmap, lineplot
+from seaborn import barplot, heatmap
 from matplotlib.colors import LinearSegmentedColormap
 
-
 ## Heros and banners
-
 from .app_heroes import (
     get_overall_result_hero,
     get_stage_result_hero,
@@ -20,6 +18,9 @@ from .app_heroes import (
 
 # Charts
 from .app_charts import (
+    chart_seaborn_linechart_stage_progress_positions,
+    chart_seaborn_barplot_stagetimes,
+    chart_plot_driver_stagewins,
     chart_seaborn_linechart_split_positions,
     chart_seaborn_barplot_splits,
     chart_seaborn_linechart_splits,
@@ -29,23 +30,19 @@ from .app_charts import (
 # from shinywidgets import render_widget
 # from itables.widget import ITable
 
-
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 
 wrc = WRCTimingResultsAPIClientV2(
     use_cache=True, backend="memory", expire_after=30, liveCatchup=True
 )
 
-
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
 # TO DO - in creating dropdowns, where index values are integers they should be set to strings BUT
 # this should be done in an immutable way and not modify the original dict integer values
 
-
 def seasonInfo(updateDB=False):
     return wrc.getSeasons(updateDB=updateDB)
-
 
 with ui.sidebar(open="desktop"):
     # Create season selector
@@ -184,70 +181,9 @@ with ui.accordion(open=False):
             if overall_times_wide.empty:
                 return
 
-            overall_cols = wrc.getOverallStageCols(overall_times_wide)
-            overall_times_wide[overall_cols] = overall_times_wide[overall_cols].apply(
-                lambda col: col.rank(method="min", ascending=True)
+            ax = chart_seaborn_linechart_stage_progress_positions(wrc, 
+                overall_times_wide
             )
-            overall_times_pos_long = melt(
-                overall_times_wide,
-                id_vars=["carNo", "driverName"],
-                value_vars=overall_cols,
-                var_name="roundN",
-                value_name="position",
-            )
-            ax = lineplot(
-                data=overall_times_pos_long,
-                x="roundN",
-                y="position",
-                hue="carNo",
-                legend=False,
-            )
-            x_min, x_max = ax.get_xlim()
-            for car in overall_times_pos_long["carNo"].unique():
-                # Filter data for this car and get the last round's position
-                first_point = overall_times_pos_long[
-                    (overall_times_pos_long["carNo"] == car)
-                    & (
-                        overall_times_pos_long["roundN"]
-                        == overall_times_pos_long["roundN"]
-                    .iloc[0])
-                ]
-                if not first_point.empty:
-                    # Get position value for the last point
-                    y_pos = first_point["position"].values[0]
-
-                    # Add text slightly to the right of the maximum round
-                    ax.text(
-                        x_min - 0.1,
-                        y_pos,
-                        f"#{car}",
-                        verticalalignment="center",
-                        fontsize=9,
-                    )
-                # TO DO if someone drops out before the end, label at the end of their rally.
-                last_point = overall_times_pos_long[
-                    (overall_times_pos_long["carNo"] == car)
-                    & (
-                        overall_times_pos_long["roundN"]
-                        == overall_times_pos_long["roundN"].iloc[-1]
-                    )
-                ]
-
-                if not last_point.empty:
-                    # Get position value for the last point
-                    y_pos = last_point["position"].values[0]
-
-                    # Add text slightly to the right of the maximum round
-                    ax.text(
-                        x_max + 0.05,
-                        y_pos,
-                        f"#{car}",
-                        verticalalignment="center",
-                        fontsize=9,
-                    )
-            ax.set(xlabel=None, ylabel="Overall Position")
-            ax.invert_yaxis()
-            plt.xlim(x_min - 0.5, x_max + 0.5)
             return ax
 
         with ui.card(class_="mt-3"):
@@ -455,42 +391,21 @@ with ui.accordion(open=False):
 
                     @render.plot(alt="Bar chart of stage wins.")
                     def plot_driver_stagewins():
-                        df = getStageWinners()
-                        if df.empty:
+                        stage_winners = getStageWinners()
+                        if stage_winners.empty:
                             return
                         # TO DO - make use of commented out elements
                         # which limit counts  up to and including current stage
-                        # df["_stagenum"] = df["stageNo"].str.replace("SS", "")
-                        # df["_stagenum"] = df["_stagenum"].astype(int)
+                        # stage_winners["_stagenum"] = stage_winners["stageNo"].str.replace("SS", "")
+                        # stage_winners["_stagenum"] = stage_winners["_stagenum"].astype(int)
 
-                        # idx = df[df["stageId"] == input.stage()].index
+                        # idx = stage_winners[stage_winners["stageId"] == input.stage()].index
                         # if len(idx) == 0:
                         #    return]
 
                         # Drop empty rows
-                        # df = df[df["carNo"].str.strip() != ""]
-                        # Get value counts and reset index to create a plotting dataframe
-                        stage_counts = (
-                            # df.iloc[: idx[0] + 1]
-                            df.groupby("driverName")["code"]
-                            .count()
-                            .sort_values(ascending=False)
-                            .reset_index()
-                        )
-
-                        # Create figure with larger size for better readability
-                        plt.figure(figsize=(10, 6))
-
-                        # Create horizontal bar plot
-                        ax = barplot(
-                            data=stage_counts,
-                            y="driverName",
-                            x="code",
-                            orient="h",
-                            color="steelblue",
-                        )
-                        ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
-                        ax.set(xlabel=None, ylabel=None)
+                        # stage_winners = stage_winners[stage_winners["carNo"].str.strip() != ""]
+                        ax = chart_plot_driver_stagewins(stage_winners)
                         return ax
 
                 with ui.accordion_panel("Retirements"):
@@ -715,27 +630,10 @@ with ui.accordion(open=False):
                         stage_times_df = get_rebased_data()
                         if stage_times_df is None:
                             return
-
-                        rebase_gap_col = "Rebase Gap (s)"
-
-                        ax = barplot(
-                            stage_times_df,
-                            orient="h",
-                            y="carNo",
-                            x=rebase_gap_col,
-                            legend=False,
+                        rebase_reverse_palette = input.rebase_reverse_palette()
+                        ax = chart_seaborn_barplot_stagetimes(
+                            stage_times_df, rebase_reverse_palette
                         )
-
-                        # Get all the bars from the plot
-                        bars = [patch for patch in ax.patches]
-
-                        # Color each bar based on its height
-                        for bar in bars:
-                            if input.rebase_reverse_palette():
-                                bar.set_color("#2ecc71" if bar.get_width() > 0 else "#e74c3c")
-                            else:
-                                bar.set_color("#2ecc71" if bar.get_width() <= 0 else "#e74c3c")
-                        ax.invert_xaxis()
                         return ax
 
                     @render.data_frame
@@ -1529,6 +1427,8 @@ def get_rebased_data():
     if not rebase_driver:
         return stage_times_df
 
+    # TO DO - this should be in wrc. ?
+
     # Add percentage time column using rebase driver time basis
     rebase_time = stage_times_df.loc[stage_times_df["carNo"] == rebase_driver, "timeInS"].iloc[0]
     stage_times_df["Rebase %"] = (100 * stage_times_df["timeInS"] / rebase_time).round(1)
@@ -1554,9 +1454,6 @@ def get_rebased_data():
         stage_times_df["Rebase pace diff (s/km)"] = None
 
     return stage_times_df
-
-## App utils
-
 
 ## Start the data collection
 wrc.seedDB()

@@ -3,7 +3,6 @@ from shiny import ui as uis
 
 from wrc_rallydj.utils import format_timedelta
 
-
 def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
     stages_ = stages[stages["stageId"] == stageId].iloc[0]
     stage_name = stages_["name"]
