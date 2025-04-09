@@ -209,3 +209,24 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
 
     ax.legend_.remove()
     return ax
+
+
+def chart_plot_split_dists(wrc, scaled_splits_wide, splits_section_view):
+    split_cols = wrc.getSplitCols(scaled_splits_wide)
+    scaled_splits_long = melt(
+        scaled_splits_wide,
+        id_vars=["carNo", "driverName"],
+        value_vars=split_cols,
+        var_name="roundN",
+        value_name="value",
+    )
+    ylabel = "Time in section (s)"
+    view = splits_section_view
+    if view == "pace":
+        ylabel = "Pace (s/km)"
+    elif view == "speed":
+        ylabel = "Speed (km/h)"
+
+    ax = boxplot(data=scaled_splits_long, x="roundN", y="value")
+    ax.set(xlabel=None, ylabel=ylabel)
+    return ax
