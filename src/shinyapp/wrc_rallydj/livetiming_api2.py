@@ -19,9 +19,10 @@ from pandas import (
     concat,
     to_datetime,
     notnull,
+    to_numeric,
 )
-from numpy import nan
 
+from numpy import nan
 
 class DatabaseManager:
     def __init__(self, dbname, newdb=False, dbReadOnly=False):
@@ -1822,6 +1823,29 @@ class WRCTimingResultsAPIClientV2:
             ].round(1)
 
         return scaled_splits_wide
+
+    def rebase_splits_wide_with_ult(self, split_times_wide, rebase_driver):
+        split_cols = self.getSplitCols(split_times_wide)
+
+        # output_ = split_times_wide_numeric
+        # Use the split durations rather than split elapsed times
+        output_ = self.getSplitDuration(split_times_wide)
+
+        # output_ = wrc.subtract_from_rows(
+        #    output_, split_cols, ignore_first_row=False
+        # )
+        ult_row = {"carNo": "ult"}
+
+        # Find minimum non-zero values for each round column
+        for col in split_cols:
+            # Convert to numeric, filter non-zero, find minimum
+            min_val = to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
+            ult_row[col] = min_val
+
+        output_ = concat([output_, DataFrame([ult_row])], ignore_index=True)
+        output_ = self.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
+        output_ = output_[output_["carNo"] != "ult"]
+        return output_, split_cols
 
     def _getStageOverallResults(
         self, *args, stageId=None, by_championship=False, **kwargs

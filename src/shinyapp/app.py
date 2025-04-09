@@ -4,7 +4,7 @@ from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, melt, to_numeric, concat
+from pandas import DataFrame, melt
 from matplotlib import pyplot as plt
 from seaborn import barplot, boxplot, heatmap, lineplot
 from matplotlib.colors import LinearSegmentedColormap
@@ -153,7 +153,8 @@ with ui.accordion(open=False):
             overall_times_wide = get_overall_pos_wide()
             if overall_times_wide.empty:
                 return
-
+            # TO DO - this should have options for within and accumualted statge time views
+            # as well as a driver rebase option
             return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
 
         @render.plot(
@@ -207,6 +208,7 @@ with ui.accordion(open=False):
                         verticalalignment="center",
                         fontsize=9,
                     )
+                # TO DO if someone drops out before the end, label at the end of their rally.
                 last_point = overall_times_pos_long[
                     (overall_times_pos_long["carNo"] == car)
                     & (
@@ -227,7 +229,7 @@ with ui.accordion(open=False):
                         verticalalignment="center",
                         fontsize=9,
                     )
-            ax.set(xlabel=None, ylabel="Position")
+            ax.set(xlabel=None, ylabel="Overall Position")
             ax.invert_yaxis()
             plt.xlim(x_min - 0.5, x_max + 0.5)
             return ax
@@ -1058,7 +1060,7 @@ with ui.accordion(open=False):
                                         or split_times_wide.empty
                                     ):
                                         return
-                                    output_, split_cols = _reshape_splits_wide_with_ult(
+                                    output_, split_cols = wrc.rebase_splits_wide_with_ult(
                                         split_times_wide, rebase_driver
                                     )
 
@@ -1152,7 +1154,7 @@ with ui.accordion(open=False):
                                         return
 
                                     split_times_wide_, split_cols = (
-                                        _reshape_splits_wide_with_ult(
+                                        wrc.rebase_splits_wide_with_ult(
                                             split_times_wide, rebase_driver
                                         )
                                     )
@@ -1740,15 +1742,15 @@ def get_rebased_data():
     stage_times_df = get_stage_data()
     if stage_times_df is None:
         return None
-    
+
     # Get rebase driver
     rebase_driver = input.stage_rebase_driver()
     rebase_driver = int(rebase_driver) if rebase_driver else rebase_driver
-    
+
     # Return if no rebase driver selected
     if not rebase_driver:
         return stage_times_df
-    
+
     # Add percentage time column using rebase driver time basis
     rebase_time = stage_times_df.loc[stage_times_df["carNo"] == rebase_driver, "timeInS"].iloc[0]
     stage_times_df["Rebase %"] = (100 * stage_times_df["timeInS"] / rebase_time).round(1)
@@ -1759,12 +1761,12 @@ def get_rebased_data():
     stage_times_df.loc[:, rebase_gap_col] = wrc.rebaseTimes(
         stage_times_df, rebase_driver, "carNo", rebase_gap_col
     )
-    
+
     # Calculate rebased pace difference
     rebase_pace_df = stage_times_df.loc[
         stage_times_df["carNo"] == rebase_driver, "pace (s/km)"
     ]
-    
+
     if not rebase_pace_df.empty:
         rebase_pace = rebase_pace_df.iloc[0]
         stage_times_df["Rebase pace diff (s/km)"] = (
@@ -1772,167 +1774,14 @@ def get_rebased_data():
         ).round(2)
     else:
         stage_times_df["Rebase pace diff (s/km)"] = None
-    
+
     return stage_times_df
 
 ## Heros and banners
 
+from .app_heroes import get_overall_result_hero, get_stage_result_hero
 
-def get_overall_result_hero(stageId, stages_data, overall_data):
-    stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
-    stage_name = stage_["name"]
-    stage_code = stage_["code"]
-
-    # TO DO  - what if there is a joint position?
-    def _get_hero_text(record):
-        if not record.empty:
-            record = record.iloc[0]
-            return ui.markdown(
-                f"""
-                __{record["driverName"]} #{record["carNo"]}__  
-                {format_timedelta(record["stageTimeMs"])}  
-                """
-            )
-
-    # Positions are zero-indexed
-    ##averaging = round(overall_df.loc[0, "speed (km/h)"], 1)
-    # TO DO - if this is final result, we can use overall dist for speed
-    # averaging = f"Averaging  \n  \n{averaging} km/h" if averaging else ""
-    p1_ = overall_data[overall_data["position"] == 1]
-    p1 = ui.value_box(
-        title=f"{stage_code}: {stage_name}",
-        value=_get_hero_text(p1_),
-        theme="text-green",
-        # showcase=averaging,
-        # showcase_layout="left center",
-        full_screen=True,
-    )
-
-    if len(overall_data) > 1:
-        # p2pace = round(times.loc[1, "pace diff (s/km)"], 2)
-        # p2pace = p2pace if p2pace else ""
-        # p2pace = f'(Pace: {p2pace} s/km slower)'
-        p2_ = overall_data[overall_data["position"] == 2]
-        p2 = ui.value_box(
-            value="+" + format_timedelta(p2_.iloc[0]["diffFirstMs"]),
-            title=_get_hero_text(p2_),
-            theme="text-blue",
-            # showcase=p2pace,
-            # showcase_layout="bottom",
-            full_screen=True,
-        )
-        if len(overall_data) > 2:
-            # p3pace = round(overall_df.loc[2, "pace diff (s/km)"], 2)
-            # p3pace = p3pace if p3pace else ""
-            # p3pace = f"(Pace: {p3pace} s/km slower)"
-            p3_ = overall_data[overall_data["position"] == 3]
-            p3 = ui.value_box(
-                value=format_timedelta(p3_.iloc[0]["diffFirstMs"], addplus=True),
-                title=_get_hero_text(p3_),
-                theme="text-purple",
-                # showcase=p3pace,
-                # showcase_layout="bottom",
-                full_screen=True,
-            )
-            return ui.TagList(p1, uis.layout_columns(p2, p3))
-        return ui.TagList(p1, p2)
-
-    return p1
-
-
-def get_stage_result_hero(stageId, stages_data, stage_times_data):
-
-    if stage_times_data.empty:
-        print(f"No stage times in stage_times_data() for {stageId}")
-        return None
-
-    stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
-    stage_name = stage_["name"]
-    stage_code = stage_["code"]
-
-    def _get_hero_text(p):
-        return ui.markdown(
-            f"""
-            __{p["driverName"]} #{p["carNo"]}__  
-            {format_timedelta(p["timeInS"], units="s")}  
-            """
-        )
-
-    stage_times_data_p1 = stage_times_data[stage_times_data["position"] == 1]
-    if stage_times_data_p1.empty:
-        return
-    p1_ = stage_times_data_p1.iloc[0]
-
-    # Positions are zero-indexed
-    averaging = p1_["speed (km/h)"]
-    pace = p1_["pace (s/km)"]
-    # TO DO - if this is final result, we can use overall dist for speed
-    averaging = f"Averaging  \n  \n{averaging} km/h  \n{pace} s/km" if averaging else ""
-    p1 = ui.value_box(
-        title=f"{stage_code}: {stage_name}",
-        value=_get_hero_text(p1_),
-        theme="text-green",
-        showcase=averaging,
-        showcase_layout="left center",
-        full_screen=True,
-    )
-
-    if len(stage_times_data) > 1:
-        p2_ = stage_times_data[stage_times_data["position"] == 2].iloc[0]
-        p2speed = p2_["speed (km/h)"]
-        p2pace = p2_["pace diff (s/km)"]
-        p2speedpace = f"({p2speed} km/h, {p2pace} s/km off the pace)" if p2speed else ""
-        p2 = ui.value_box(
-            value=format_timedelta(p2_["diffFirstMs"], addplus=True),
-            title=_get_hero_text(p2_),
-            theme="text-blue",
-            showcase=p2speedpace,
-            showcase_layout="bottom",
-            full_screen=True,
-        )
-        if len(stage_times_data) > 2:
-            p3_ = stage_times_data[stage_times_data["position"] == 3].iloc[0]
-            p3speed = p3_["speed (km/h)"]
-            p3pace = p3_["pace diff (s/km)"]
-            p3speedpace = (
-                f"({p3speed} km/h, {p3pace} s/km off the pace)" if p3speed else ""
-            )
-            p3 = ui.value_box(
-                value=format_timedelta(p3_["diffFirstMs"], addplus=True),
-                title=_get_hero_text(p3_),
-                theme="text-purple",
-                showcase=p3speedpace,
-                showcase_layout="bottom",
-                full_screen=True,
-            )
-            return ui.TagList(p1, uis.layout_columns(p2, p3))
-        return ui.TagList(p1, p2)
-
-    return p1
-
-
-def _reshape_splits_wide_with_ult(split_times_wide, rebase_driver):
-    split_cols = wrc.getSplitCols(split_times_wide)
-
-    # output_ = split_times_wide_numeric
-    # Use the split durations rather than split elapsed times
-    output_ = wrc.getSplitDuration(split_times_wide)
-
-    # output_ = wrc.subtract_from_rows(
-    #    output_, split_cols, ignore_first_row=False
-    # )
-    ult_row = {"carNo": "ult"}
-
-    # Find minimum non-zero values for each round column
-    for col in split_cols:
-        # Convert to numeric, filter non-zero, find minimum
-        min_val = to_numeric(output_[col][output_[col] > 0], errors="coerce").min()
-        ult_row[col] = min_val
-
-    output_ = concat([output_, DataFrame([ult_row])], ignore_index=True)
-    output_ = wrc.rebaseManyTimes(output_, rebase_driver, "carNo", split_cols)
-    output_ = output_[output_["carNo"] != "ult"]
-    return output_, split_cols
+## App utils
 
 
 ## Start the data collection
