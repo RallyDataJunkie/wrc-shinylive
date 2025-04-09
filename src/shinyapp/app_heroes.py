@@ -3,6 +3,60 @@ from shiny import ui as uis
 
 from wrc_rallydj.utils import format_timedelta
 
+
+def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
+    stages_ = stages[stages["stageId"] == stageId].iloc[0]
+    stage_name = stages_["name"]
+    stage_code = stages_["code"]
+
+    times_ = times[times["carNo"] == rebase_driver]
+    if times.empty:
+        return
+    times_ = times_.iloc[0]
+
+    def _get_hero_text():
+        return ui.markdown(
+            f"""
+    __#{times_["carNo"]} {times_["driverName"]}__  
+    {format_timedelta(times_["elapsedDurationMs"])}  
+    """
+        )
+
+    def _get_showcase():
+        diffFirst = format_timedelta(
+            times_["diffFirstMs"], addplus=True
+        )
+        diffFirst = (
+            "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
+        )
+        speed = times_["speed (km/h)"]
+        pace = times_["pace diff (s/km)"]
+        pace = (
+            f"""{times_["pace (s/km)"]} s/km"""
+            if times_["position"] == 1
+            else f"*{round(pace, 2)} s/km off-pace*"
+        )
+        return ui.markdown(
+            f"""
+__P{times_["position"]}__ {diffFirst}  
+
+{round(speed,1)} km/h  
+{pace}
+"""
+        )
+
+    pr = ui.value_box(
+        title=f"{stage_code} {stage_name}",
+        value=_get_hero_text(),
+        theme="text-black",
+        showcase=_get_showcase(),
+        showcase_layout="left center",
+        full_screen=True,
+    )
+
+    return pr
+
+
 def get_overall_result_hero(stageId, stages_data, overall_data):
     stage_ = stages_data[stages_data["stageId"] == stageId].iloc[0]
     stage_name = stage_["name"]
@@ -14,7 +68,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             record = record.iloc[0]
             return ui.markdown(
                 f"""
-                __{record["driverName"]} #{record["carNo"]}__  
+                __#{record["carNo"]} {record["driverName"]}__  
                 {format_timedelta(record["stageTimeMs"])}  
                 """
             )
@@ -78,7 +132,7 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     def _get_hero_text(p):
         return ui.markdown(
             f"""
-            __{p["driverName"]} #{p["carNo"]}__  
+            __#{p["carNo"]} {p["driverName"]}__  
             {format_timedelta(p["timeInS"], units="s")}  
             """
         )

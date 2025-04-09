@@ -10,6 +10,15 @@ from seaborn import barplot, boxplot, heatmap, lineplot
 from matplotlib.colors import LinearSegmentedColormap
 from adjustText import adjust_text
 
+
+## Heros and banners
+
+from .app_heroes import (
+    get_overall_result_hero,
+    get_stage_result_hero,
+    get_rebased_driver_hero,
+)
+
 # from shinywidgets import render_widget
 # from itables.widget import ITable
 
@@ -967,55 +976,7 @@ with ui.accordion(open=False):
                         times = wrc.getStageTimes(stageId=stageId, raw=False)
                         if stages.empty or times.empty:
                             return ui.markdown("*No data available.*")
-
-                        stages_ = stages[stages["stageId"] == stageId].iloc[0]
-                        stage_name = stages_["name"]
-                        stage_code = stages_["code"]
-
-                        times_ = times[times["carNo"] == rebase_driver]
-                        if times.empty:
-                            return
-                        times_ = times_.iloc[0]
-
-                        def _get_hero_text():
-                            return ui.markdown(
-                                f"""
-                        __#{times_["carNo"]} {times_["driverName"]}__  
-                        {format_timedelta(times_["elapsedDurationMs"])}  
-                        """
-                            )
-
-                        def _get_showcase():
-                            diffFirst = format_timedelta(
-                                times_["diffFirstMs"], addplus=True
-                            )
-                            diffFirst = (
-                                "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
-                            )
-                            speed = times_["speed (km/h)"]
-                            pace = times_["pace diff (s/km)"]
-                            pace = (
-                                f"""{times_["pace (s/km)"]} s/km"""
-                                if times_["position"] == 1
-                                else f"*{round(pace, 2)} s/km off-pace*"
-                            )
-                            return ui.markdown(
-                                f"""
-                __P{times_["position"]}__ {diffFirst}  
-                
-                {round(speed,1)} km/h  
-                {pace}
-                """
-                            )
-
-                        pr = ui.value_box(
-                            title=f"{stage_code} {stage_name}",
-                            value=_get_hero_text(),
-                            theme="text-black",
-                            showcase=_get_showcase(),
-                            showcase_layout="left center",
-                            full_screen=True,
-                        )
+                        pr = get_rebased_driver_hero(stageId, rebase_driver, stages, times)
                         return pr
 
                     with ui.accordion(open=False):
@@ -1776,10 +1737,6 @@ def get_rebased_data():
         stage_times_df["Rebase pace diff (s/km)"] = None
 
     return stage_times_df
-
-## Heros and banners
-
-from .app_heroes import get_overall_result_hero, get_stage_result_hero
 
 ## App utils
 
