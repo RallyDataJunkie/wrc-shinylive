@@ -20,7 +20,10 @@ from .app_heroes import (
 )
 
 # Charts
-from .app_charts import chart_seaborn_linechart_split_positions
+from .app_charts import (
+    chart_seaborn_linechart_split_positions,
+    chart_seaborn_barplot_splits,
+)
 
 # from shinywidgets import render_widget
 # from itables.widget import ITable
@@ -1056,6 +1059,10 @@ with ui.accordion(open=False):
                                 @render.plot(alt="Barplot of within split delta times.")
                                 def seaborn_barplot_splits():
                                     rebase_driver = input.rebase_driver()
+                                    rebase_reverse_palette = input.rebase_reverse_palette()
+                                    splits_section_plot_type = (
+                                        input.splits_section_plot()
+                                    )
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
                                         return
@@ -1074,57 +1081,14 @@ with ui.accordion(open=False):
                                     ):
                                         return
 
-                                    split_times_wide_, split_cols = (
-                                        wrc.rebase_splits_wide_with_ult(
-                                            split_times_wide, rebase_driver
-                                        )
+                                    ax = chart_seaborn_barplot_splits(
+                                        wrc,
+                                        split_times_wide,
+                                        rebase_driver,
+                                        splits_section_plot_type,
+                                        rebase_reverse_palette,
                                     )
 
-                                    split_times_long = melt(
-                                        split_times_wide_,
-                                        value_vars=split_cols,
-                                        id_vars=["carNo"],
-                                        var_name="roundN",
-                                        value_name="time",
-                                    )
-
-                                    if input.splits_section_plot() == "bydriver":
-                                        ax = barplot(
-                                            split_times_long,
-                                            orient="h",
-                                            hue="roundN",
-                                            x="time",
-                                            y="carNo",
-                                            legend=False,
-                                        )
-                                    else:
-                                        ax = barplot(
-                                            split_times_long,
-                                            orient="h",
-                                            y="roundN",
-                                            x="time",
-                                            hue="carNo",
-                                            legend=False,
-                                        )
-
-                                    # Get all the bars from the plot
-                                    bars = [patch for patch in ax.patches]
-
-                                    # Color each bar based on its height
-                                    for bar in bars:
-                                        if input.rebase_reverse_palette():
-                                            bar.set_color(
-                                                "#2ecc71"
-                                                if bar.get_width() > 0
-                                                else "#e74c3c"
-                                            )
-                                        else:
-                                            bar.set_color(
-                                                "#2ecc71"
-                                                if bar.get_width() <= 0
-                                                else "#e74c3c"
-                                            )
-                                    ax.invert_xaxis()
                                     return ax
 
                         with ui.accordion_panel("Split times linecharts"):
