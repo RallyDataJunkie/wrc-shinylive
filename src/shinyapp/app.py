@@ -159,29 +159,31 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
-        ui.markdown("*Progress across stages.*")
+        with ui.accordion(open=False, id="rally_progression_accordion"):
+            with ui.accordion_panel("Rally progression"):
+                ui.markdown("*Progress across stages.*")
 
-        @render.data_frame
-        @reactive.event(input.stage, input.event_day, input.event_section)
-        def stage_progress_frame():
-            overall_times_wide = get_overall_pos_wide()
-            if overall_times_wide.empty:
-                return
-            # TO DO - this should have options for within and accumualted statge time views
-            # as well as a driver rebase option
-            return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
+                @render.data_frame
+                @reactive.event(input.stage, input.event_day, input.event_section)
+                def stage_progress_frame():
+                    overall_times_wide = get_overall_pos_wide()
+                    if overall_times_wide.empty:
+                        return
+                    # TO DO - this should have options for within and accumualted statge time views
+                    # as well as a driver rebase option
+                    return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
 
-        @render.plot(alt="Line chart of overall rally positions.")
-        @reactive.event(input.splits_review_accordion, input.category, input.stage)
-        def seaborn_linechart_stage_progress_positions():
-            overall_times_wide = get_overall_pos_wide()
-            if overall_times_wide.empty:
-                return
+                @render.plot(alt="Line chart of overall rally positions.")
+                @reactive.event(input.splits_review_accordion, input.category, input.stage)
+                def seaborn_linechart_stage_progress_positions():
+                    overall_times_wide = get_overall_pos_wide()
+                    if overall_times_wide.empty:
+                        return
 
-            ax = chart_seaborn_linechart_stage_progress_positions(
-                wrc, overall_times_wide
-            )
-            return ax
+                    ax = chart_seaborn_linechart_stage_progress_positions(
+                        wrc, overall_times_wide
+                    )
+                    return ax
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
