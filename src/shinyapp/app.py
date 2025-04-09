@@ -163,18 +163,30 @@ with ui.accordion(open=False):
             with ui.accordion_panel("Rally progression"):
                 ui.markdown("*Progress across stages.*")
 
-                @render.data_frame
-                @reactive.event(input.stage, input.event_day, input.event_section)
-                def stage_progress_frame():
-                    overall_times_wide = get_overall_pos_wide()
-                    if overall_times_wide.empty:
-                        return
-                    # TO DO - this should have options for within and accumualted statge time views
-                    # as well as a driver rebase option
-                    return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
+                with ui.tooltip(id="progression_report_type_tt"):
+                    ui.input_select(
+                        "progression_report_type",
+                        "Progression report type",
+                        {
+                            "bystagetime": "Stage time",
+                            "bystagepos": "Stage position",
+                            "bystagegap": "Stage gap (s)",
+                            "bystagediff": "Stage diff (s)",
+                            "byrallytime": "Overall rally time",
+                            "byrallypos": "Overall rally position",
+                            "byrallyclassposs": "Overall rally class position",
+                            "bystagegap": "Overall rally gap (s)",
+                            "bystagediff": "Overall rally diff (s)",
+                        },
+                        selected="bystagetime",
+                    ),
+                    "Progression report type; dimension to be displayed. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
+                    # TO DO implement report by type
 
                 @render.plot(alt="Line chart of overall rally positions.")
-                @reactive.event(input.splits_review_accordion, input.category, input.stage)
+                @reactive.event(
+                    input.splits_review_accordion, input.category, input.stage
+                )
                 def seaborn_linechart_stage_progress_positions():
                     overall_times_wide = get_overall_pos_wide()
                     if overall_times_wide.empty:
@@ -184,6 +196,39 @@ with ui.accordion(open=False):
                         wrc, overall_times_wide
                     )
                     return ax
+
+                @render.data_frame
+                @reactive.event(input.stage, input.event_day, input.event_section)
+                def stage_progress_frame():
+                    overall_times_wide = get_overall_pos_wide()
+                    if overall_times_wide.empty:
+                        return
+                    # TO DO - this should have options for within and accumualted statge time views
+                    # as well as a driver rebase option
+                    return render.DataGrid(
+                        overall_times_wide.copy().drop(columns="entryId")
+                    )
+
+            with ui.accordion_panel("Rally progression rebase"):
+                # Create stage driver rebase selector
+                ui.input_select(
+                        "rally_progression_rebase_driver",
+                        "Driver rebase:",
+                        {},
+                    )
+
+                with ui.tooltip(id="progression_rebase_type_tt"):
+                    ui.input_select(
+                        "progression_rebase_type",
+                        "Progression rebase type",
+                        {
+                            "bystagetime": "Stage time",
+                            "byrallytime": "Overall rally time",
+                        },
+                        selected="bystagetime",
+                    ),
+                    "Progression rebase type; dimension to be rebased. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
+                    # TO DO implement rebase by type
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
@@ -918,9 +963,9 @@ with ui.accordion(open=False):
                                     )
 
                         with ui.accordion_panel("Split times group barplots"):
-                            with ui.tooltip(id="splits_section_plot_tt"):
+                            with ui.tooltip(id="splits_section_plot_type_tt"):
                                 ui.input_select(
-                                    "splits_section_plot",
+                                    "splits_section_plot_type",
                                     "Section plot view",
                                     {
                                         "bysplit": "Split section groups",
@@ -950,7 +995,7 @@ with ui.accordion(open=False):
                                         input.rebase_reverse_palette()
                                     )
                                     splits_section_plot_type = (
-                                        input.splits_section_plot()
+                                        input.splits_section_plot_type()
                                     )
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
@@ -1298,6 +1343,8 @@ def update_stages_driver_rebase_select():
     )
 
     ui.update_select("stage_rebase_driver", choices=rebase_drivers)
+
+    ui.update_select("rally_progression_rebase_driver", choices=rebase_drivers)
 
     rebase_drivers["ult"] = "ULTIMATE"
     ui.update_select("rebase_driver", choices=rebase_drivers)
