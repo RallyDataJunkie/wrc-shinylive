@@ -6,7 +6,9 @@ from adjustText import adjust_text
 
 
 def chart_seaborn_linechart_split_positions(wrc, split_times_wide, split_cols):
-    split_times_wide[split_cols] = split_times_wide[split_cols].apply(lambda col: col.rank(method='min', ascending=True))
+    split_times_wide[split_cols] = split_times_wide[split_cols].apply(
+        lambda col: col.rank(method="min", ascending=True)
+    )
     split_times_pos_long = melt(
         split_times_wide,
         id_vars=["carNo", "driverName"],
@@ -14,7 +16,9 @@ def chart_seaborn_linechart_split_positions(wrc, split_times_wide, split_cols):
         var_name="roundN",
         value_name="position",
     )
-    ax = lineplot(data=split_times_pos_long, x="roundN", y="position", hue="carNo", legend=False)
+    ax = lineplot(
+        data=split_times_pos_long, x="roundN", y="position", hue="carNo", legend=False
+    )
     x_min, x_max = ax.get_xlim()
     for car in split_times_pos_long["carNo"].unique():
         # Filter data for this car and get the last round's position
@@ -34,8 +38,10 @@ def chart_seaborn_linechart_split_positions(wrc, split_times_wide, split_cols):
                 verticalalignment="center",
                 fontsize=9,
             )
-        last_point = split_times_pos_long[(split_times_pos_long["carNo"] == car) & 
-                                        (split_times_pos_long["roundN"] == wrc.SPLIT_FINAL)]
+        last_point = split_times_pos_long[
+            (split_times_pos_long["carNo"] == car)
+            & (split_times_pos_long["roundN"] == wrc.SPLIT_FINAL)
+        ]
 
         if not last_point.empty:
             # Get position value for the last point
@@ -54,11 +60,16 @@ def chart_seaborn_linechart_split_positions(wrc, split_times_wide, split_cols):
     plt.xlim(x_min - 0.5, x_max + 0.5)
     return ax
 
-def chart_seaborn_barplot_splits(wrc, split_times_wide, rebase_driver, splits_section_plot_type, rebase_reverse_palette):
-    split_times_wide_, split_cols = (
-        wrc.rebase_splits_wide_with_ult(
-            split_times_wide, rebase_driver
-        )
+
+def chart_seaborn_barplot_splits(
+    wrc,
+    split_times_wide,
+    rebase_driver,
+    splits_section_plot_type,
+    rebase_reverse_palette,
+):
+    split_times_wide_, split_cols = wrc.rebase_splits_wide_with_ult(
+        split_times_wide, rebase_driver
     )
 
     split_times_long = melt(
@@ -94,17 +105,9 @@ def chart_seaborn_barplot_splits(wrc, split_times_wide, rebase_driver, splits_se
     # Color each bar based on its height
     for bar in bars:
         if rebase_reverse_palette:
-            bar.set_color(
-                "#2ecc71"
-                if bar.get_width() > 0
-                else "#e74c3c"
-            )
+            bar.set_color("#2ecc71" if bar.get_width() > 0 else "#e74c3c")
         else:
-            bar.set_color(
-                "#2ecc71"
-                if bar.get_width() <= 0
-                else "#e74c3c"
-            )
+            bar.set_color("#2ecc71" if bar.get_width() <= 0 else "#e74c3c")
     ax.invert_xaxis()
     return ax
 
@@ -115,9 +118,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
     if insert_point in split_times_wide.columns:
         insert_loc = split_times_wide.columns.get_loc(insert_point)
     elif wrc.SPLIT_FINAL in split_times_wide.columns:
-        insert_loc = split_times_wide.columns.get_loc(
-            wrc.SPLIT_FINAL
-        )
+        insert_loc = split_times_wide.columns.get_loc(wrc.SPLIT_FINAL)
     start_col = f"{wrc.SPLIT_PREFIX}0"
     if insert_loc is not None and start_col not in split_times_wide:
         split_times_wide.insert(
@@ -143,22 +144,20 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
         value_name="time",
     )
 
-    split_dists_ = wrc.getStageSplitPoints(
-        stageId=stageId, extended=True
-    )
-    split_dists = split_dists_.set_index("name")[
-        "distance"
-    ].to_dict()
+    split_dists_ = wrc.getStageSplitPoints(stageId=stageId, extended=True)
+    split_dists = split_dists_.set_index("name")["distance"].to_dict()
 
     # Add start point
     split_dists[f"{wrc.SPLIT_PREFIX}0"] = 0
 
-    split_times_long["distance"] = split_times_long[
-        "roundN"
-    ].map(split_dists)
+    split_times_long["distance"] = split_times_long["roundN"].map(split_dists)
 
     ax = lineplot(
-        data=split_times_long.sort_values(["carNo", ]),
+        data=split_times_long.sort_values(
+            [
+                "carNo",
+            ]
+        ),
         x="distance",
         y="time",
         hue="carNo",
@@ -170,9 +169,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
     texts = []
     for line, label in zip(
         ax.get_lines(),
-        split_times_long.sort_values("carNo")[
-            "carNo"
-        ].unique(),
+        split_times_long.sort_values("carNo")["carNo"].unique(),
     ):
         x_data, y_data = (
             line.get_xdata(),
@@ -197,9 +194,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
             "explode": "y",
             "pull": "y",
         },
-        arrowprops=dict(
-            arrowstyle="-", color="gray", lw=0.5
-        ),
+        arrowprops=dict(arrowstyle="-", color="gray", lw=0.5),
     )
 
     ax.set_xlim(
@@ -258,8 +253,8 @@ def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
             (overall_times_pos_long["carNo"] == car)
             & (
                 overall_times_pos_long["roundN"]
-                == overall_times_pos_long["roundN"]
-            .iloc[0])
+                == overall_times_pos_long["roundN"].iloc[0]
+            )
         ]
         if not first_point.empty:
             # Get position value for the last point

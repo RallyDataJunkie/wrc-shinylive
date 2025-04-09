@@ -5,8 +5,7 @@ from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame
-from matplotlib import pyplot as plt
-from seaborn import barplot, heatmap
+from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 
 ## Heros and banners
@@ -41,8 +40,10 @@ ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 # TO DO - in creating dropdowns, where index values are integers they should be set to strings BUT
 # this should be done in an immutable way and not modify the original dict integer values
 
+
 def seasonInfo(updateDB=False):
     return wrc.getSeasons(updateDB=updateDB)
+
 
 with ui.sidebar(open="desktop"):
     # Create season selector
@@ -170,19 +171,15 @@ with ui.accordion(open=False):
             # as well as a driver rebase option
             return render.DataGrid(overall_times_wide.copy().drop(columns="entryId"))
 
-        @render.plot(
-            alt="Line chart of overall rally positions."
-        )
-        @reactive.event(
-            input.splits_review_accordion, input.category, input.stage
-        )
+        @render.plot(alt="Line chart of overall rally positions.")
+        @reactive.event(input.splits_review_accordion, input.category, input.stage)
         def seaborn_linechart_stage_progress_positions():
             overall_times_wide = get_overall_pos_wide()
             if overall_times_wide.empty:
                 return
 
-            ax = chart_seaborn_linechart_stage_progress_positions(wrc, 
-                overall_times_wide
+            ax = chart_seaborn_linechart_stage_progress_positions(
+                wrc, overall_times_wide
             )
             return ax
 
@@ -682,9 +679,7 @@ with ui.accordion(open=False):
 
                 ui.markdown("*Position / elapsed time across the split sections.*")
 
-                @render.plot(
-                    alt="Line chart of elapsed split positions."
-                )
+                @render.plot(alt="Line chart of elapsed split positions.")
                 @reactive.event(
                     input.splits_review_accordion, input.category, input.stage
                 )
@@ -824,7 +819,9 @@ with ui.accordion(open=False):
                         times = wrc.getStageTimes(stageId=stageId, raw=False)
                         if stages.empty or times.empty:
                             return ui.markdown("*No data available.*")
-                        pr = get_rebased_driver_hero(stageId, rebase_driver, stages, times)
+                        pr = get_rebased_driver_hero(
+                            stageId, rebase_driver, stages, times
+                        )
                         return pr
 
                     with ui.accordion(open=False):
@@ -869,8 +866,10 @@ with ui.accordion(open=False):
                                         or split_times_wide.empty
                                     ):
                                         return
-                                    output_, split_cols = wrc.rebase_splits_wide_with_ult(
-                                        split_times_wide, rebase_driver
+                                    output_, split_cols = (
+                                        wrc.rebase_splits_wide_with_ult(
+                                            split_times_wide, rebase_driver
+                                        )
                                     )
 
                                     output_.set_index("carNo", inplace=True)
@@ -944,7 +943,9 @@ with ui.accordion(open=False):
                                 @render.plot(alt="Barplot of within split delta times.")
                                 def seaborn_barplot_splits():
                                     rebase_driver = input.rebase_driver()
-                                    rebase_reverse_palette = input.rebase_reverse_palette()
+                                    rebase_reverse_palette = (
+                                        input.rebase_reverse_palette()
+                                    )
                                     splits_section_plot_type = (
                                         input.splits_section_plot()
                                     )
@@ -1345,11 +1346,14 @@ def get_overall_pos_wide():
         return DataFrame()
     stageId = int(stageId)
     # TO DO - up to
-    stageId=None
+    stageId = None
     priority = input.category()
-    overall_times_wide = wrc.getStageOverallWide(stageId=stageId, priority=priority, completed=True, typ="position") # typ: position, totalTimeInS
+    overall_times_wide = wrc.getStageOverallWide(
+        stageId=stageId, priority=priority, completed=True, typ="position"
+    )  # typ: position, totalTimeInS
 
     return overall_times_wide
+
 
 @reactive.calc
 @reactive.event(input.stage, input.category)
@@ -1390,12 +1394,10 @@ def get_stage_data():
         return None
     stageId = int(stageId)
     priority = input.category()
-    stage_times_df = wrc.getStageTimes(
-        stageId=stageId, priority=priority, raw=False
-    )
+    stage_times_df = wrc.getStageTimes(stageId=stageId, priority=priority, raw=False)
     if stage_times_df.empty:
         return None
-    
+
     # Add position and road position processing
     stage_times_df["roadPos"] = range(1, len(stage_times_df) + 1)
     stage_times_df["position_"] = stage_times_df["position"]
@@ -1403,8 +1405,9 @@ def get_stage_data():
         stage_times_df.sort_values("position", inplace=True)
         stage_times_df["position"] = range(1, len(stage_times_df) + 1)
         stage_times_df.sort_values("roadPos", inplace=True)
-    
+
     return stage_times_df
+
 
 # Create a reactive cached function for rebased calculations
 @reactive.calc
@@ -1430,8 +1433,12 @@ def get_rebased_data():
     # TO DO - this should be in wrc. ?
 
     # Add percentage time column using rebase driver time basis
-    rebase_time = stage_times_df.loc[stage_times_df["carNo"] == rebase_driver, "timeInS"].iloc[0]
-    stage_times_df["Rebase %"] = (100 * stage_times_df["timeInS"] / rebase_time).round(1)
+    rebase_time = stage_times_df.loc[
+        stage_times_df["carNo"] == rebase_driver, "timeInS"
+    ].iloc[0]
+    stage_times_df["Rebase %"] = (100 * stage_times_df["timeInS"] / rebase_time).round(
+        1
+    )
 
     # Calculate rebased gap
     rebase_gap_col = "Rebase Gap (s)"
@@ -1454,6 +1461,7 @@ def get_rebased_data():
         stage_times_df["Rebase pace diff (s/km)"] = None
 
     return stage_times_df
+
 
 ## Start the data collection
 wrc.seedDB()

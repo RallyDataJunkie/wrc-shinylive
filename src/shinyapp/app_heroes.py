@@ -3,6 +3,7 @@ from shiny import ui as uis
 
 from wrc_rallydj.utils import format_timedelta
 
+
 def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
     stages_ = stages[stages["stageId"] == stageId].iloc[0]
     stage_name = stages_["name"]
@@ -22,12 +23,8 @@ def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
         )
 
     def _get_showcase():
-        diffFirst = format_timedelta(
-            times_["diffFirstMs"], addplus=True
-        )
-        diffFirst = (
-            "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
-        )
+        diffFirst = format_timedelta(times_["diffFirstMs"], addplus=True)
+        diffFirst = "" if times_["position"] == 1 else f"__*{diffFirst}s*__"
         speed = times_["speed (km/h)"]
         pace = times_["pace diff (s/km)"]
         pace = (
