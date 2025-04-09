@@ -819,6 +819,7 @@ with ui.accordion(open=False):
                         times = wrc.getStageTimes(stageId=stageId, raw=False)
                         if stages.empty or times.empty:
                             return ui.markdown("*No data available.*")
+
                         pr = get_rebased_driver_hero(
                             stageId, rebase_driver, stages, times
                         )

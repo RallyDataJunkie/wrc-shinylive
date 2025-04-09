@@ -10,8 +10,6 @@ def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
     stage_code = stages_["code"]
 
     times_ = times[times["carNo"] == rebase_driver]
-    if times.empty:
-        return
     times_ = times_.iloc[0]
 
     def _get_hero_text():
@@ -125,6 +123,21 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     stage_name = stage_["name"]
     stage_code = stage_["code"]
 
+    def _create_position_value_box(driver_data, theme_color, hero_text_func):
+        """Create a value box for a driver's position data"""
+        speed = driver_data["speed (km/h)"]
+        pace = driver_data["pace diff (s/km)"]
+        speedpace = f"({speed} km/h, {pace} s/km off the pace)" if speed else ""
+
+        return ui.value_box(
+            value=format_timedelta(driver_data["diffFirstMs"], addplus=True),
+            title=hero_text_func(driver_data),
+            theme=theme_color,
+            showcase=speedpace,
+            showcase_layout="bottom",
+            full_screen=True,
+        )
+
     def _get_hero_text(p):
         return ui.markdown(
             f"""
@@ -153,34 +166,14 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     )
 
     if len(stage_times_data) > 1:
-        p2_ = stage_times_data[stage_times_data["position"] == 2].iloc[0]
-        p2speed = p2_["speed (km/h)"]
-        p2pace = p2_["pace diff (s/km)"]
-        p2speedpace = f"({p2speed} km/h, {p2pace} s/km off the pace)" if p2speed else ""
-        p2 = ui.value_box(
-            value=format_timedelta(p2_["diffFirstMs"], addplus=True),
-            title=_get_hero_text(p2_),
-            theme="text-blue",
-            showcase=p2speedpace,
-            showcase_layout="bottom",
-            full_screen=True,
-        )
+        p2_data = stage_times_data[stage_times_data["position"] == 2].iloc[0]
+        p2 = _create_position_value_box(p2_data, "text-blue", _get_hero_text)
+        
         if len(stage_times_data) > 2:
-            p3_ = stage_times_data[stage_times_data["position"] == 3].iloc[0]
-            p3speed = p3_["speed (km/h)"]
-            p3pace = p3_["pace diff (s/km)"]
-            p3speedpace = (
-                f"({p3speed} km/h, {p3pace} s/km off the pace)" if p3speed else ""
-            )
-            p3 = ui.value_box(
-                value=format_timedelta(p3_["diffFirstMs"], addplus=True),
-                title=_get_hero_text(p3_),
-                theme="text-purple",
-                showcase=p3speedpace,
-                showcase_layout="bottom",
-                full_screen=True,
-            )
+            p3_data = stage_times_data[stage_times_data["position"] == 3].iloc[0]
+            p3 = _create_position_value_box(p3_data, "text-purple", _get_hero_text)
             return ui.TagList(p1, uis.layout_columns(p2, p3))
+        
         return ui.TagList(p1, p2)
 
     return p1
