@@ -8,7 +8,6 @@ from pandas import DataFrame, melt
 from matplotlib import pyplot as plt
 from seaborn import barplot, boxplot, heatmap, lineplot
 from matplotlib.colors import LinearSegmentedColormap
-from adjustText import adjust_text
 
 
 ## Heros and banners
@@ -23,6 +22,7 @@ from .app_heroes import (
 from .app_charts import (
     chart_seaborn_linechart_split_positions,
     chart_seaborn_barplot_splits,
+    chart_seaborn_linechart_splits,
 )
 
 # from shinywidgets import render_widget
@@ -1131,105 +1131,11 @@ with ui.accordion(open=False):
                                     ):
                                         return
 
-                                    insert_point = f"{wrc.SPLIT_PREFIX}1"
-                                    insert_loc = None
-                                    if insert_point in split_times_wide.columns:
-                                        insert_loc = split_times_wide.columns.get_loc(insert_point)
-                                    elif wrc.SPLIT_FINAL in split_times_wide.columns:
-                                        insert_loc = split_times_wide.columns.get_loc(
-                                            wrc.SPLIT_FINAL
-                                        )
-                                    start_col = f"{wrc.SPLIT_PREFIX}0"
-                                    if insert_loc is not None and start_col not in split_times_wide:
-                                        split_times_wide.insert(
-                                            loc=insert_loc,
-                                            column=start_col,
-                                            value=0,
-                                        )
-
-                                    split_cols = wrc.getSplitCols(split_times_wide)
-
-                                    split_times_wide_ = wrc.rebaseManyTimes(
-                                        split_times_wide,
-                                        rebase_driver,
-                                        "carNo",
-                                        split_cols,
+                                    ax = chart_seaborn_linechart_splits(
+                                        wrc, stageId, split_times_wide, rebase_driver
                                     )
 
-                                    split_times_long = melt(
-                                        split_times_wide_,
-                                        value_vars=split_cols,
-                                        id_vars=["carNo"],
-                                        var_name="roundN",
-                                        value_name="time",
-                                    )
-
-                                    split_dists_ = wrc.getStageSplitPoints(
-                                        stageId=stageId, extended=True
-                                    )
-                                    split_dists = split_dists_.set_index("name")[
-                                        "distance"
-                                    ].to_dict()
-
-                                    # Add start point
-                                    split_dists[f"{wrc.SPLIT_PREFIX}0"] = 0
-
-                                    split_times_long["distance"] = split_times_long[
-                                        "roundN"
-                                    ].map(split_dists)
-
-                                    g = lineplot(
-                                        data=split_times_long.sort_values(["carNo", ]),
-                                        x="distance",
-                                        y="time",
-                                        hue="carNo",
-                                    )
-
-                                    if rebase_driver and rebase_driver != "ult":
-                                        g.set_ylim(g.get_ylim()[::-1])
-
-                                    texts = []
-                                    for line, label in zip(
-                                        g.get_lines(),
-                                        split_times_long.sort_values("carNo")[
-                                            "carNo"
-                                        ].unique(),
-                                    ):
-                                        x_data, y_data = (
-                                            line.get_xdata(),
-                                            line.get_ydata(),
-                                        )
-                                        x_last, y_last = x_data[-1], y_data[-1]
-                                        text = g.text(
-                                            x_data[-1],
-                                            y_data[-1],
-                                            f" {label}",
-                                            ha="left",
-                                            verticalalignment="center",
-                                        )
-                                        texts.append(text)
-
-                                    # Adjust labels to avoid overlap
-                                    adjust_text(
-                                        texts,
-                                        only_move={
-                                            "text": "y",
-                                            "static": "y",
-                                            "explode": "y",
-                                            "pull": "y",
-                                        },
-                                        arrowprops=dict(
-                                            arrowstyle="-", color="gray", lw=0.5
-                                        ),
-                                    )
-
-                                    g.set_xlim(
-                                        split_times_long["distance"].min(),
-                                        split_times_long["distance"].max() * 1.15,
-                                    )
-
-                                    g.legend_.remove()
-                                    return g
+                                    return ax
 
 
 @reactive.calc
