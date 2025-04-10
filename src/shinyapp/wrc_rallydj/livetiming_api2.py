@@ -4,12 +4,13 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 from urllib.parse import urljoin
-import datetime
+from datetime import datetime, timedelta, date
 from sqlite_utils import Database
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
 import os
 import sqlite3
 from wrc_rallydj.db_table_schemas import SETUP_V2_Q
+from wrc_rallydj.utils import is_date_in_range
 from pandas import (
     read_sql,
     DataFrame,
@@ -23,6 +24,7 @@ from pandas import (
 )
 
 from numpy import nan
+
 
 class DatabaseManager:
     def __init__(self, dbname, newdb=False, dbReadOnly=False):
@@ -76,7 +78,7 @@ class DatabaseManager:
             DB = Database(self.conn)
             DB[table].upsert_all(df.to_dict(orient="records"), pk=pk)
         else:
-            logger.info(f"Inserrting {table} (if_exists: {if_exists})...")
+            logger.info(f"Inserting {table} (if_exists: {if_exists})...")
             df.to_sql(table, self.conn, if_exists=if_exists, index=index)
 
     def cleardbtable(self, table):
@@ -458,10 +460,10 @@ class APIClient:
 
         return controlTimes_df
 
-    def _getEventShakeDownTimes(self, eventId, updateDB=False):
+    def _getEventShakeDownTimes(self, eventId, run=1, updateDB=False):
         if not eventId:
             return
-        stub = f"events/{eventId}/shakedowntimes.json?shakedownNumber=1"
+        stub = f"events/{eventId}/shakedowntimes.json?shakedownNumber={run}"
         json_data = self._WRC_RedBull_json(stub)
         shakedownTimes_df = DataFrame(json_data)
 
@@ -620,7 +622,7 @@ class WRCTimingResultsAPIClientV2:
 
     def __init__(
         self,
-        year: int = datetime.date.today().year,
+        year: int = date.today().year,
         championship: str = "wrc",  # wrc | erc
         category: str = "Drivers",
         group: str = "all",
@@ -1188,10 +1190,17 @@ class WRCTimingResultsAPIClientV2:
         return self.api_client._getEventShakeDownTimes(*args, **kwargs)
 
     def getEventShakeDownTimes(
-        self, eventId=None, on_event=True, priority=None, raw=True, updateDB=False
+        self,
+        eventId=None,
+        on_event=True,
+        priority=None,
+        run=1,
+        raw=True,
+        updateDB=False,
     ):
+        # ERCC: Shakedown run=1; Qualifying stage/QS run=2
         if updateDB:
-            self._getEventShakeDownTimes(updateDB=updateDB)
+            self._getEventShakeDownTimes(run=run, updateDB=updateDB)
         if on_event and self.eventId:
             eventId = self.eventId
 
@@ -1456,8 +1465,26 @@ class WRCTimingResultsAPIClientV2:
         # TO DO handle stagecode
         if stageId or stage_code:
             stage_info = self.getStageInfo(
-                stageId=stageId, stage_code=stage_code, updateDB=True, noLiveCheck=True
+                stageId=stageId, stage_code=stage_code, updateDB=False, noLiveCheck=True
             )
+            if stage_info.empty and self.isRallyLive():
+                updateDB = True
+            elif not stage_info.empty and (
+                self.isRallyLive()
+                and stage_info.iloc[0]["status"].lower()
+                not in ["completed", "cancelled"]  # ["running", "torun"]
+            ):
+                updateDB = True
+            else:
+                updateDB = False
+
+            if updateDB:
+                stage_info = self.getStageInfo(
+                    stageId=stageId,
+                    stage_code=stage_code,
+                    updateDB=updateDB,
+                    noLiveCheck=True,
+                )
             if not stage_info.empty:
                 stage_info = stage_info.iloc[0]
                 status = stage_info["status"].lower()
@@ -1467,18 +1494,28 @@ class WRCTimingResultsAPIClientV2:
 
     def isRallyLive(self):
         """Flag to show that rally is live, so there are"""
-        # TO DO - various itinerary controls report status
-        # itinerarySections: status: ToRun, Running
-        # itineraryControls: status: ToRun
-        # itineraryStages: status: ToRun
-        # itineraryLeg: status: ToRun
-
-        _, _, _, itinerary_stages = self._getEventItineraries(updateDB=True)
-        if itinerary_stages.empty:
-            return False
-        itinerary_stages["status"] = itinerary_stages["status"].str.lower()
-        # TO DO also put date bounds on this
-        return "running" in itinerary_stages["status"].tolist()
+        season = self.getSeasonRounds()
+        event_ = season[season["eventId"]==self.eventId]
+        if not event_.empty:
+            event = event_.iloc[0].to_dict()
+            if is_date_in_range(event):
+                    # TO DO - various itinerary controls report status
+                    # itinerarySections: status: ToRun, Running
+                    # itineraryControls: status: ToRun
+                    # itineraryStages: status: ToRun
+                    # itineraryLeg: status: ToRun
+                    _, _, _, itinerary_stages = self._getEventItineraries(updateDB=False)
+                    if not itinerary_stages.empty:
+                        itinerary_stages["status"] = itinerary_stages["status"].str.lower()
+                        _, _, _, itinerary_stages = self._getEventItineraries(updateDB=True)
+                        if any(itinerary_stages["status"].isin(["running", "torun"])):
+                            _, _, _, itinerary_stages = self._getEventItineraries(updateDB=True)
+                    if itinerary_stages.empty:
+                        return False
+                    itinerary_stages["status"] = itinerary_stages["status"].str.lower()
+                    # TO DO also put date bounds on this
+                    return "running" in itinerary_stages["status"].tolist()
+        return False
 
     def getStageTimes(
         self,
@@ -1923,6 +1960,10 @@ class WRCTimingResultsAPIClientV2:
             if r.empty or (
                 completed and len(r["stageCode"].unique().tolist()) < len(stageIds)
             ):
+                print(
+                    "This is a polled update:",
+                    len(r["stageCode"].unique().tolist()), len(stageIds),
+                )
                 if completed:
                     for stageId in stageIds:
                         self._getStageOverallResults(stageId=stageId, updateDB=True)
@@ -1934,11 +1975,44 @@ class WRCTimingResultsAPIClientV2:
                 f"No getStageOverallResults? {self.eventId} {self.stageId} {self.rallyId}"
             )
             r = DataFrame()
+
+        if r.empty:
+            return r
+
+        from numpy import where
+
         overall_df = r
         overall_df["roadPos"] = range(1, len(overall_df) + 1)
-        overall_df.sort_values("position", inplace=True)
-        overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
-        overall_df.sort_values("roadPos", inplace=True)
+        overall_df.sort_values(["stageOrder", "position"], inplace=True)
+        # overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
+        overall_df["categoryPosition"] = overall_df.groupby("stageCode").cumcount() + 1
+        overall_df.sort_values(["stageOrder", "roadPos"], inplace=True)
+
+        # if we were working wihtin groups, eg for class position
+        # overall_df["Diff"] = overall_df.groupby("stageCode")["diffPrevMs"].apply(
+        #     lambda group: group.apply(
+        #         lambda x: round(x / 1000, 1) if notnull(x) else nan
+        #     )
+        # )
+        if "diffFirstMs" in overall_df:
+            overall_df["Gap"] = overall_df.groupby("stageCode")[
+                "diffFirstMs"
+            ].transform(
+                lambda group: where(notnull(group), group.div(1000).round(1), nan)
+            )
+        if "diffPrevMs" in overall_df:
+            overall_df["Diff"] = overall_df.groupby("stageCode")[
+                "diffPrevMs"
+            ].transform(
+                lambda group: where(
+                    notnull(group), group.div(1000).round(1), nan
+                )
+            )
+        if "totalTimeMs" in overall_df:
+            # df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
+            #    lambda x: x / 1000 if notnull(x) else nan
+            # ).round(1)
+            overall_df["timeInS"] = (overall_df["totalTimeMs"] / 1000).round(1)
 
         if completed:
             overall_df.rename(columns=stageIds, inplace=True)

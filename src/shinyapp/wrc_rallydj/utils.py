@@ -1,10 +1,29 @@
 from parse import parse
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 
 # import pandas as pd
 from pandas import to_datetime, date_range, DataFrame, concat, merge
-import datetime
 from numpy import nan
+
+
+def is_date_in_range(date_dict):
+    # Parse the start and end dates from the dictionary
+    if "startDate" not in date_dict or "finishDate" not in date_dict:
+        return False
+
+    # Convert ISO format string to datetime (not just date)
+    start_date = datetime.fromisoformat(date_dict["startDate"])
+    end_date = datetime.fromisoformat(date_dict["finishDate"])
+
+    # Add leeway of 12 hours on both sides
+    start_with_leeway = start_date - timedelta(hours=12)
+    end_with_leeway = end_date + timedelta(hours=12)
+
+    # Get current date and time
+    now = datetime.now()
+
+    # Check if now is within the range (inclusive)
+    return start_with_leeway <= now <= end_with_leeway
 
 
 def format_timedelta(t, units="ms", addplus=False):
@@ -75,8 +94,6 @@ def enrich_stage_winners(stagewinners, inplace=True):
     return stagewinners
 
 
-
-
 def convert_date_range(date_range_str):
     """Convert date of from `19 - 22 JAN 2023` to date range."""
     r = parse("{start_day} - {end_day} {month} {year}", date_range_str)
@@ -135,7 +152,7 @@ def tablify(json_data, subcolkey=None, addcols=None):
 
 
 def timeNow(typ="ms"):
-    now = int(datetime.datetime.now().timestamp())
+    now = int(datetime.now().timestamp())
     if typ == "ms":
         now *= 1000
     return now

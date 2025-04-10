@@ -166,19 +166,19 @@ with ui.accordion(open=False):
                 with ui.tooltip(id="progression_report_type_tt"):
                     ui.input_select(
                         "progression_report_type",
-                        "Progression report type",
+                        "Progression report type:",
                         {
-                            "bystagetime": "Stage time",
-                            "bystagepos": "Stage position",
-                            "bystagegap": "Stage gap (s)",
-                            "bystagediff": "Stage diff (s)",
+                            # "bystagetime": "Stage time",
+                            # "bystagepos": "Stage position",
+                            # "bystagegap": "Stage gap (s)",
+                            # "bystagediff": "Stage diff (s)",
                             "byrallytime": "Overall rally time",
                             "byrallypos": "Overall rally position",
                             "byrallyclassposs": "Overall rally class position",
                             "bystagegap": "Overall rally gap (s)",
                             "bystagediff": "Overall rally diff (s)",
                         },
-                        selected="bystagetime",
+                        selected="byrallytime",
                     ),
                     "Progression report type; dimension to be displayed. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
                     # TO DO implement report by type
@@ -198,15 +198,20 @@ with ui.accordion(open=False):
                     return ax
 
                 @render.data_frame
-                @reactive.event(input.stage, input.event_day, input.event_section)
+                @reactive.event(
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_report_type,
+                )
                 def stage_progress_frame():
-                    overall_times_wide = get_overall_pos_wide()
-                    if overall_times_wide.empty:
+                    overall_typ_wide = get_overall_typ_wide()
+                    if overall_typ_wide.empty:
                         return
                     # TO DO - this should have options for within and accumualted statge time views
                     # as well as a driver rebase option
                     return render.DataGrid(
-                        overall_times_wide.copy().drop(columns="entryId")
+                        overall_typ_wide.copy().drop(columns="entryId")
                     )
 
             with ui.accordion_panel("Rally progression rebase"):
@@ -325,7 +330,7 @@ with ui.accordion(open=False):
                         return render.DataGrid(startlist[retcols])
 
                 with ui.accordion_panel("Shakedown"):
-
+                    # TO DO in ERC the Qualifying stage (QS) is shakedown run number 2
                     @render.data_frame
                     @reactive.event(
                         input.stage_review_accordion, input.category, input.stage
@@ -484,8 +489,6 @@ with ui.accordion(open=False):
                         return render.DataGrid(retirements[retcols])
 
                 with ui.accordion_panel("Penalties"):
-                    # TO DO - ideally, this and retirements
-                    # would only react when the accordion is opened?
                     @render.data_frame
                     @reactive.event(
                         input.season_round, input.stage, input.stage_accordion
@@ -1400,6 +1403,40 @@ def get_overall_pos_wide():
     priority = input.category()
     overall_times_wide = wrc.getStageOverallWide(
         stageId=stageId, priority=priority, completed=True, typ="position"
+    )  # typ: position, totalTimeInS
+
+    return overall_times_wide
+
+# TO DO XXX
+
+
+@reactive.calc
+@reactive.event(input.stage, input.category, input.progression_report_type)
+def get_overall_typ_wide():
+    stageId = input.stage()
+    if not stageId:
+        return DataFrame()
+    stageId = int(stageId)
+    progression_report_typ = input.progression_report_type()
+    # TO DO - up to
+    stageId = None
+    priority = input.category()
+
+    progression_report_types = {
+        "bystagetime": "Stage time",  # not yet
+        "bystagepos": "Stage position",  # not yet
+        "bystagegap": "Stage gap (s)",  # not yet
+        "bystagediff": "Stage diff (s)",  # not yet
+        "byrallytime": "timeInS",
+        "byrallypos": "position",
+        "byrallyclassposs": "categoryPosition",
+        "bystagegap": "Gap",
+        "bystagediff": "Diff",
+    }
+    typ = progression_report_types[progression_report_typ]
+
+    overall_times_wide = wrc.getStageOverallWide(
+        stageId=stageId, priority=priority, completed=True, typ=typ
     )  # typ: position, totalTimeInS
 
     return overall_times_wide
