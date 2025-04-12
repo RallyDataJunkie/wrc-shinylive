@@ -9,6 +9,6 @@ parse
 sqlite_utils
 inflect
 adjustText
-#sqlite3
+sqlite3
 #anywidget
 #itables
