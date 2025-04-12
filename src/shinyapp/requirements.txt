@@ -1,4 +1,5 @@
 jupyterlite_simple_cors_proxy
+sqlite3
 #shiny
 #pandas
 #requests
@@ -9,6 +10,5 @@ parse
 sqlite_utils
 inflect
 adjustText
-sqlite3
 #anywidget
 #itables
