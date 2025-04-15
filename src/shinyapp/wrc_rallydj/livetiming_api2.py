@@ -1,4 +1,5 @@
 import logging
+
 # Set a basic logging level
 logging.basicConfig(level=logging.INFO)
 
@@ -73,7 +74,7 @@ class DatabaseManager:
             self.cleardbtable(table)
 
         cols = read_sql(f"PRAGMA table_info({table})", self.conn)["name"].tolist()
-        if "" in  df.columns:
+        if "" in df.columns:
             df.drop(columns="", inplace=True)
 
         for c in df.columns:
@@ -91,6 +92,7 @@ class DatabaseManager:
     def cleardbtable(self, table):
         c = self.conn.cursor()
         c.execute(f'DELETE FROM "{table}"')
+
 
 # TO DO
 # Introduce a DBMediatedAPIclient class which sits between
@@ -207,10 +209,12 @@ class APIClient:
             for k in ["championshipEntryId", "overallPosition", "overallPoints"]:
                 _championshipEntry[k] = championshipEntry[k]
             if championshipEntry["roundResults"]:
-                _championshipEntry["championshipId"] = championshipEntry["roundResults"][0]["championshipId"]
+                _championshipEntry["championshipId"] = championshipEntry[
+                    "roundResults"
+                ][0]["championshipId"]
             _championshipEntry["Round"] = len(championshipEntry["roundResults"])
             _championshipEntryResultsOverall.append(_championshipEntry)
-                
+
             _championshipEntryResultsByRound.extend(championshipEntry["roundResults"])
 
         championshipEntryResultsOverall_df = DataFrame(_championshipEntryResultsOverall)
@@ -239,12 +243,12 @@ class APIClient:
             return DataFrame(), DataFrame(), DataFrame()
             # Use WRC drivers as the default
             # XX get rid of _getChampionshipName
-            #_championship = self._getChampionshipName()
+            # _championship = self._getChampionshipName()
 
-            #seasonId, championships_df, _, _ = self._getSeasonDetail()
-            #championshipId = championships_df[
+            # seasonId, championships_df, _, _ = self._getSeasonDetail()
+            # championshipId = championships_df[
             #    championships_df["name"] == _championship
-            #].iloc[0]["championshipId"]
+            # ].iloc[0]["championshipId"]
 
         if seasonId is None:
             seasonId = self._getSeasons(championship, year).iloc[0]["seasonId"]
@@ -272,7 +276,7 @@ class APIClient:
 
         _e = json_data["championshipEntries"]
         championshipEntries_df = DataFrame(_e)
-        #renamers["tyreManufacturer"] = "tyreManufacturer_"
+        # renamers["tyreManufacturer"] = "tyreManufacturer_"
         championshipEntries_df.rename(columns=renamers, inplace=True)
 
         if updateDB:
@@ -626,6 +630,7 @@ class APIClient:
             self.dbfy(penalties_df, "penalties", pk="penaltyId")
         return penalties_df
 
+
 # The WRCTimingResultsAPIClientV2() constructs state on a season basis
 class WRCTimingResultsAPIClientV2:
     CHAMPIONSHIP_CODES = {
@@ -756,10 +761,12 @@ class WRCTimingResultsAPIClientV2:
             rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
             # Fetch the reference values for the specified 'rebaseId'
-            reference_values = times.loc[times[idCol] == rebaseId, rebaseCols].iloc[0]
+            reference_values = times.loc[
+                times[idCol] == int(rebaseId), rebaseCols
+            ].iloc[0]
 
             # Subtract only the specified columns
-            times[rebaseCols] = times[rebaseCols].subtract(reference_values)
+            times[rebaseCols] = times[rebaseCols].subtract(reference_values).round(1)
 
             if not inplace:
                 return times
@@ -824,7 +831,7 @@ class WRCTimingResultsAPIClientV2:
         if updateDB:
             self._getSeasons(updateDB=updateDB)
         # TO DO need to filter with championship
-        _on_year =  f"AND year={year}" if year is not None else ""
+        _on_year = f"AND year={year}" if year is not None else ""
         q = f"""SELECT * FROM seasons WHERE 1=1 {_on_year};"""
         seasons_df = self.db_manager.read_sql(q)
 
@@ -1024,7 +1031,7 @@ class WRCTimingResultsAPIClientV2:
 
         return championships_df
 
-    def getChampionships(self, seasonId=None, on_season=True,  raw=True, updateDB=False):
+    def getChampionships(self, seasonId=None, on_season=True, raw=True, updateDB=False):
         if updateDB:
             self._getSeasonDetail(updateDB=updateDB)
         if on_season and not seasonId:
@@ -1474,7 +1481,9 @@ class WRCTimingResultsAPIClientV2:
         # TO DO the name setting below is broken:
         # - need to update from data;
         # - need to account for ERC
-        championships_df_ =  championships_df[championships_df["championshipId"]==int(championshipId)]["name"]
+        championships_df_ = championships_df[
+            championships_df["championshipId"] == int(championshipId)
+        ]["name"]
         if championships_df_.empty:
             print("SNAFU — can't set championship")
             return
@@ -1574,7 +1583,7 @@ class WRCTimingResultsAPIClientV2:
     def isRallyLive(self):
         """Flag to show that rally is live, so there are"""
         season = self.getSeasonRounds()
-        event_ = season[season["eventId"]==self.eventId]
+        event_ = season[season["eventId"] == self.eventId]
         if not event_.empty:
             event = event_.iloc[0].to_dict()
             if is_date_in_range(event):
@@ -1588,7 +1597,9 @@ class WRCTimingResultsAPIClientV2:
                     itinerary_stages["status"] = itinerary_stages["status"].str.lower()
                     _, _, _, itinerary_stages = self._getEventItineraries(updateDB=True)
                     if any(itinerary_stages["status"].isin(["running", "torun"])):
-                        _, _, _, itinerary_stages = self._getEventItineraries(updateDB=True)
+                        _, _, _, itinerary_stages = self._getEventItineraries(
+                            updateDB=True
+                        )
                 if itinerary_stages.empty:
                     return False
                 itinerary_stages["status"] = itinerary_stages["status"].str.lower()
@@ -1633,9 +1644,7 @@ class WRCTimingResultsAPIClientV2:
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
-                logger.debug(
-                    f"getStageTimes empty read hack"
-                )
+                logger.debug(f"getStageTimes empty read hack")
                 self._getStageTimes(stageId=stageId, updateDB=True)
                 r = self.db_manager.read_sql(sql)
         else:
@@ -1770,7 +1779,7 @@ class WRCTimingResultsAPIClientV2:
         )
         split_times_wide = pivot(
             split_times_df.dropna(subset=["number", "elapsedDurationMs"]),
-            index=[ "carNo", "driverName", "entryId"],
+            index=["carNo", "driverName", "entryId"],
             columns="number",
             values="elapsedDurationMs",
         ).reset_index()
@@ -2084,7 +2093,8 @@ class WRCTimingResultsAPIClientV2:
             ):
                 print(
                     "This is an emptyy dataframe polled update:",
-                    len(r["stageCode"].unique().tolist()), len(stageIds),
+                    len(r["stageCode"].unique().tolist()),
+                    len(stageIds),
                 )
                 if completed:
                     for stageId in stageIds:
@@ -2126,9 +2136,7 @@ class WRCTimingResultsAPIClientV2:
             overall_df["Diff"] = overall_df.groupby("stageCode")[
                 "diffPrevMs"
             ].transform(
-                lambda group: where(
-                    notnull(group), group.div(1000).round(1), nan
-                )
+                lambda group: where(notnull(group), group.div(1000).round(1), nan)
             )
         if "totalTimeMs" in overall_df:
             # df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(

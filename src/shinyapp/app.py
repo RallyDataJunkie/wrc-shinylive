@@ -313,7 +313,7 @@ with ui.accordion(open=False):
                     for c in ["Manufacturer", "Team", "TyreManufacturer"]:
                         if c in wrc.championshipName:
                             cols = [c, "totalPoints", "pointsBreakdown", "position"]
-                    
+
                     cols = [c for c in cols if c in championship_event.columns]
 
                     def custom_sort_key(x):
@@ -410,6 +410,18 @@ with ui.accordion(open=False):
                     )
 
             with ui.accordion_panel("Rally progression rebase"):
+                with ui.tooltip(id="progression_rebase_type_tt"):
+                    ui.input_select(
+                        "progression_rebase_type",
+                        "Progression rebase type",
+                        {
+                            #"bystagetime": "Stage time",
+                            "byrallytime": "Overall rally time",
+                        },
+                        selected="bystagetime",
+                    ),
+                    "Progression rebase type; dimension to be rebased. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
+
                 # Create stage driver rebase selector
                 ui.input_select(
                     "rally_progression_rebase_driver",
@@ -417,20 +429,28 @@ with ui.accordion(open=False):
                     {},
                 )
 
-                with ui.tooltip(id="progression_rebase_type_tt"):
-                    ui.input_select(
-                        "progression_rebase_type",
-                        "Progression rebase type",
-                        {
-                            "bystagetime": "Stage time",
-                            "byrallytime": "Overall rally time",
-                        },
-                        selected="bystagetime",
-                    ),
-                    "Progression rebase type; dimension to be rebased. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
-                    # TO DO implement rebase by type
-                    #
-                    #
+                @render.data_frame
+                @reactive.event(
+                    input.category,
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_rebase_type,
+                    input.rally_progression_rebase_driver,
+                )
+                def stage_progress_rebased_frame():
+                    overall_typ_wide = get_overall_typ_wide2_rebased()
+
+                    # TO DO - this should have options for within and accumulated statge time views
+                    # as well as a driver rebase option
+                    # TO DO - this should be sorted by position ASC for the latest stage
+                    # How is this done on the seaborn_linechart_stage_progress_positions label positions?
+                    # TO DO  - sort by each stage column
+                    stage_cols = wrc.getStageCols(overall_typ_wide)
+                    stage_cols.reverse()
+                    return render.DataGrid(
+                        overall_typ_wide.drop(columns="entryId").sort_values(stage_cols)
+                    )
 
                 @render.plot(
                     alt="Line chart of rally progression of selected dimension."
@@ -441,9 +461,10 @@ with ui.accordion(open=False):
                     input.event_day,
                     input.event_section,
                     input.progression_rebase_type,
+                    input.rally_progression_rebase_driver,
                 )
                 def seaborn_linechart_stage_typ():
-                    overall_typ_wide = get_overall_typ_wide()
+                    overall_typ_wide = get_overall_typ_wide2_rebased()
                     progression_type = input.progression_rebase_type()
                     if overall_typ_wide.empty or not progression_type:
                         return
@@ -1685,6 +1706,33 @@ def get_overall_typ_wide():
     )  # typ: position, totalTimeInS
 
     return overall_times_wide
+
+@reactive.calc
+@reactive.event(input.stage, input.category, input.rally_progression_rebase_driver, input.progression_rebase_type)
+def get_overall_typ_wide2_rebased():
+    stageId = input.stage()
+    if not stageId:
+        return DataFrame()
+    stageId = int(stageId)
+    progression_report_typ = input.progression_rebase_type()
+    # TO DO - up to
+    stageId = None
+    priority = input.category()
+
+    typ = progression_report_types[progression_report_typ]
+
+    overall_times_wide = wrc.getStageOverallWide(
+        stageId=stageId, priority=priority, completed=True, typ=typ
+    )  # typ: position, totalTimeInS
+    rebase_driver = input.rally_progression_rebase_driver()
+
+    if overall_times_wide.empty or not rebase_driver:
+        return
+    stage_cols = wrc.getStageCols(overall_times_wide)
+    output_ = wrc.rebaseManyTimes(
+        overall_times_wide, int(rebase_driver), "carNo", stage_cols
+    )
+    return output_
 
 
 @reactive.calc

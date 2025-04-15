@@ -300,8 +300,10 @@ def chart_seaborn_linechart_stage_progress_typ(wrc, overall_times_wide, typ="pos
                 fontsize=9,
             )
     ax.set(xlabel=None, ylabel=f"Overall {typ}")
-    if "position" in typ:
+    if "position" in typ or typ=="timeInS":
         ax.invert_yaxis()
+
+    # To Do - option for having distance along x esp. for timeInS -> gradient gives pace difference
     plt.xlim(x_min - 0.5, x_max + 0.5)
     return ax
 
