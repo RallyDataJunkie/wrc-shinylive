@@ -488,4 +488,18 @@ CREATE TABLE "split_times" (
   FOREIGN KEY ("stageId") REFERENCES "itinerary_stages" ("stageId"),
   FOREIGN KEY ("entryId") REFERENCES "entries" ("entryId")
 );
+
+CREATE TABLE "meta_completed_stage_tables" (
+  "tableType" TEXT,
+  "stageId" INTEGER,
+  "status" TEXT,
+  PRIMARY KEY ("tableType", "stageId")
+);
+
+CREATE TABLE "meta_completed_event_tables" (
+  "tableType" TEXT,
+  "eventId" INTEGER,
+  PRIMARY KEY ("tableType", "eventId")
+);
+
 """

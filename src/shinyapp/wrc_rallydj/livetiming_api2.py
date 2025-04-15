@@ -1304,10 +1304,45 @@ class WRCTimingResultsAPIClientV2:
 
         return r
 
-    def _getStages(self, *args, **kwargs):
-        kwargs["eventId"] = self.eventId
+    def _updateCompletedEventTableStatus(self, eventId, table):
+        if table and isinstance(table,str):
+            table=[table]
+        for t in table:
+            self.dbfy(
+                DataFrame(
+                    [{"eventId": int(eventId), "tableType": t}]
+                ),
+                "meta_completed_event_tables",
+                pk=["tableType", "eventId"],
+            )
+    def checkCompletedEventTableStatus(self, eventId, table):
+        """Return a True flag if we have stored this table."""
+        sql = f"""SELECT * FROM meta_completed_event_tables WHERE eventId={int(eventId)} AND tableType="{table}";"""
+        _result = self.query(sql=sql)
+        status = not _result.empty
+        return status
 
-        return self.api_client._getStages(*args, **kwargs)
+    def _getStages(self, *args, **kwargs):
+        eventId = self.eventId
+        kwargs["eventId"] = eventId
+        # if the event is finished and we have this already
+        stage_info_completed = self.checkCompletedEventTableStatus(eventId, "stage_info")
+        split_points_completed = self.checkCompletedEventTableStatus(eventId, "split_points")
+        stage_controlsd_completed = self.checkCompletedEventTableStatus(eventId, "stage_controls")
+        if (stage_info_completed and split_points_completed and stage_controlsd_completed
+        ):
+            return self.getStageInfo(legacyCheck=True)
+        stages_df, stage_split_points_df, stage_controls_df = (
+            self.api_client._getStages(*args, **kwargs)
+        )
+        # Check the stages table as it currently stands
+        # stages_info = self.getStageInfo(legacyCheck=True)["status"].str.lower().unique()
+        stages_info = stages_df["status"].str.lower().unique()
+        if "torun" not in stages_info and "running" not in stages_info:
+            self._updateCompletedEventTableStatus(
+                eventId, ["stage_info", "split_points", "stage_controls"]
+            )
+        return stages_df, stage_split_points_df, stage_controls_df
 
     def getStageInfo(
         self,
@@ -1320,8 +1355,11 @@ class WRCTimingResultsAPIClientV2:
         raw=True,
         updateDB=False,
         noLiveCheck=False,
+        legacyCheck=False,
     ):
-        if updateDB or self.liveCatchup:
+        if legacyCheck:
+            pass
+        elif updateDB or self.liveCatchup:
             if not noLiveCheck:
                 updateDB = updateDB or self.isStageLive(
                     stageId=stageId, stage_code=stage_code
@@ -2010,6 +2048,52 @@ class WRCTimingResultsAPIClientV2:
         )
         return completed_stages
 
+    def _updateCompletedStagesStatus(self, stageId, table, status):
+        self.dbfy(
+            DataFrame(
+                [{"stageId": int(stageId), "tableType": table, "status": status}]
+            ),
+            "meta_completed_stage_tables",
+            pk=["tableType", "stageId"],
+        )
+
+    def checkCompletedStageTableStatus(self, stageId, table):
+        """Return a True flag if we have stored this table."""
+        sql = f"""SELECT * FROM meta_completed_stage_tables WHERE stageId={stageId} AND tableType="{table}";"""
+        _result = self.query(sql=sql)
+        status = not _result.empty
+        return status
+
+    def handleStageCompleted(self, stageId, tables=None):
+        """Check to see if we have alos"""
+
+        def _isStageCompleted(stageId):
+            """Check to see if the stage is listed as completed or cancelled."""
+            stage_info = self.getStageInfo()
+            status = stage_info[stage_info["stageId"] == int(stageId)]
+            if status.empty:
+                return False, None
+            status = status["status"].iloc[0].lower()
+            completed = status in ["completed", "cancelled"]
+            return completed, status
+
+        if tables is None:
+            tables = ["stage_overall"]  # add splits etc
+        if isinstance(tables, str):
+            tables = [tables]
+        stage_completed, stage_status = _isStageCompleted(stageId)
+        if stage_completed:
+            for table in tables:
+                if not self.checkCompletedStageTableStatus(stageId, table):
+                    # Update the db with the completed data
+                    # completed also includes cancelled
+                    if table == "stage_overall":
+                        self._getStageOverallResults(stageId=stageId, updateDB=True)
+                    # also other tables?
+                    self._updateCompletedStagesStatus(stageId, table, stage_status)
+            return True
+        return False
+
     def getStageOverallResults(
         self, stageId=None, priority=None, completed=False, raw=True, updateDB=False
     ):
@@ -2029,28 +2113,17 @@ class WRCTimingResultsAPIClientV2:
                     updateDB = updateDB or self.isStageLive(stageId=stageId)
                     # TO DO we only want to request data from API if we don't already
                     # have it in the db as completed
-                    # Need a completed_status table to say what completed datasets
-                    # have been donwloaded.
+                    # Need a new table / completed_status table to say what completed datasets
+                    # have been downloaded.
                     # If a stage status is completed, download that result then add
                     # a flag to the completed_status table
-                    # def handleStageCompleted(stageId, tables=None):
-                    #   if tables is None:
-                    #     tables = ["stage_overall", ] # add splits etc
-                    #   if isinstance(tables, str):
-                    #     tables = [tables]
-                    #   stage_completed = self.isStageCompleted(stageId) # TO DO ; incl. cancelled
-                    #   if stage_completed:
-                    #     for table in tables:
-                    #       if stageId not in completed_status(stageId=stageId, table=table):
-                    #         # Update the db with the completed data
-                    #         # completed also includes cancelled
-                    #         self._getStageOverallResults(stageId=stageId, updateDB=True)
-                    #         # also other tables?
-                    #         updateCompletedStatus(stageId=stageId,table=table)
-                    #     return True
-                    #   return False
-                    # if not handleStageCompleted(stageId):
-                    self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
+                    # CREATE TABLE "completed_tables" (
+                    # "tableType" TEXT,
+                    # "tableId" INTEGER,
+                    #  PRIMARY KEY ("tableType", "tableId"),
+                    # )
+                    if not self.handleStageCompleted(stageId):
+                        self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
             else:
                 updateDB = updateDB or self.isStageLive(stageId=stageId)
                 self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
