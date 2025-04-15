@@ -37,15 +37,15 @@ wrc = WRCTimingResultsAPIClientV2(
 )
 
 progression_report_types = {
-    "bystagetime": "Stage time",  # not yet
-    "bystagepos": "Stage position",  # not yet
-    "bystagegap": "Stage gap (s)",  # not yet
-    "bystagediff": "Stage diff (s)",  # not yet
+    "bystagetime": "timeInS",  # not yet
+    "bystagepos": "position",
+    "bystagegap": "Gap",  # not yet
+    "bystagediff": "Diff",  # not yet
     "byrallytime": "timeInS",
     "byrallypos": "position",
     "byrallyclassposs": "categoryPosition",
-    "bystagegap": "Gap",
-    "bystagediff": "Diff",
+    "byrallygap": "Gap",
+    "byrallydiff": "Diff",
 }
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
@@ -102,6 +102,8 @@ with ui.accordion(open=False):
             return ui.markdown(txt)
 
     with ui.accordion_panel("Season info"):
+
+        ui.markdown("TO DO - round winners; next rally; previous round result; championship hero")
 
         @render.data_frame
         @reactive.event(input.rally_seasonId)
@@ -241,6 +243,8 @@ with ui.accordion(open=False):
         @render.ui
         @reactive.event(input.stage, input.display_latest_overall)
         def rally_overview_latest_hero():
+            # TO DO - for winner give overal stage distance, av speed, av pace
+            # TO DO for 2nd / 3rd, av speed, av pace delta
             setStageData()
             stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
                 by="number", ascending=True
@@ -261,6 +265,8 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
+        # TO DO  if still stages to run, give eg 7 stages / 120km of 18 stages / 250km completed, 11 stages / 130km still to run. BUT how to handle cancelled stages?
+        # TO DO remarks regarding how much pace required to make back time over N stages.
         with ui.accordion(open=False, id="event_championship_points_accordion"):
             with ui.accordion_panel("Championship Points on Event"):
 
@@ -339,13 +345,13 @@ with ui.accordion(open=False):
                         #].sort_values("position", key=lambda x: x.map(custom_sort_key))
                         championship_event[championship_event["status"] != "DidNotEnter"][
                             cols
-                        ].sort_values("totalPoints", ascending=False)
+                        ].sort_values(["totalPoints", "pointsBreakdown"], ascending=False)
                     )
                     # return render.DataGrid(championship_event[cols].sort_values("position"))
 
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
-                ui.markdown("*Progress across stages.*")
+                ui.markdown("*Progress across stages.* (TO DO - select position or points)")
 
                 @render.plot(alt="Line chart of overall rally positions.")
                 @reactive.event(
@@ -367,17 +373,17 @@ with ui.accordion(open=False):
                 with ui.tooltip(id="progression_report_type_tt"):
                     ui.input_select(
                         "progression_report_type",
-                        "Progression report type:",
+                        "Progression report type (TO DO - on stage position / time):",
                         {
-                            # "bystagetime": "Stage time",
-                            # "bystagepos": "Stage position",
-                            # "bystagegap": "Stage gap (s)",
-                            # "bystagediff": "Stage diff (s)",
+                            "bystagetime": "Stage time",
+                            "bystagepos": "Stage position",
+                            "bystagegap": "Stage gap (s)",
+                            "bystagediff": "Stage diff (s)",
                             "byrallytime": "Overall rally time",
                             "byrallypos": "Overall rally position",
                             "byrallyclassposs": "Overall rally class position",
-                            "bystagegap": "Overall rally gap (s)",
-                            "bystagediff": "Overall rally diff (s)",
+                            "byrallygap": "Overall rally gap (s)",
+                            "byrallydiff": "Overall rally diff (s)",
                         },
                         selected="byrallytime",
                     ),
@@ -413,7 +419,7 @@ with ui.accordion(open=False):
                 with ui.tooltip(id="progression_rebase_type_tt"):
                     ui.input_select(
                         "progression_rebase_type",
-                        "Progression rebase type",
+                        "Progression rebase type: (TO DO - on stage time rebase)",
                         {
                             #"bystagetime": "Stage time",
                             "byrallytime": "Overall rally time",
@@ -826,7 +832,71 @@ with ui.accordion(open=False):
 
                         return ui.markdown("\n\n".join(md))
 
-                with ui.accordion_panel("Overall position"):
+
+                with ui.accordion_panel("Stage times"):
+                    # Create stage driver rebase selector
+                    ui.input_select(
+                        "stage_rebase_driver",
+                        "Driver rebase:",
+                        {},
+                    )
+
+                    @render.plot(alt="Barplot of stage times.")
+                    @reactive.event(
+                        input.stage_review_accordion,
+                        input.category,
+                        input.stage,
+                        input.stage_rebase_driver,
+                    )
+                    def seaborn_barplot_stagetimes():
+                        stage_times_df = get_rebased_data()
+                        if stage_times_df is None:
+                            return
+                        rebase_reverse_palette = input.rebase_reverse_palette()
+                        ax = chart_seaborn_barplot_stagetimes(
+                            stage_times_df, rebase_reverse_palette
+                        )
+                        return ax
+
+                    @render.data_frame
+                    @reactive.event(
+                        input.stage_review_accordion,
+                        input.category,
+                        input.stage,
+                        input.stage_rebase_driver,
+                    )
+                    def stage_results_short():
+                        stage_times_df = get_rebased_data()
+                        if stage_times_df is None:
+                            return
+
+                        cols = [
+                            "carNo",
+                            "driverName",
+                            "roadPos",
+                            "position",
+                            "categoryPosition",
+                            "Gap",
+                            "Diff",
+                            "Rebase Gap (s)",
+                            "Rebase %",
+                            "Rebase pace diff (s/km)",
+                            "timeInS",
+                            "speed (km/h)",
+                            "pace (s/km)",
+                            "timeToCarBehind",
+                            "codriverName",
+                            "manufacturerName",
+                            "entrantName",
+                            "vehicleModel",
+                            "priority",
+                            "eligibility",
+                        ]
+                        # TO DO — make timeInS a nice, human readable time
+                        cols = [c for c in cols if c in stage_times_df.columns]
+                        return render.DataGrid(stage_times_df[cols])
+
+                with ui.accordion_panel("Overall rally positions"):
 
                     @render.data_frame
                     @reactive.event(
@@ -898,69 +968,6 @@ with ui.accordion(open=False):
                             inplace=True,
                         )
                         return render.DataGrid(overall_df)
-
-                with ui.accordion_panel("Stage times"):
-                    # Create stage driver rebase selector
-                    ui.input_select(
-                        "stage_rebase_driver",
-                        "Driver rebase:",
-                        {},
-                    )
-
-                    @render.plot(alt="Barplot of stage times.")
-                    @reactive.event(
-                        input.stage_review_accordion,
-                        input.category,
-                        input.stage,
-                        input.stage_rebase_driver,
-                    )
-                    def seaborn_barplot_stagetimes():
-                        stage_times_df = get_rebased_data()
-                        if stage_times_df is None:
-                            return
-                        rebase_reverse_palette = input.rebase_reverse_palette()
-                        ax = chart_seaborn_barplot_stagetimes(
-                            stage_times_df, rebase_reverse_palette
-                        )
-                        return ax
-
-                    @render.data_frame
-                    @reactive.event(
-                        input.stage_review_accordion,
-                        input.category,
-                        input.stage,
-                        input.stage_rebase_driver,
-                    )
-                    def stage_results_short():
-                        stage_times_df = get_rebased_data()
-                        if stage_times_df is None:
-                            return
-
-                        cols = [
-                            "carNo",
-                            "driverName",
-                            "roadPos",
-                            "position",
-                            "categoryPosition",
-                            "Gap",
-                            "Diff",
-                            "Rebase Gap (s)",
-                            "Rebase %",
-                            "Rebase pace diff (s/km)",
-                            "timeInS",
-                            "speed (km/h)",
-                            "pace (s/km)",
-                            "timeToCarBehind",
-                            "codriverName",
-                            "manufacturerName",
-                            "entrantName",
-                            "vehicleModel",
-                            "priority",
-                            "eligibility",
-                        ]
-                        # TO DO — make timeInS a nice, human readable time
-                        cols = [c for c in cols if c in stage_times_df.columns]
-                        return render.DataGrid(stage_times_df[cols])
 
     with ui.accordion_panel(title="Splits Analysis"):
 
@@ -1701,10 +1708,16 @@ def get_overall_typ_wide():
 
     typ = progression_report_types[progression_report_typ]
 
-    overall_times_wide = wrc.getStageOverallWide(
-        stageId=stageId, priority=priority, completed=True, typ=typ
-    )  # typ: position, totalTimeInS
-
+    if "rally" in progression_report_typ.lower():
+        overall_times_wide = wrc.getStageOverallWide(
+            stageId=stageId, priority=priority, completed=True, typ=typ
+        )  # typ: position, totalTimeInS
+    elif "stage" in progression_report_typ.lower():
+        overall_times_wide = wrc.getStageTimesWide(
+            stageId=stageId, priority=priority, completed=True, typ=typ
+        )  # TO DO XXX
+    else:
+        overall_times_wide=DataFrame()
     return overall_times_wide
 
 @reactive.calc

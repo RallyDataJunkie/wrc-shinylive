@@ -1697,9 +1697,12 @@ class WRCTimingResultsAPIClientV2:
                 _codriver_join = (
                     f"INNER JOIN entries_codrivers AS cd ON e.codriverId=cd.personId"
                 )
+                _stage_info_join = (
+                    f"INNER JOIN stage_info AS si ON si.stageId=st.stageId"
+                )
                 _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-                sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, e.priority, e.eligibility, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {omit_dns_} {on_event_} {on_stage_} {priority_};"""
+                sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, e.priority, e.eligibility, si.code AS stageCode, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_stage_info_join} WHERE 1=1 {omit_dns_} {on_event_} {on_stage_} {priority_};"""
                 # TO DO have a query where we return DNS (did not start)
 
             r = self.db_manager.read_sql(sql)
@@ -1868,24 +1871,50 @@ class WRCTimingResultsAPIClientV2:
 
         return split_times_wide
 
+    # TO DO below but one this as getStageWide and generalise names inside function
+    # and maybe introduce a convenience getStageOverallWide
+    def getStageTimesWide(
+        self,
+        stageId=None,
+        priority=None,
+        completed=False,
+        typ="position",
+        extent="stage", # stage | overall
+        updateDB=False,):
+        return self.getStageOverallWide(
+            stageId=stageId,
+            priority=priority,
+            completed=completed,
+            typ=typ,
+            extent="stage",  # stage | overall
+            updateDB=updateDB,
+        )
+
     def getStageOverallWide(
         self,
         stageId=None,
         priority=None,
         completed=False,
         typ="position",
+        extent="overall", # stage | overall
         updateDB=False,
     ):
         # typ: position, totalTimeInS
         if self.eventId and self.rallyId and stageId:
             priority = None if priority == "P0" else priority
-        overall_times = self.getStageOverallResults(
-            raw=False,
-            stageId=stageId,
-            priority=priority,
-            completed=completed,
-            updateDB=updateDB,
-        )
+        if extent=="stage":
+            print("AS IS WTF")
+            overall_times =self.getStageTimes(stageId=stageId, completed=completed,priority=priority, raw=False,updateDB=updateDB)
+            # rebaseToCategory=True ??
+        else:
+            print("AS WAS SHOULD BE AS BEFORE")
+            overall_times = self.getStageOverallResults(
+                raw=False,
+                stageId=stageId,
+                priority=priority,
+                completed=completed,
+                updateDB=updateDB,
+            )
         stage_order = overall_times["stageCode"].unique()
         # Optionally return just up to and including specified stageId
         # TO DO
