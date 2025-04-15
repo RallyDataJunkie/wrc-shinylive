@@ -744,7 +744,8 @@ class WRCTimingResultsAPIClientV2:
         """Rebase times based on the time for a particular vehicle."""
         if not rebaseId or rebaseId == "ult" or idCol is None or rebaseCol is None:
             return times
-        return times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
+        rebase_times = times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
+        return rebase_times.round(1)
 
     @staticmethod
     def rebaseManyTimes(
@@ -1648,24 +1649,45 @@ class WRCTimingResultsAPIClientV2:
     def getStageTimes(
         self,
         stageId=None,
+        completed=False,
+        omitDNS=True,
         priority=None,
         rebaseToCategory=True,
         raw=True,
         updateDB=False,
     ):
+        # The assumption below is for on_event
+        stageIds = (
+            self.getCompletedStages(stageId=stageId)
+            if completed
+            else {}  # TO DO map for the default stageId
+        )
         if updateDB or self.liveCatchup:
-            logger.debug(
-                f"getStageTimes updateDB: {updateDB}, liveCatchup: {self.liveCatchup}"
-            )
-            updateDB = updateDB or self.isStageLive(stageId=stageId)
-            self._getStageTimes(stageId=stageId, updateDB=updateDB)
+            if completed:
+                # Check availability of every stage required
+                for stageId in stageIds:
+                    updateDB = updateDB or self.isStageLive(stageId=stageId)
+                    if not self.handleStageCompleted(stageId, tables="stage_times"):
+                        self._getStageTimes(stageId=stageId, updateDB=updateDB)
+            else:
+                logger.debug(
+                    f"getStageTimes updateDB: {updateDB}, liveCatchup: {self.liveCatchup}"
+                )
+                updateDB = updateDB or self.isStageLive(stageId=stageId)
+                self._getStageTimes(stageId=stageId, updateDB=updateDB)
 
         stageId = stageId if stageId else self.stageId
         if stageId and self.eventId and self.rallyId:
             _entry_join = f"INNER JOIN entries AS e ON st.entryId=e.entryId"
             priority = None if priority == "P0" else priority
-            on_event_ = f"AND st.eventId={self.eventId} AND st.stageId={stageId} AND st.rallyId={self.rallyId}"
+            on_event_ = f"AND st.eventId={self.eventId} AND st.rallyId={self.rallyId}"
+            if completed and stageIds:
+                stage_ids_str = ",".join(str(sid) for sid in stageIds)
+                on_stage_ = f"AND st.stageId IN ({stage_ids_str})"
+            else:
+                on_stage_ = f"AND st.stageId={stageId}" if stageId else ""
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
+            omit_dns_ = """AND st.status!="DNS" """ if omitDNS else ""
             if raw:
                 sql = f"""SELECT st.* FROM stage_times AS st {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
             else:
@@ -1677,7 +1699,8 @@ class WRCTimingResultsAPIClientV2:
                 )
                 _manufacturer_join = f"INNER JOIN manufacturers AS m ON e.manufacturerId=m.manufacturerId"
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
-                sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, e.priority, e.eligibility, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, e.priority, e.eligibility, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {omit_dns_} {on_event_} {on_stage_} {priority_};"""
+                # TO DO have a query where we return DNS (did not start)
 
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
@@ -2038,14 +2061,27 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageOverallResults(*args, **kwargs)
 
-    def getCompletedStages(self, stageId=None):
+    def getCompletedStages(self, stageId=None, stageMode="uptoincl", on_event=True):
         # stageId is the up to an including stageId, else all TO DO still
         completed_stages = (
-            self.getStageInfo(raw=False, completed=True)
-            .sort_values("number")[["stageId", "code"]]
-            .set_index("stageId")["code"]
-            .to_dict()
+            self.getStageInfo(raw=False, on_event=on_event, completed=True)
+            .sort_values("number").reset_index(drop=True)
+            
         )
+        if stageId:
+            # if we have a single stageId, get stages up to that
+            if isinstance(stageId, int) and stageMode=="uptoincl":
+                upto_idx = completed_stages[completed_stages["stageId"] == stageId].index.tolist()
+                # Get frames up to an including the specified stage
+                if upto_idx:
+                    completed_stages = completed_stages[:upto_idx[0]+1]
+            elif isinstance(stageId, list):
+                # if we have a list of stageIds, just get those
+                completed_stages = completed_stages[
+                    completed_stages["stageId"].isin(stageId)
+                ]
+
+        completed_stages = completed_stages[["stageId", "code"]].set_index("stageId")["code"].to_dict()
         return completed_stages
 
     def _updateCompletedStagesStatus(self, stageId, table, status):
@@ -2089,6 +2125,8 @@ class WRCTimingResultsAPIClientV2:
                     # completed also includes cancelled
                     if table == "stage_overall":
                         self._getStageOverallResults(stageId=stageId, updateDB=True)
+                    elif table == "stage_times":
+                        self._getStageTimes(stageId=stageId, updateDB=True)
                     # also other tables?
                     self._updateCompletedStagesStatus(stageId, table, stage_status)
             return True
@@ -2097,7 +2135,7 @@ class WRCTimingResultsAPIClientV2:
     def getStageOverallResults(
         self, stageId=None, priority=None, completed=False, raw=True, updateDB=False
     ):
-
+        # The assumption below is for on_event
         stageIds = (
             self.getCompletedStages(stageId=stageId)
             if completed
