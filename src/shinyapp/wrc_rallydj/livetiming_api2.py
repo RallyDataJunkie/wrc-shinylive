@@ -1689,7 +1689,7 @@ class WRCTimingResultsAPIClientV2:
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
             omit_dns_ = """AND st.status!="DNS" """ if omitDNS else ""
             if raw:
-                sql = f"""SELECT st.* FROM stage_times AS st {_entry_join} WHERE 1=1 {on_event_} {priority_};"""
+                sql = f"""SELECT st.* FROM stage_times AS st {_entry_join} WHERE 1=1 {on_event_} {priority_} {on_stage_};"""
             else:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
@@ -1704,7 +1704,6 @@ class WRCTimingResultsAPIClientV2:
                 _entrants_join = f"INNER JOIN entrants AS n ON e.entrantId=n.entrantId"
                 sql = f"""SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, e.priority, e.eligibility, si.code AS stageCode, st.* FROM stage_times AS st {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} {_stage_info_join} WHERE 1=1 {omit_dns_} {on_event_} {on_stage_} {priority_};"""
                 # TO DO have a query where we return DNS (did not start)
-
             r = self.db_manager.read_sql(sql)
             # Hack to poll API if empty
             if r.empty:
@@ -1856,7 +1855,7 @@ class WRCTimingResultsAPIClientV2:
             stage_times.rename(
                 columns={"elapsedDurationMs": self.SPLIT_FINAL}, inplace=True
             )
-
+            ## XX
             split_times_wide = merge(split_times_wide, stage_times, on="entryId")
 
         if timeInS:
@@ -1903,11 +1902,9 @@ class WRCTimingResultsAPIClientV2:
         if self.eventId and self.rallyId and stageId:
             priority = None if priority == "P0" else priority
         if extent=="stage":
-            print("AS IS WTF")
             overall_times =self.getStageTimes(stageId=stageId, completed=completed,priority=priority, raw=False,updateDB=updateDB)
             # rebaseToCategory=True ??
         else:
-            print("AS WAS SHOULD BE AS BEFORE")
             overall_times = self.getStageOverallResults(
                 raw=False,
                 stageId=stageId,
@@ -1950,12 +1947,12 @@ class WRCTimingResultsAPIClientV2:
     def getStageCols(self, stages_wide):
         """Get the stage columns from a wide stages dataframe."""
         # TO DO - also provide an option for getting this from stageId values?
-        split_cols = [
+        stage_cols = [
             c
             for c in stages_wide.columns
             if c.startswith(self.STAGE_PREFIX) or c == self.STAGE_FINAL
         ]
-        return split_cols
+        return stage_cols
 
     def getSplitDuration(
         self, split_times_wide, split_cols=None, ret_id=True, id_col=None

@@ -421,7 +421,7 @@ with ui.accordion(open=False):
                         "progression_rebase_type",
                         "Progression rebase type: (TO DO - on stage time rebase)",
                         {
-                            #"bystagetime": "Stage time",
+                            "bystagetime": "Stage time",
                             "byrallytime": "Overall rally time",
                         },
                         selected="bystagetime",
@@ -470,8 +470,10 @@ with ui.accordion(open=False):
                     input.rally_progression_rebase_driver,
                 )
                 def seaborn_linechart_stage_typ():
+                    # HACK this chart is harwdired:
+                    # - line chart makes no sense for stage progression
                     overall_typ_wide = get_overall_typ_wide2_rebased()
-                    progression_type = input.progression_rebase_type()
+                    progression_type = "byrallytime" #input.progression_rebase_type()
                     if overall_typ_wide.empty or not progression_type:
                         return
                     typ = progression_report_types[progression_type]
