@@ -98,7 +98,8 @@ CREATE TABLE "championship_entries" (
   "LastName" TEXT,
   "CountryISO3" TEXT,
   "Manufacturer" TEXT,
-  "TyreManufacturer" TEXT
+  "TyreManufacturer" TEXT,
+  "Name" TEXT
 );
 
 

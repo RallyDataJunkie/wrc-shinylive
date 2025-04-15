@@ -164,7 +164,7 @@ with ui.accordion(open=False):
         #    return render.DataGrid(championships_df[cols])
 
         ui.markdown("__Championship Overall Points__")
-        ui.markdown("*TO DO - points at end of selected rally*")
+        ui.markdown("*TO DO - points at end of selected round*")
 
         @render.data_frame
         @reactive.event(
@@ -199,6 +199,7 @@ with ui.accordion(open=False):
                 "overallPosition",
                 "LastName",
                 "Manufacturer",
+                "Team",
                 "TyreManufacturer",
                 "overallPoints",
             ]
@@ -260,7 +261,6 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
-
         with ui.accordion(open=False, id="event_championship_points_accordion"):
             with ui.accordion_panel("Championship Points on Event"):
 
@@ -306,18 +306,14 @@ with ui.accordion(open=False):
                         "position", "LastName",
                         "TyreManufacturer",
                         "Manufacturer",
+                        "Team",
                         "totalPoints",
                         "pointsBreakdown",
                     ]
-                    if "Manufacturer" in wrc.championshipName:
-                        cols = ["Manufacturer", "totalPoints", "pointsBreakdown", "position"]
-                    elif "TyreManufacturer" in wrc.championshipName:
-                        cols = [
-                            "TyreManufacturer",
-                            "totalPoints",
-                            "pointsBreakdown",
-                            "position",
-                        ]
+                    for c in ["Manufacturer", "Team", "TyreManufacturer"]:
+                        if c in wrc.championshipName:
+                            cols = [c, "totalPoints", "pointsBreakdown", "position"]
+                    
                     cols = [c for c in cols if c in championship_event.columns]
 
                     def custom_sort_key(x):
@@ -353,6 +349,7 @@ with ui.accordion(open=False):
 
                 @render.plot(alt="Line chart of overall rally positions.")
                 @reactive.event(
+                    input.category,
                     input.stage,
                     input.event_day,
                     input.event_section,
@@ -389,6 +386,7 @@ with ui.accordion(open=False):
 
                 @render.data_frame
                 @reactive.event(
+                    input.category,
                     input.stage,
                     input.event_day,
                     input.event_section,
@@ -402,29 +400,14 @@ with ui.accordion(open=False):
                     # as well as a driver rebase option
                     # TO DO - this should be sorted by position ASC for the latest stage
                     # How is this done on the seaborn_linechart_stage_progress_positions label positions?
+                    # TO DO  - sort by each stage column
+                    stage_cols = wrc.getStageCols(overall_typ_wide)
+                    stage_cols.reverse()
                     return render.DataGrid(
-                        overall_typ_wide.copy().drop(columns="entryId")
+                        overall_typ_wide.copy()
+                        .drop(columns="entryId")
+                        .sort_values(stage_cols)
                     )
-
-                @render.plot(
-                    alt="Line chart of rally progression of selected dimension."
-                )
-                @reactive.event(
-                    input.stage,
-                    input.event_day,
-                    input.event_section,
-                    input.progression_report_type,
-                )
-                def seaborn_linechart_stage_typ():
-                    overall_typ_wide = get_overall_typ_wide()
-                    progression_type = input.progression_report_type()
-                    if overall_typ_wide.empty or not progression_type:
-                        return
-                    typ = progression_report_types[progression_type]
-                    ax = chart_seaborn_linechart_stage_progress_typ(
-                        wrc, overall_typ_wide, typ
-                    )
-                    return ax
 
             with ui.accordion_panel("Rally progression rebase"):
                 # Create stage driver rebase selector
@@ -448,6 +431,27 @@ with ui.accordion(open=False):
                     # TO DO implement rebase by type
                     #
                     #
+
+                @render.plot(
+                    alt="Line chart of rally progression of selected dimension."
+                )
+                @reactive.event(
+                    input.category,
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_rebase_type,
+                )
+                def seaborn_linechart_stage_typ():
+                    overall_typ_wide = get_overall_typ_wide()
+                    progression_type = input.progression_rebase_type()
+                    if overall_typ_wide.empty or not progression_type:
+                        return
+                    typ = progression_report_types[progression_type]
+                    ax = chart_seaborn_linechart_stage_progress_typ(
+                        wrc, overall_typ_wide, typ
+                    )
+                    return ax
 
         with ui.card(class_="mt-3"):
             with ui.card_header():

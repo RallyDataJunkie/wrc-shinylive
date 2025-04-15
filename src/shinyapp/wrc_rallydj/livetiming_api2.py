@@ -899,20 +899,26 @@ class WRCTimingResultsAPIClientV2:
             q = f"""SELECT * FROM championship_overall AS co WHERE 1=1 {championship_} {event_};"""
         else:
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON co.championshipEntryId=ce.championshipEntryId"
-            q = f"""SELECT co.*, ce.LastName, ce.Manufacturer, ce.TyreManufacturer FROM championship_overall AS co {_championship_entry_join} WHERE 1=1 {championship_} {event_};"""
+            q = f"""SELECT co.*, ce.LastName, ce.Name as Team, ce.Manufacturer, ce.TyreManufacturer FROM championship_overall AS co {_championship_entry_join} WHERE 1=1 {championship_} {event_};"""
 
         championshipEntryResultsOverall_df = self.db_manager.read_sql(q)
 
         if not raw:
             if "for Manufacturers" in self.championshipName:
-                championshipEntryResultsOverall_df.drop(columns=["TyreManufacturer", "LastName"], inplace=True)
+                championshipEntryResultsOverall_df.drop(
+                    columns=["TyreManufacturer", "LastName", "Team"], inplace=True
+                )
             elif "Drivers" in self.championshipName:
-                championshipEntryResultsOverall_df.drop(columns=["Manufacturer", "TyreManufacturer"], inplace=True)
+                championshipEntryResultsOverall_df.drop(
+                    columns=["Manufacturer", "TyreManufacturer", "Team"], inplace=True
+                )
             elif "Tyre" in self.championshipName:
-                championshipEntryResultsOverall_df.drop(columns=["Manufacturer", "LastName"], inplace=True)
+                championshipEntryResultsOverall_df.drop(
+                    columns=["Manufacturer", "LastName", "Team"], inplace=True
+                )
             elif "Teams" in self.championshipName:
                 championshipEntryResultsOverall_df.drop(
-                    columns=["TyreManufacturer", "Manufacturer", "LastName"],
+                    columns=["Manufacturer", "TyreManufacturer", "LastName"],
                     inplace=True,
                 )
         return championshipEntryResultsOverall_df
@@ -948,27 +954,28 @@ class WRCTimingResultsAPIClientV2:
         else:
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON cr.championshipEntryId=ce.championshipEntryId"
             _championship_rounds_join = f"INNER JOIN championship_rounds_detail AS chd ON cr.eventId=chd.eventId"
-            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, chd.name AS eventName, chd.startDate, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_};"""
+            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, ce.Name as Team, chd.name AS eventName, chd.startDate, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_};"""
 
         championshipEntryResultsByRound_df = self.db_manager.read_sql(q)
         if not raw:
             if "for Manufacturers" in self.championshipName:
                 championshipEntryResultsByRound_df.drop(
-                    columns=["TyreManufacturer", "LastName"], inplace=True
+                    columns=["TyreManufacturer", "LastName", "Team"], inplace=True
                 )
             elif "Drivers" in self.championshipName:
                 championshipEntryResultsByRound_df.drop(
-                    columns=["Manufacturer", "TyreManufacturer"], inplace=True
+                    columns=["Manufacturer", "TyreManufacturer", "Team"], inplace=True
                 )
             elif "Tyre" in self.championshipName:
                 championshipEntryResultsByRound_df.drop(
-                    columns=["Manufacturer", "LastName"], inplace=True
+                    columns=["Manufacturer", "LastName", "Team"], inplace=True
                 )
             elif "Teams" in self.championshipName:
                 championshipEntryResultsByRound_df.drop(
-                    columns=["TyreManufacturer", "Manufacturer", "LastName"],
+                    columns=["Manufacturer", "TyreManufacturer", "LastName"],
                     inplace=True,
                 )
+
         return championshipEntryResultsByRound_df
 
     def _getChampionshipDetail(self, *args, **kwargs):
@@ -1763,7 +1770,7 @@ class WRCTimingResultsAPIClientV2:
         )
         split_times_wide = pivot(
             split_times_df.dropna(subset=["number", "elapsedDurationMs"]),
-            index=["driverName", "entryId", "carNo"],
+            index=[ "carNo", "driverName", "entryId"],
             columns="number",
             values="elapsedDurationMs",
         ).reset_index()
@@ -1816,7 +1823,7 @@ class WRCTimingResultsAPIClientV2:
 
         overall_times_wide = pivot(
             overall_times.dropna(subset=["position"]),
-            index=["driverName", "entryId", "carNo"],
+            index=["carNo", "driverName", "entryId"],
             columns="stageCode",
             values=typ,
         ).reset_index()
