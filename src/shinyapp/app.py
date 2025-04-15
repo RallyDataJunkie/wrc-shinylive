@@ -134,15 +134,15 @@ with ui.accordion(open=False):
         # JOIN wrc.getChampionshipEntries gives championshipEntryId, personId map
         # wrc.getChampionshipRounds()
 
-        @render.ui
-        @reactive.event(input.rally_seasonId, input.championships)
-        def championship_info():
-            # TO DO this is not set for ERC
-            # wrc.setChampionship()
-            getChampionships()
-            return ui.markdown(
-                f"__{wrc.championshipName}__"
-            )
+        # @render.ui
+        # @reactive.event(input.rally_seasonId, input.championships)
+        # def championship_info():
+        # TO DO this is not set for ERC
+        # wrc.setChampionship()
+        #    getChampionships()
+        #    return ui.markdown(
+        #        f"__{wrc.championshipName}__"
+        #    )
 
         # Create championships selector
         ui.input_select(
@@ -260,69 +260,92 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
-        ui.markdown("__Championship Points on Event__")
 
-        @render.data_frame
-        @reactive.event(
-            input.rally_seasonId,
-            input.category,
-            input.season_round,
-            input.championships,
-        )
-        def championship_event_frame():
-            seasonId = input.rally_seasonId()
-            eventId = input.season_round()
-            championshipId = input.championships()
-            if not seasonId or not eventId:
-                return
-            # The following is the latest overall, not keyed by anything
-            # need a swtich for ERC etc
-            # Need a different function if we specify at a particular round
-            eventId = int(eventId)
-            # TO DO cache championship and set it
-            # championships = getChampionships()
+        with ui.accordion(open=False, id="event_championship_points_accordion"):
+            with ui.accordion_panel("Championship Points on Event"):
 
-            # championshipId = championships[championships["type"] == "Drivers"][
-            #    "championshipId"
-            # ].iloc[0]
-            championship_event = wrc.getChampionshipByRound(
-                championshipId=championshipId,
-                eventId=eventId,
-                raw=False,
-                # on_event=True
-            )
-            # TO DO limit columns
-            cols = [
-                "position",
-                "driverCode",
-                "driverName",
-                "totalPoints",
-                "pointsBreakdown",
-            ]
+                ui.input_select(
+                    "event_championships",
+                    "Championships:",
+                    {},
+                )
 
-            def custom_sort_key(x):
-                if isna(x) or x == "":
-                    return (2, 0)  # Empty values last, with value 0 as secondary key
-                elif x == "R":
-                    return (
-                        1,
-                        0,
-                    )  # "R" values in the middle, with value 0 as secondary key
-                else:
-                    try:
-                        # Integers first, sorted by their value
-                        return (0, int(x))
-                    except:
-                        # Any other values (shouldn't happen in your case)
-                        return (3, str(x))
+                @render.data_frame
+                @reactive.event(
+                    input.rally_seasonId,
+                    input.category,
+                    input.season_round,
+                    input.event_championships,
+                )
+                def championship_event_frame():
+                    seasonId = input.rally_seasonId()
+                    eventId = input.season_round()
+                    championshipId = input.event_championships()
+                    if not seasonId or not eventId:
+                        return
+                    # The following is the latest overall, not keyed by anything
+                    # need a swtich for ERC etc
+                    # Need a different function if we specify at a particular round
+                    eventId = int(eventId)
+                    championshipId = int(championshipId)
+                    wrc.setChampionship(championshipId=championshipId)
+                    # TO DO cache championship and set it
+                    # championships = getChampionships()
 
-            # TO DO fix cols filter for eg manufacturers etc
-            return render.DataGrid(
-                championship_event[championship_event["status"] != "DidNotEnter"][
-                    cols
-                ].sort_values("position", key=lambda x: x.map(custom_sort_key))
-            )
-            # return render.DataGrid(championship_event[cols].sort_values("position"))
+                    # championshipId = championships[championships["type"] == "Drivers"][
+                    #    "championshipId"
+                    # ].iloc[0]
+                    championship_event = wrc.getChampionshipByRound(
+                        championshipId=championshipId,
+                        eventId=eventId,
+                        raw=False,
+                        # on_event=True
+                    )
+                    # TO DO limit columns
+                    cols = [
+                        "position", "LastName",
+                        "TyreManufacturer",
+                        "Manufacturer",
+                        "totalPoints",
+                        "pointsBreakdown",
+                    ]
+                    if "Manufacturer" in wrc.championshipName:
+                        cols = ["Manufacturer", "totalPoints", "pointsBreakdown", "position"]
+                    elif "TyreManufacturer" in wrc.championshipName:
+                        cols = [
+                            "TyreManufacturer",
+                            "totalPoints",
+                            "pointsBreakdown",
+                            "position",
+                        ]
+                    cols = [c for c in cols if c in championship_event.columns]
+
+                    def custom_sort_key(x):
+                        if isna(x) or x == "":
+                            return (2, 0)  # Empty values last, with value 0 as secondary key
+                        elif x == "R":
+                            return (
+                                1,
+                                0,
+                            )  # "R" values in the middle, with value 0 as secondary key
+                        else:
+                            try:
+                                # Integers first, sorted by their value
+                                return (0, int(x))
+                            except:
+                                # Any other values (shouldn't happen in your case)
+                                return (3, str(x))
+
+                    # TO DO fix cols filter for eg manufacturers etc
+                    return render.DataGrid(
+                        #championship_event[championship_event["status"] != "DidNotEnter"][
+                        #    cols
+                        #].sort_values("position", key=lambda x: x.map(custom_sort_key))
+                        championship_event[championship_event["status"] != "DidNotEnter"][
+                            cols
+                        ].sort_values("totalPoints", ascending=False)
+                    )
+                    # return render.DataGrid(championship_event[cols].sort_values("position"))
 
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
@@ -1561,6 +1584,7 @@ def update_championships_select():
         .to_dict()
     )
     ui.update_select("championships", choices=championships)
+    ui.update_select("event_championships", choices=championships)
 
 
 ## Reactive calcs

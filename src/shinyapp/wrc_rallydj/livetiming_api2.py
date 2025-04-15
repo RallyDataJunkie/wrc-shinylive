@@ -951,7 +951,24 @@ class WRCTimingResultsAPIClientV2:
             q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, chd.name AS eventName, chd.startDate, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_};"""
 
         championshipEntryResultsByRound_df = self.db_manager.read_sql(q)
-
+        if not raw:
+            if "for Manufacturers" in self.championshipName:
+                championshipEntryResultsByRound_df.drop(
+                    columns=["TyreManufacturer", "LastName"], inplace=True
+                )
+            elif "Drivers" in self.championshipName:
+                championshipEntryResultsByRound_df.drop(
+                    columns=["Manufacturer", "TyreManufacturer"], inplace=True
+                )
+            elif "Tyre" in self.championshipName:
+                championshipEntryResultsByRound_df.drop(
+                    columns=["Manufacturer", "LastName"], inplace=True
+                )
+            elif "Teams" in self.championshipName:
+                championshipEntryResultsByRound_df.drop(
+                    columns=["TyreManufacturer", "Manufacturer", "LastName"],
+                    inplace=True,
+                )
         return championshipEntryResultsByRound_df
 
     def _getChampionshipDetail(self, *args, **kwargs):
