@@ -4,7 +4,7 @@ from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame
+from pandas import DataFrame, isna
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 
@@ -18,6 +18,7 @@ from .app_heroes import (
 # Charts
 from .app_charts import (
     chart_seaborn_linechart_stage_progress_positions,
+    chart_seaborn_linechart_stage_progress_typ,
     chart_seaborn_barplot_stagetimes,
     chart_plot_driver_stagewins,
     chart_seaborn_linechart_split_positions,
@@ -34,6 +35,18 @@ from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 wrc = WRCTimingResultsAPIClientV2(
     use_cache=True, backend="memory", expire_after=30, liveCatchup=True
 )
+
+progression_report_types = {
+    "bystagetime": "Stage time",  # not yet
+    "bystagepos": "Stage position",  # not yet
+    "bystagegap": "Stage gap (s)",  # not yet
+    "bystagediff": "Stage diff (s)",  # not yet
+    "byrallytime": "timeInS",
+    "byrallypos": "position",
+    "byrallyclassposs": "categoryPosition",
+    "bystagegap": "Gap",
+    "bystagediff": "Diff",
+}
 
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
@@ -85,12 +98,13 @@ with ui.accordion(open=False):
 
         @render.ui
         def about():
-            txt = "This website was developed in order to explore the use of Shinylive-Python for developing in-browser reactive Python applications, and to support personal use (reasearch, analysis, visualisation, reporting) of timing and results data arising from WRC rally events.\n\nThe website may contain errors resulting from the processing of the data: please file an issue at https://github.com/RallyDataJunkie/wrc-shinylive/issues if you notice an error.\n\n*This website is unofficial and is not associated in any way with WRC Promoter GmbH. WRC WORLD RALLY CHAMPIONSHIP is a trade mark of the FEDERATION INTERNATIONALE DE L'AUTOMOBILE.*"
+            txt = "This website was developed in order to explore the use of Shinylive-Python for developing in-browser reactive Python applications, and to support personal use (reasearch, analysis, visualisation, reporting) of timing and results data arising from WRC rally events.\n\nThis website may contain errors resulting from the processing of the data: please file an issue at https://github.com/RallyDataJunkie/wrc-shinylive/issues if you notice an error. Results and timing data may be cached in your browser.\n\n*This website is unofficial and is not associated in any way with WRC Promoter GmbH, The WRC World Rally Championship, the FIA European Rally Championship, the Federation Internationale de l'Automobile or Red Bull GmbH. WRC WORLD RALLY CHAMPIONSHIP and ERC FIA EUROPEAN RALLY CHAMPIONSHIP are trade marks of the FEDERATION INTERNATIONALE DE L'AUTOMOBILE.*"
             return ui.markdown(txt)
 
     with ui.accordion_panel("Season info"):
 
         @render.data_frame
+        @reactive.event(input.rally_seasonId)
         def season_frame():
             season = wrc.getSeasonRounds()
             if season.empty:
@@ -104,6 +118,93 @@ with ui.accordion(open=False):
                 "surfaces",
             ]
             return render.DataGrid(season[retcols])
+
+        # TO DO remarks on the season
+        # TO DO - remark on number of rounds
+        # TO DO - remark on number of completed rounds
+        # TO DO - remark on championship lead
+        # TO DO - remark on next upcoming round
+
+    with ui.accordion_panel("Championship results"):
+        # TO DO  - select chapionships based on wrc.getChampionships() ?
+        # TO DO wrc.setChampionship()
+        # wrc.getChampionshipOverall() gives championshipEntryId
+        # wrc.getChampionshipByRound() gives championshipEntryId
+        # JOIN wrc.getDrivers(by_championship=True) gives personId, name etc
+        # JOIN wrc.getChampionshipEntries gives championshipEntryId, personId map
+        # wrc.getChampionshipRounds()
+
+        @render.ui
+        @reactive.event(input.rally_seasonId, input.championships)
+        def championship_info():
+            # TO DO this is not set for ERC
+            # wrc.setChampionship()
+            getChampionships()
+            return ui.markdown(
+                f"__{wrc.championshipName}__"
+            )
+
+        # Create championships selector
+        ui.input_select(
+            "championships",
+            "Championships:",
+            {},
+        )
+        # @render.data_frame
+        # @reactive.event(
+        #    input.rally_seasonId,
+        #    input.category,
+        # )
+        # def show_championships():
+        #    seasonId = input.rally_seasonId()
+        #    if not seasonId:
+        #        return
+        #    championships_df = getChampionships()
+        #    cols = ["name", "type"] #champioshipId
+        #    return render.DataGrid(championships_df[cols])
+
+        ui.markdown("__Championship Overall Points__")
+        ui.markdown("*TO DO - points at end of selected rally*")
+
+        @render.data_frame
+        @reactive.event(
+            input.rally_seasonId,
+            input.category,
+            input.season_round,
+            input.championships,
+        )
+        def championship_overall_frame():
+            seasonId = input.rally_seasonId()
+            eventId = input.season_round()
+            championshipId = input.championships()
+            if not seasonId or not eventId or not championshipId:
+                return
+            # The following is the latest overall, not keyed by anything
+            # need a switch for ERC etc
+            # Need a different function if we specify at a particular round
+            eventId = int(eventId)
+            championshipId = int(championshipId)
+            wrc.setChampionship(championshipId=championshipId)
+            # TO DO cache championship and set it
+            # championships = getChampionships()
+            # championshipId = championships[championships["type"]=="Drivers"]["championshipId"].iloc[0]
+
+            championship_overall = wrc.getChampionshipOverall(
+                championshipId=championshipId, raw=False
+            )
+
+            # TO DO limit columns - may be manufacturers etc etc
+            cols = [
+                "Round",
+                "overallPosition",
+                "LastName",
+                "Manufacturer",
+                "TyreManufacturer",
+                "overallPoints",
+            ]
+            cols = [c for c in cols if c in championship_overall.columns]
+            # return render.DataGrid(championship_overall[cols].sort_values("overallPosition"))
+            return render.DataGrid(championship_overall[cols].sort_values("overallPosition"))
 
     with ui.accordion_panel("Event overview"):
 
@@ -159,9 +260,89 @@ with ui.accordion(open=False):
             else:
                 print("Missing stage results data?")
 
+        ui.markdown("__Championship Points on Event__")
+
+        @render.data_frame
+        @reactive.event(
+            input.rally_seasonId,
+            input.category,
+            input.season_round,
+            input.championships,
+        )
+        def championship_event_frame():
+            seasonId = input.rally_seasonId()
+            eventId = input.season_round()
+            championshipId = input.championships()
+            if not seasonId or not eventId:
+                return
+            # The following is the latest overall, not keyed by anything
+            # need a swtich for ERC etc
+            # Need a different function if we specify at a particular round
+            eventId = int(eventId)
+            # TO DO cache championship and set it
+            # championships = getChampionships()
+
+            # championshipId = championships[championships["type"] == "Drivers"][
+            #    "championshipId"
+            # ].iloc[0]
+            championship_event = wrc.getChampionshipByRound(
+                championshipId=championshipId,
+                eventId=eventId,
+                raw=False,
+                # on_event=True
+            )
+            # TO DO limit columns
+            cols = [
+                "position",
+                "driverCode",
+                "driverName",
+                "totalPoints",
+                "pointsBreakdown",
+            ]
+
+            def custom_sort_key(x):
+                if isna(x) or x == "":
+                    return (2, 0)  # Empty values last, with value 0 as secondary key
+                elif x == "R":
+                    return (
+                        1,
+                        0,
+                    )  # "R" values in the middle, with value 0 as secondary key
+                else:
+                    try:
+                        # Integers first, sorted by their value
+                        return (0, int(x))
+                    except:
+                        # Any other values (shouldn't happen in your case)
+                        return (3, str(x))
+
+            # TO DO fix cols filter for eg manufacturers etc
+            return render.DataGrid(
+                championship_event[championship_event["status"] != "DidNotEnter"][
+                    cols
+                ].sort_values("position", key=lambda x: x.map(custom_sort_key))
+            )
+            # return render.DataGrid(championship_event[cols].sort_values("position"))
+
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
                 ui.markdown("*Progress across stages.*")
+
+                @render.plot(alt="Line chart of overall rally positions.")
+                @reactive.event(
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_report_type,
+                )
+                def seaborn_linechart_stage_progress_positions():
+                    overall_times_wide = get_overall_pos_wide()
+                    if overall_times_wide.empty:
+                        return
+                    ax = chart_seaborn_linechart_stage_progress_positions(
+                        wrc, overall_times_wide
+                    )
+                    return ax
 
                 with ui.tooltip(id="progression_report_type_tt"):
                     ui.input_select(
@@ -183,20 +364,6 @@ with ui.accordion(open=False):
                     "Progression report type; dimension to be displayed. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
                     # TO DO implement report by type
 
-                @render.plot(alt="Line chart of overall rally positions.")
-                @reactive.event(
-                    input.splits_review_accordion, input.category, input.stage
-                )
-                def seaborn_linechart_stage_progress_positions():
-                    overall_times_wide = get_overall_pos_wide()
-                    if overall_times_wide.empty:
-                        return
-
-                    ax = chart_seaborn_linechart_stage_progress_positions(
-                        wrc, overall_times_wide
-                    )
-                    return ax
-
                 @render.data_frame
                 @reactive.event(
                     input.stage,
@@ -208,19 +375,41 @@ with ui.accordion(open=False):
                     overall_typ_wide = get_overall_typ_wide()
                     if overall_typ_wide.empty:
                         return
-                    # TO DO - this should have options for within and accumualted statge time views
+                    # TO DO - this should have options for within and accumulated statge time views
                     # as well as a driver rebase option
+                    # TO DO - this should be sorted by position ASC for the latest stage
+                    # How is this done on the seaborn_linechart_stage_progress_positions label positions?
                     return render.DataGrid(
                         overall_typ_wide.copy().drop(columns="entryId")
                     )
 
+                @render.plot(
+                    alt="Line chart of rally progression of selected dimension."
+                )
+                @reactive.event(
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_report_type,
+                )
+                def seaborn_linechart_stage_typ():
+                    overall_typ_wide = get_overall_typ_wide()
+                    progression_type = input.progression_report_type()
+                    if overall_typ_wide.empty or not progression_type:
+                        return
+                    typ = progression_report_types[progression_type]
+                    ax = chart_seaborn_linechart_stage_progress_typ(
+                        wrc, overall_typ_wide, typ
+                    )
+                    return ax
+
             with ui.accordion_panel("Rally progression rebase"):
                 # Create stage driver rebase selector
                 ui.input_select(
-                        "rally_progression_rebase_driver",
-                        "Driver rebase:",
-                        {},
-                    )
+                    "rally_progression_rebase_driver",
+                    "Driver rebase:",
+                    {},
+                )
 
                 with ui.tooltip(id="progression_rebase_type_tt"):
                     ui.input_select(
@@ -234,6 +423,8 @@ with ui.accordion(open=False):
                     ),
                     "Progression rebase type; dimension to be rebased. Use stage basis for summary reporting of individual stages, progression bases for reporting on rally progression."
                     # TO DO implement rebase by type
+                    #
+                    #
 
         with ui.card(class_="mt-3"):
             with ui.card_header():
@@ -489,6 +680,7 @@ with ui.accordion(open=False):
                         return render.DataGrid(retirements[retcols])
 
                 with ui.accordion_panel("Penalties"):
+
                     @render.data_frame
                     @reactive.event(
                         input.season_round, input.stage, input.stage_accordion
@@ -517,6 +709,7 @@ with ui.accordion(open=False):
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
 
+            # TO DO XX hero needs updating to reflect Category selection
             @render.ui
             def stageresult_hero():
                 setStageData()
@@ -717,7 +910,7 @@ with ui.accordion(open=False):
                             "priority",
                             "eligibility",
                         ]
-
+                        # TO DO — make timeInS a nice, human readable time
                         cols = [c for c in cols if c in stage_times_df.columns]
                         return render.DataGrid(stage_times_df[cols])
 
@@ -1036,10 +1229,10 @@ with ui.accordion(open=False):
                                         id="splits_in_sectionlineplot_tt",
                                     ):
                                         ui.span(
-                                            "Time gained / lost within each section in seconds relative to rebase driver (stacked barplot) ",
+                                            "Time gained / lost across sections in seconds relative to rebase driver (line chart) ",
                                             question_circle_fill,
                                         )
-                                        "Delta times within each split section. Times are relative to rebased driver's time. Bright column: good/bad split section for rebased driver. Bright row: good/bad sections for (row) driver."
+                                        "Accumumluated time deltas across each split section. Times are relative to rebased driver's time. Lines above x=0 are cars ahead, lines below are times behind."
 
                                 @render.plot(
                                     alt="Line chart of within split delta times."
@@ -1353,6 +1546,23 @@ def update_stages_driver_rebase_select():
     ui.update_select("rebase_driver", choices=rebase_drivers)
 
 
+@reactive.effect
+@reactive.event(input.rally_seasonId, input.category)
+def update_championships_select():
+    seasonId = input.rally_seasonId()
+    if not seasonId:
+        return
+    championships_df = getChampionships()  # name, type,
+    if championships_df.empty:
+        return
+    championships = (
+        championships_df[["championshipId", "name"]]
+        .set_index("championshipId")["name"]
+        .to_dict()
+    )
+    ui.update_select("championships", choices=championships)
+
+
 ## Reactive calcs
 
 
@@ -1407,6 +1617,24 @@ def get_overall_pos_wide():
 
     return overall_times_wide
 
+
+@reactive.calc
+@reactive.event(input.rally_seasonId, input.championships)
+def getChampionships():
+    print("get championship")
+    seasonId = input.rally_seasonId()
+    if not seasonId:
+        return
+    championships = wrc.getChampionships(seasonId=seasonId)
+    championshipId = (
+        championships[championships["type"] == "Drivers"]["championshipId"].iloc[0]
+        if not input.championships()
+        else int(input.championships())
+    )
+    wrc.setChampionship(championshipId=championshipId)
+    return championships
+
+
 # TO DO XXX
 
 
@@ -1422,17 +1650,6 @@ def get_overall_typ_wide():
     stageId = None
     priority = input.category()
 
-    progression_report_types = {
-        "bystagetime": "Stage time",  # not yet
-        "bystagepos": "Stage position",  # not yet
-        "bystagegap": "Stage gap (s)",  # not yet
-        "bystagediff": "Stage diff (s)",  # not yet
-        "byrallytime": "timeInS",
-        "byrallypos": "position",
-        "byrallyclassposs": "categoryPosition",
-        "bystagegap": "Gap",
-        "bystagediff": "Diff",
-    }
     typ = progression_report_types[progression_report_typ]
 
     overall_times_wide = wrc.getStageOverallWide(

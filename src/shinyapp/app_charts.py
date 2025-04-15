@@ -228,21 +228,31 @@ def chart_plot_split_dists(wrc, scaled_splits_wide, splits_section_view):
 
 
 def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
-    overall_cols = wrc.getOverallStageCols(overall_times_wide)
-    overall_times_wide[overall_cols] = overall_times_wide[overall_cols].apply(
-        lambda col: col.rank(method="min", ascending=True)
+    return chart_seaborn_linechart_stage_progress_typ(
+        wrc, overall_times_wide, typ="position"
     )
+
+
+def chart_seaborn_linechart_stage_progress_typ(wrc, overall_times_wide, typ="position"):
+    overall_cols = wrc.getOverallStageCols(overall_times_wide)
+    if typ=="position":
+        # This does essentially a category rank on all passed rows
+        # TO DO handle category or overall etc properly
+        overall_times_wide[overall_cols] = overall_times_wide[overall_cols].apply(
+            lambda col: col.rank(method="min", ascending=True)
+        )
+
     overall_times_pos_long = melt(
         overall_times_wide,
         id_vars=["carNo", "driverName"],
         value_vars=overall_cols,
         var_name="roundN",
-        value_name="position",
+        value_name=typ,
     )
     ax = lineplot(
         data=overall_times_pos_long,
         x="roundN",
-        y="position",
+        y=typ,
         hue="carNo",
         legend=False,
     )
@@ -258,7 +268,7 @@ def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
         ]
         if not first_point.empty:
             # Get position value for the last point
-            y_pos = first_point["position"].values[0]
+            y_pos = first_point[typ].values[0]
 
             # Add text slightly to the right of the maximum round
             ax.text(
@@ -279,7 +289,7 @@ def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
 
         if not last_point.empty:
             # Get position value for the last point
-            y_pos = last_point["position"].values[0]
+            y_pos = last_point[typ].values[0]
 
             # Add text slightly to the right of the maximum round
             ax.text(
@@ -289,8 +299,9 @@ def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
                 verticalalignment="center",
                 fontsize=9,
             )
-    ax.set(xlabel=None, ylabel="Overall Position")
-    ax.invert_yaxis()
+    ax.set(xlabel=None, ylabel=f"Overall {typ}")
+    if "position" in typ:
+        ax.invert_yaxis()
     plt.xlim(x_min - 0.5, x_max + 0.5)
     return ax
 

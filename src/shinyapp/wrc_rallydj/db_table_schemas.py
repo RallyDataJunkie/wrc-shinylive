@@ -61,9 +61,13 @@ CREATE TABLE "championship_rounds_detail" (
 );
 
 CREATE TABLE "championship_overall" (
+  "championshipId" INTEGER,
   "championshipEntryId" INTEGER,
   "overallPosition" INTEGER,
-  "overallPoints" INTEGER
+  "overallPoints" INTEGER,
+  "Round" INTEGER,
+  PRIMARY KEY ("championshipEntryId", "championshipId", "Round"),
+  FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId")
 );
 
 CREATE TABLE "championship_results" (
@@ -77,7 +81,7 @@ CREATE TABLE "championship_results" (
   "status" TEXT,
   "totalPoints" INTEGER,
   "entryId" INTEGER,
-  PRIMARY KEY ("championshipEntryId","eventId"),
+  PRIMARY KEY ("championshipEntryId", "eventId"),
   FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId"),
   FOREIGN KEY ("eventId") REFERENCES "itinerary_event" ("eventId")
 );
@@ -90,7 +94,6 @@ CREATE TABLE "championship_entries" (
   "personId" INTEGER,
   "entrantId" INTEGER,
   "manufacturerId" INTEGER,
-  "tyreManufacturerId" TEXT,
   "FirstName" TEXT,
   "LastName" TEXT,
   "CountryISO3" TEXT,
