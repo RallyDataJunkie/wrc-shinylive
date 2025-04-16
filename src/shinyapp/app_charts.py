@@ -356,3 +356,148 @@ def chart_plot_driver_stagewins(stage_winners):
     ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     ax.set(xlabel=None, ylabel=None)
     return ax
+
+
+# TO DO
+def sparks_test():
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    from matplotlib.ticker import NullFormatter
+
+    # Sample data creation - replace this with your actual data
+    np.random.seed(42)
+
+    # Define the codes
+    codes = ["OGI", "EVA", "NEU", "TÂN", "FOU", "KAT", "GRE", "BRE", "OST", "SUN"]
+
+    # Create sample data for each metric and code
+    n_periods = 30
+    data = []
+
+    for code in codes:
+        # Generate random time series data with some trends
+        overall_pos = np.cumsum(np.random.normal(0, 0.5, n_periods)) + 10
+        overall_gap = -np.abs(np.random.normal(0, 1, n_periods)) - 5  # Negative values
+        overall_pos_change = np.random.normal(0, 1, n_periods)
+        stage_pos = np.cumsum(np.random.normal(0, 0.3, n_periods)) + 5
+        stage_gap = -np.abs(np.random.normal(0, 0.8, n_periods)) - 3  # Negative values
+
+        for i in range(n_periods):
+            data.append(
+                {
+                    "code": code,
+                    "period": i,
+                    "overall_pos": overall_pos[i],
+                    "overall_gap": overall_gap[i],
+                    "overall_pos_change": overall_pos_change[i],
+                    "stage_pos": stage_pos[i],
+                    "stage_gap": stage_gap[i],
+                }
+            )
+
+    # Convert to DataFrame
+    df = pd.DataFrame(data)
+
+    # Now create the sparkline dashboard
+    # plt.style.use("ggplot")
+    plt.style.use("default")
+    fig = plt.figure(figsize=(15, 10), facecolor="white")
+
+    # Define metrics to plot
+    metrics = ["overall_pos", "overall_gap", "overall_pos_change", "stage_pos", "stage_gap"]
+
+    # Set up the grid
+    n_rows = len(codes)
+    n_cols = len(metrics) + 1  # +1 for the code column
+    gs = gridspec.GridSpec(n_rows, n_cols, width_ratios=[1] + [3] * len(metrics))
+
+    # Create a title row
+    plt.figtext(0.02, 0.95, "code", fontsize=12, fontweight="bold")
+    x_pos = 0.1
+    x_gap = 0.95 / len(metrics)
+    for metric in metrics:
+        plt.figtext(
+            x_pos, 0.95, metric.replace("_", " ").title(), fontsize=12, fontweight="bold"
+        )
+        x_pos += x_gap
+
+    # Plot each sparkline
+    for i, code in enumerate(codes):
+        code_data = df[df["code"] == code]
+
+        # Add code name
+        ax_code = plt.subplot(gs[i, 0])
+        ax_code.text(0.5, 0.5, code, fontsize=12, ha="center", va="center")
+        ax_code.axis("off")
+
+        # Create sparklines for each metric
+        for j, metric in enumerate(metrics):
+            ax = plt.subplot(gs[i, j + 1])
+
+            values = code_data[metric].values
+            periods = code_data["period"].values
+
+            # Determine color based on the metric
+            if "gap" in metric:
+                color = "red"  # Negative values
+            else:
+                color = "blue"
+
+            # Plot the sparkline
+            if "change" not in metric and "gap" not in metric:
+                # Use a step plot
+                ax.step(periods, values, color=color, linewidth=1.5)
+
+                # Add dotted horizontal lines for reference
+                if values.max() > 0 and values.min() < 0:
+                    ax.axhline(y=0, color="black", linestyle=":", linewidth=0.5)
+
+                # Add top and bottom reference lines
+                y_max = values.max() * 1.1
+                y_min = values.min() * 1.1 if values.min() < 0 else 0
+                ax.axhline(y=y_max, color="black", linestyle=":", linewidth=0.5)
+                ax.axhline(y=y_min, color="black", linestyle=":", linewidth=0.5)
+
+            # Add bar chart style for some metrics (like changes or gaps)
+            if "change" in metric or "gap" in metric:
+                for k, v in enumerate(values):
+                    if v > 0:
+                        ax.plot([k, k], [0, v], color=color, linewidth=3)
+                    else:
+                        ax.plot([k, k], [0, v], color="red", linewidth=3)
+
+            # Remove axes
+            ax.xaxis.set_major_formatter(NullFormatter())
+            ax.yaxis.set_major_formatter(NullFormatter())
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+            ax.spines["bottom"].set_visible(False)
+            ax.spines["left"].set_visible(False)
+            ax.tick_params(axis="both", which="both", length=0)
+
+            # Add light horizontal grid line
+            ax.axhline(y=0, color="gray", alpha=0.3, linewidth=0.5)
+
+            # Set y-axis limits to be consistent across rows for the same metric
+            metric_min = df[metric].min() * 1.1
+            metric_max = df[metric].max() * 1.1
+            ax.set_ylim(metric_min, metric_max)
+
+    # Add horizontal lines between rows
+    for i in range(1, n_rows):
+        plt.axhline(
+            y=i / n_rows,
+            color="green",
+            linestyle="-",
+            linewidth=0.5,
+            xmin=0.05,
+            xmax=0.95,
+        )
+
+    plt.subplots_adjust(wspace=0.1, hspace=0.1, left=0.05, right=0.95, top=0.9, bottom=0.05)
+    # plt.suptitle("Sparkline Dashboard", fontsize=14, y=0.98)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.93])
+    plt.show()
