@@ -473,7 +473,7 @@ with ui.accordion(open=False):
                         cols=split_cols,
                         within_cols_gradient=False,
                         # reverse_palette=rebase_reverse_palette,
-                    ).to_html()
+                    ).hide().to_html()
                     return ui.HTML(html)
 
                 @render.data_frame
@@ -1140,7 +1140,7 @@ with ui.accordion(open=False):
                                 False,
                             ),
                             "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
-
+                    """ TO DO: sort order dropdown (SP.., RoadPos, position); show: Top10, Top20, All"""
                     # Create driver rebase selector
                     with ui.tooltip(id="rebase_driver_tt"):
                         ui.input_select(
@@ -1203,7 +1203,7 @@ with ui.accordion(open=False):
                             cols=split_cols,
                             within_cols_gradient=False,
                             reverse_palette=rebase_reverse_palette,
-                        ).to_html()
+                        ).hide().to_html()
                         return ui.HTML(html)
 
                     with ui.accordion(open=False):
@@ -1797,8 +1797,10 @@ def _get_overall_typ_wide_core(
     stageId,
     priority,
     progression_report_typ,
-    typ,
 ):
+
+    typ = progression_report_types[progression_report_typ]
+
     if "rally" in progression_report_typ.lower():
         overall_times_wide = wrc.getStageOverallWide(
             stageId=stageId, priority=priority, completed=True, typ=typ
@@ -1829,10 +1831,8 @@ def get_overall_typ_wide2_rebased():
     stageId = None
     priority = input.category()
 
-    typ = progression_report_types[progression_report_typ]
-
     overall_times_wide = _get_overall_typ_wide_core(
-        stageId, priority, progression_report_typ, typ
+        stageId, priority, progression_report_typ
     )
 
     rebase_driver = input.rally_progression_rebase_driver()
