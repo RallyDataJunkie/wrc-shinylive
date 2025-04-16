@@ -15,7 +15,7 @@ def get_rebased_driver_hero(stageId, rebase_driver, stages, times):
     def _get_hero_text():
         return ui.markdown(
             f"""
-    __#{times_["carNo"]} {times_["driverName"]}__  
+    __{times_["driverName"]} #{times_["carNo"]}__  
     {format_timedelta(times_["elapsedDurationMs"])}  
     """
         )
@@ -62,7 +62,7 @@ def get_overall_result_hero(stageId, stages_data, overall_data):
             record = record.iloc[0]
             return ui.markdown(
                 f"""
-                __#{record["carNo"]} {record["driverName"]}__  
+                __{record["driverName"]} #{record["carNo"]}__  
                 {format_timedelta(record["stageTimeMs"])}  
                 """
             )
@@ -141,7 +141,7 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     def _get_hero_text(p):
         return ui.markdown(
             f"""
-            __#{p["carNo"]} {p["driverName"]}__  
+            __{p["driverName"]} #{p["carNo"]}__  
             {format_timedelta(p["timeInS"], units="s")}  
             """
         )
@@ -168,12 +168,12 @@ def get_stage_result_hero(stageId, stages_data, stage_times_data):
     if len(stage_times_data) > 1:
         p2_data = stage_times_data[stage_times_data["position"] == 2].iloc[0]
         p2 = _create_position_value_box(p2_data, "text-blue", _get_hero_text)
-        
+
         if len(stage_times_data) > 2:
             p3_data = stage_times_data[stage_times_data["position"] == 3].iloc[0]
             p3 = _create_position_value_box(p3_data, "text-purple", _get_hero_text)
             return ui.TagList(p1, uis.layout_columns(p2, p3))
-        
+
         return ui.TagList(p1, p2)
 
     return p1
