@@ -40,6 +40,7 @@ CREATE TABLE "championship_rounds_detail" (
   "startDate" TEXT,
   "finishDate" TEXT,
   "year" INTEGER,
+  "Round" INTEGER,
   "timeZoneId" TEXT,
   "timeZoneName" TEXT,
   "timeZoneOffset" INTEGER,
@@ -63,6 +64,7 @@ CREATE TABLE "championship_rounds_detail" (
 CREATE TABLE "championship_overall" (
   "championshipId" INTEGER,
   "championshipEntryId" INTEGER,
+  "seasonId" INTEGER,
   "overallPosition" INTEGER,
   "overallPoints" INTEGER,
   "Round" INTEGER,
@@ -73,6 +75,7 @@ CREATE TABLE "championship_overall" (
 CREATE TABLE "championship_results" (
   "championshipEntryId" INTEGER,
   "championshipId" INTEGER,
+  "seasonId" INTEGER,
   "dropped" INTEGER,
   "eventId" INTEGER,
   "pointsBreakdown" TEXT,

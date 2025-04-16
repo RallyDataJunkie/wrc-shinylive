@@ -220,6 +220,9 @@ class APIClient:
         championshipEntryResultsOverall_df = DataFrame(_championshipEntryResultsOverall)
         championshipEntryResultsByRound_df = DataFrame(_championshipEntryResultsByRound)
 
+        championshipEntryResultsOverall_df["seasonId"] = seasonId
+        championshipEntryResultsByRound_df["seasonId"] = seasonId
+
         if updateDB:
             self.dbfy(
                 championshipEntryResultsOverall_df,
@@ -278,6 +281,9 @@ class APIClient:
         championshipEntries_df = DataFrame(_e)
         # renamers["tyreManufacturer"] = "tyreManufacturer_"
         championshipEntries_df.rename(columns=renamers, inplace=True)
+
+        championshipRounds_df = championshipRounds_df.sort_values(by='startDate', ascending=True).reset_index(drop=True)
+        championshipRounds_df["Round"] = range(1, len(championshipRounds_df) + 1)
 
         if updateDB:
             self.dbfy(
@@ -942,6 +948,7 @@ class WRCTimingResultsAPIClientV2:
         eventId=None,
         on_event=False,
         on_championship=False,
+        on_season=False,
         raw=True,
         updateDB=False,
     ):
@@ -961,13 +968,14 @@ class WRCTimingResultsAPIClientV2:
             event_ = f"AND cr.eventId={eventId}"
         else:
             event_ = ""
+        on_season_ = f"""AND seasonId={self.seasonId}""" if on_season else ""
         if raw:
-            q = f"""SELECT * FROM championship_results AS cr WHERE 1=1 {championship_} {event_};"""
+            q = f"""SELECT * FROM championship_results AS cr WHERE 1=1 {championship_} {event_} {on_season_};"""
 
         else:
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON cr.championshipEntryId=ce.championshipEntryId"
             _championship_rounds_join = f"INNER JOIN championship_rounds_detail AS chd ON cr.eventId=chd.eventId"
-            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, ce.Name as Team, chd.name AS eventName, chd.startDate, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_};"""
+            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, ce.Name as Team, chd.name AS eventName, chd.startDate, chd.Round, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_} {on_season_} ORDER BY chd.startDate, position ASC;"""
 
         championshipEntryResultsByRound_df = self.db_manager.read_sql(q)
         if not raw:
@@ -2302,6 +2310,21 @@ class WRCTimingResultsAPIClientV2:
     def _getPenalties(self, *args, **kwargs):
         kwargs["eventId"] = self.eventId
         return self.api_client._getPenalties(*args, **kwargs)
+
+    def getStageWinnerAdvantages(self, on_event=True, eventId=None, stageId=None):
+        # TO DO - get speed, pace and time advantage, pos 1 to pos2
+        # get position=1 or position=2
+        # dedupe on position, sort by position ascending=True
+        # if len(2): the delta is the advantage
+        pass
+
+    def getEventWinnerAdvantages(self, on_championship=True, eventId=None):
+        # TO DO - get speed, pace and time advantage, pos 1 to pos2
+        # get position=1 or position=2
+        # dedupe on position, sort by position ascending=True
+        # if len(2): the delta is the advantage
+        pass
+
 
     def getStageWinners(self, on_event=True, priority=None, raw=True):
         if not self.eventId or not self.rallyId:
