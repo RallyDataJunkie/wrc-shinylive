@@ -438,6 +438,32 @@ with ui.accordion(open=False):
                     {},
                 )
 
+                @render.ui
+                @reactive.event(
+                    input.category,
+                    input.stage,
+                    input.event_day,
+                    input.event_section,
+                    input.progression_rebase_type,
+                    input.rally_progression_rebase_driver,
+                )
+                def stage_progression_heat():
+                    progression_rebase_type = input.progression_rebase_type()
+                    overall_typ_wide = (
+                        get_overall_typ_wide2_rebased()
+                    )  # get_overall_typ_wide() #XX
+                    if not progression_rebase_type or overall_typ_wide.empty:
+                        return
+
+                    split_cols = wrc.getStageCols(overall_typ_wide)
+                    html = df_color_gradient_styler(
+                        overall_typ_wide,
+                        cols=split_cols,
+                        within_cols_gradient=False,
+                        #reverse_palette=rebase_reverse_palette,
+                    ).to_html()
+                    return ui.HTML(html)
+
                 @render.data_frame
                 @reactive.event(
                     input.category,
@@ -1158,7 +1184,7 @@ with ui.accordion(open=False):
                         return ui.HTML(html)
 
                     with ui.accordion(open=False):
-                        with ui.accordion_panel("Heatmap"):
+                        with ui.accordion_panel("Time gained/lost within each split"):
 
                             with ui.tooltip(id="heatmap_outliers_tt"):
                                 ui.input_checkbox(

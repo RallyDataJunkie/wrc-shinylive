@@ -11,7 +11,7 @@ def df_color_gradient_styler(
     reverse_palette=False,
     pos_color=(255, 70, 70),
     neg_color=(40, 255, 40),
-    max_delta=None,
+    max_delta=60 # Accepts: None,
 ):
     # Function to create color-coded background with rounded corners
     def color_by_value(val, pos_max, neg_max):
