@@ -27,6 +27,9 @@ from .app_charts import (
     chart_plot_split_dists,
 )
 
+# Tables
+from .app_tables import df_color_gradient_styler
+
 # from shinywidgets import render_widget
 # from itables.widget import ITable
 
@@ -445,8 +448,10 @@ with ui.accordion(open=False):
                     input.rally_progression_rebase_driver,
                 )
                 def stage_progress_rebased_frame():
-                    overall_typ_wide = get_overall_typ_wide2_rebased()
-
+                    progression_rebase_type = input.progression_rebase_type()
+                    overall_typ_wide = get_overall_typ_wide2_rebased() #get_overall_typ_wide() #XX
+                    if not progression_rebase_type or overall_typ_wide.empty:
+                        return
                     # TO DO - this should have options for within and accumulated statge time views
                     # as well as a driver rebase option
                     # TO DO - this should be sorted by position ASC for the latest stage
@@ -773,6 +778,9 @@ with ui.accordion(open=False):
                     by="number", ascending=True
                 )
                 stageId = input.stage()
+                if stagesInfo.empty or not stageId:
+                    return
+
                 if stageId and not stagesInfo.empty:
                     stageId = int(stageId)
                 stage_times_data = wrc.getStageTimes(raw=False)
@@ -833,7 +841,6 @@ with ui.accordion(open=False):
                         # TO DO
 
                         return ui.markdown("\n\n".join(md))
-
 
                 with ui.accordion_panel("Stage times"):
                     # Create stage driver rebase selector
@@ -1107,13 +1114,11 @@ with ui.accordion(open=False):
                     @reactive.event(input.stage, input.rebase_driver)
                     def rebase_driver_info():
                         stageId = input.stage()
-                        if not stageId:
-                            return
-                        stageId = int(stageId)
                         rebase_driver = input.rebase_driver()
                         # TO DO: provide ult view if rebase_driver=="ult"
-                        if not rebase_driver or rebase_driver == "ult":
+                        if not stageId or not rebase_driver or rebase_driver == "ult":
                             return
+                        stageId = int(stageId)
                         rebase_driver = int(rebase_driver)
                         stages = wrc.getStageInfo(stage_code=stageId, raw=False)
                         times = wrc.getStageTimes(stageId=stageId, raw=False)
@@ -1124,6 +1129,33 @@ with ui.accordion(open=False):
                             stageId, rebase_driver, stages, times
                         )
                         return pr
+
+                    # XX
+                    @render.ui
+                    @reactive.event(
+                        input.splits_review_accordion,
+                        input.category,
+                        input.stage,
+                        input.rebase_driver,
+                        input.rebase_reverse_palette,
+                    )
+                    def split_times_heat():
+                        split_times_wide = get_split_times_wide()
+                        rebase_driver = input.rebase_driver()
+                        rebase_reverse_palette = input.rebase_reverse_palette()
+                        if split_times_wide.empty or not rebase_driver:
+                            return
+                        split_cols = wrc.getSplitCols(split_times_wide)
+                        split_times_wide = wrc.rebaseManyTimes(
+                            split_times_wide, int(rebase_driver), "carNo", split_cols
+                        )
+                        html = df_color_gradient_styler(
+                            split_times_wide,
+                            cols=split_cols,
+                            within_cols_gradient=False,
+                            reverse_palette=rebase_reverse_palette,
+                        ).to_html()
+                        return ui.HTML(html)
 
                     with ui.accordion(open=False):
                         with ui.accordion_panel("Heatmap"):
@@ -1629,6 +1661,7 @@ def update_championships_select():
 def getStageWinners():
     # TO DO - this needs fixing to reflect category
     priority = input.category()
+
     # TO DO priority not yet handled below
     stagewinners = wrc.getStageWinners(priority=priority, raw=False)
     stagewinners = enrich_stage_winners(stagewinners)
@@ -1682,7 +1715,7 @@ def getChampionships():
     print("get championship")
     seasonId = input.rally_seasonId()
     if not seasonId:
-        return
+        return DataFrame()
     championships = wrc.getChampionships(seasonId=seasonId)
     championshipId = (
         championships[championships["type"] == "Drivers"]["championshipId"].iloc[0]
@@ -1708,8 +1741,15 @@ def get_overall_typ_wide():
     stageId = None
     priority = input.category()
 
-    typ = progression_report_types[progression_report_typ]
+    return _get_overall_typ_wide_core(stageId, priority, progression_report_typ)
 
+
+def _get_overall_typ_wide_core(
+    stageId,
+    priority,
+    progression_report_typ,
+    typ,
+):
     if "rally" in progression_report_typ.lower():
         overall_times_wide = wrc.getStageOverallWide(
             stageId=stageId, priority=priority, completed=True, typ=typ
@@ -1717,10 +1757,11 @@ def get_overall_typ_wide():
     elif "stage" in progression_report_typ.lower():
         overall_times_wide = wrc.getStageTimesWide(
             stageId=stageId, priority=priority, completed=True, typ=typ
-        )  # TO DO XXX
+        )
     else:
         overall_times_wide=DataFrame()
     return overall_times_wide
+
 
 @reactive.calc
 @reactive.event(input.stage, input.category, input.rally_progression_rebase_driver, input.progression_rebase_type)
@@ -1736,9 +1777,8 @@ def get_overall_typ_wide2_rebased():
 
     typ = progression_report_types[progression_report_typ]
 
-    overall_times_wide = wrc.getStageOverallWide(
-        stageId=stageId, priority=priority, completed=True, typ=typ
-    )  # typ: position, totalTimeInS
+    overall_times_wide = _get_overall_typ_wide_core(stageId, priority, progression_report_typ, typ)
+
     rebase_driver = input.rally_progression_rebase_driver()
 
     if overall_times_wide.empty or not rebase_driver:
@@ -1756,7 +1796,7 @@ def get_split_times_wide():
     """Cache for split times wide data"""
     stageId = input.stage()
     if not stageId:
-        return None
+        return DataFrame()
     stageId = int(stageId)
     priority = input.category()
 
