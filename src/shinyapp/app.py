@@ -106,7 +106,9 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel("Season info"):
 
-        ui.markdown("TO DO - round winners; next rally; previous round result; championship hero")
+        ui.markdown(
+            "TO DO - round winners; next rally; previous round result; championship hero"
+        )
 
         @render.data_frame
         @reactive.event(input.rally_seasonId)
@@ -210,7 +212,9 @@ with ui.accordion(open=False):
             ]
             cols = [c for c in cols if c in championship_overall.columns]
             # return render.DataGrid(championship_overall[cols].sort_values("overallPosition"))
-            return render.DataGrid(championship_overall[cols].sort_values("overallPosition"))
+            return render.DataGrid(
+                championship_overall[cols].sort_values("overallPosition")
+            )
 
     with ui.accordion_panel("Event overview"):
 
@@ -312,7 +316,8 @@ with ui.accordion(open=False):
                     )
                     # TO DO limit columns
                     cols = [
-                        "position", "LastName",
+                        "position",
+                        "LastName",
                         "TyreManufacturer",
                         "Manufacturer",
                         "Team",
@@ -327,7 +332,10 @@ with ui.accordion(open=False):
 
                     def custom_sort_key(x):
                         if isna(x) or x == "":
-                            return (2, 0)  # Empty values last, with value 0 as secondary key
+                            return (
+                                2,
+                                0,
+                            )  # Empty values last, with value 0 as secondary key
                         elif x == "R":
                             return (
                                 1,
@@ -343,18 +351,22 @@ with ui.accordion(open=False):
 
                     # TO DO fix cols filter for eg manufacturers etc
                     return render.DataGrid(
-                        #championship_event[championship_event["status"] != "DidNotEnter"][
+                        # championship_event[championship_event["status"] != "DidNotEnter"][
                         #    cols
-                        #].sort_values("position", key=lambda x: x.map(custom_sort_key))
-                        championship_event[championship_event["status"] != "DidNotEnter"][
-                            cols
-                        ].sort_values(["totalPoints", "pointsBreakdown"], ascending=False)
+                        # ].sort_values("position", key=lambda x: x.map(custom_sort_key))
+                        championship_event[
+                            championship_event["status"] != "DidNotEnter"
+                        ][cols].sort_values(
+                            ["totalPoints", "pointsBreakdown"], ascending=False
+                        )
                     )
                     # return render.DataGrid(championship_event[cols].sort_values("position"))
 
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
-                ui.markdown("*Progress across stages.* (TO DO - select position or points)")
+                ui.markdown(
+                    "*Progress across stages.* (TO DO - select position or points)"
+                )
 
                 @render.plot(alt="Line chart of overall rally positions.")
                 @reactive.event(
@@ -460,7 +472,7 @@ with ui.accordion(open=False):
                         overall_typ_wide,
                         cols=split_cols,
                         within_cols_gradient=False,
-                        #reverse_palette=rebase_reverse_palette,
+                        # reverse_palette=rebase_reverse_palette,
                     ).to_html()
                     return ui.HTML(html)
 
@@ -475,7 +487,9 @@ with ui.accordion(open=False):
                 )
                 def stage_progress_rebased_frame():
                     progression_rebase_type = input.progression_rebase_type()
-                    overall_typ_wide = get_overall_typ_wide2_rebased() #get_overall_typ_wide() #XX
+                    overall_typ_wide = (
+                        get_overall_typ_wide2_rebased()
+                    )  # get_overall_typ_wide() #XX
                     if not progression_rebase_type or overall_typ_wide.empty:
                         return
                     # TO DO - this should have options for within and accumulated statge time views
@@ -504,7 +518,7 @@ with ui.accordion(open=False):
                     # HACK this chart is harwdired:
                     # - line chart makes no sense for stage progression
                     overall_typ_wide = get_overall_typ_wide2_rebased()
-                    progression_type = "byrallytime" #input.progression_rebase_type()
+                    progression_type = "byrallytime"  # input.progression_rebase_type()
                     if overall_typ_wide.empty or not progression_type:
                         return
                     typ = progression_report_types[progression_type]
@@ -1145,7 +1159,11 @@ with ui.accordion(open=False):
                         if not stageId or not rebase_driver or rebase_driver == "ult":
                             return
                         stageId = int(stageId)
-                        rebase_driver = int(rebase_driver)
+                        rebase_driver = (
+                            int(rebase_driver)
+                            if rebase_driver and rebase_driver != "ult"
+                            else rebase_driver
+                        )
                         stages = wrc.getStageInfo(stage_code=stageId, raw=False)
                         times = wrc.getStageTimes(stageId=stageId, raw=False)
                         if stages.empty or times.empty:
@@ -1172,8 +1190,13 @@ with ui.accordion(open=False):
                         if split_times_wide.empty or not rebase_driver:
                             return
                         split_cols = wrc.getSplitCols(split_times_wide)
-                        split_times_wide = wrc.rebaseManyTimes(
-                            split_times_wide, int(rebase_driver), "carNo", split_cols
+                        rebase_driver = (
+                            int(rebase_driver)
+                            if rebase_driver and rebase_driver != "ult"
+                            else rebase_driver
+                        )
+                        split_times_wide, split_cols = wrc.rebase_splits_wide_with_ult(
+                            split_times_wide, rebase_driver
                         )
                         html = df_color_gradient_styler(
                             split_times_wide,
@@ -1738,7 +1761,7 @@ def get_overall_pos_wide():
 @reactive.calc
 @reactive.event(input.rally_seasonId, input.championships)
 def getChampionships():
-    print("get championship")
+    # print("get championship")
     seasonId = input.rally_seasonId()
     if not seasonId:
         return DataFrame()
@@ -1785,12 +1808,17 @@ def _get_overall_typ_wide_core(
             stageId=stageId, priority=priority, completed=True, typ=typ
         )
     else:
-        overall_times_wide=DataFrame()
+        overall_times_wide = DataFrame()
     return overall_times_wide
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category, input.rally_progression_rebase_driver, input.progression_rebase_type)
+@reactive.event(
+    input.stage,
+    input.category,
+    input.rally_progression_rebase_driver,
+    input.progression_rebase_type,
+)
 def get_overall_typ_wide2_rebased():
     stageId = input.stage()
     if not stageId:
@@ -1803,15 +1831,22 @@ def get_overall_typ_wide2_rebased():
 
     typ = progression_report_types[progression_report_typ]
 
-    overall_times_wide = _get_overall_typ_wide_core(stageId, priority, progression_report_typ, typ)
+    overall_times_wide = _get_overall_typ_wide_core(
+        stageId, priority, progression_report_typ, typ
+    )
 
     rebase_driver = input.rally_progression_rebase_driver()
 
     if overall_times_wide.empty or not rebase_driver:
         return
     stage_cols = wrc.getStageCols(overall_times_wide)
+    rebase_driver = (
+        int(rebase_driver)
+        if rebase_driver and rebase_driver != "ult"
+        else rebase_driver
+    )
     output_ = wrc.rebaseManyTimes(
-        overall_times_wide, int(rebase_driver), "carNo", stage_cols
+        overall_times_wide, rebase_driver, "carNo", stage_cols
     )
     return output_
 
@@ -1885,11 +1920,14 @@ def get_rebased_data():
 
     # Get rebase driver
     rebase_driver = input.stage_rebase_driver()
-    rebase_driver = int(rebase_driver) if rebase_driver else rebase_driver
-
     # Return if no rebase driver selected
     if not rebase_driver:
         return stage_times_df
+    rebase_driver = (
+        int(rebase_driver)
+        if rebase_driver and rebase_driver != "ult"
+        else rebase_driver
+    )
 
     # TO DO - this should be in wrc. ?
 

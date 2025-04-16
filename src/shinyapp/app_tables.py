@@ -101,7 +101,7 @@ def df_color_gradient_styler(
             col_neg_min = global_neg_min
 
         # Apply styling function to this column
-        styler = styler.applymap(
+        styler = styler.map(
             lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
         )
 

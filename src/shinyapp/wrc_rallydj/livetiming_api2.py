@@ -753,18 +753,23 @@ class WRCTimingResultsAPIClientV2:
     ):
         """Rebase times in several specified columns relative to a particular vehicle."""
         if not inplace:
-            if not rebaseId or rebaseId == "ult":
+            if not rebaseId:
                 return times
             times = times.copy()
-
-        if rebaseId and rebaseId != "ult":
+        rebaseId = int(rebaseId) if rebaseId and rebaseId!="ult" else rebaseId
+        if rebaseId:
             # Ensure rebaseCols is a list
             rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
             # Fetch the reference values for the specified 'rebaseId'
+
             reference_values = times.loc[
-                times[idCol] == int(rebaseId), rebaseCols
-            ].iloc[0]
+                times[idCol] == rebaseId, rebaseCols
+            ]
+            if reference_values.empty:
+                return times
+
+            reference_values = reference_values.iloc[0]
 
             # Subtract only the specified columns
             times[rebaseCols] = times[rebaseCols].subtract(reference_values).round(1)
