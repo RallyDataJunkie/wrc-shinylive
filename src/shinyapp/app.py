@@ -480,41 +480,20 @@ with ui.accordion(open=False):
                     if not progression_rebase_type or overall_typ_wide.empty:
                         return
 
-                    split_cols = wrc.getStageCols(overall_typ_wide)
-                    html = df_color_gradient_styler(
-                        overall_typ_wide,
-                        cols=split_cols,
-                        within_cols_gradient=False,
-                        # reverse_palette=rebase_reverse_palette,
-                    ).hide().to_html()
-                    return ui.HTML(html)
-
-                @render.data_frame
-                @reactive.event(
-                    input.category,
-                    input.stage,
-                    input.event_day,
-                    input.event_section,
-                    input.progression_rebase_type,
-                    input.rally_progression_rebase_driver,
-                )
-                def stage_progress_rebased_frame():
-                    progression_rebase_type = input.progression_rebase_type()
-                    overall_typ_wide = (
-                        get_overall_typ_wide2_rebased()
-                    )  # get_overall_typ_wide() #XX
-                    if not progression_rebase_type or overall_typ_wide.empty:
-                        return
-                    # TO DO - this should have options for within and accumulated statge time views
-                    # as well as a driver rebase option
-                    # TO DO - this should be sorted by position ASC for the latest stage
-                    # How is this done on the seaborn_linechart_stage_progress_positions label positions?
-                    # TO DO  - sort by each stage column
                     stage_cols = wrc.getStageCols(overall_typ_wide)
-                    stage_cols.reverse()
-                    return render.DataGrid(
-                        overall_typ_wide.drop(columns="entryId").sort_values(stage_cols)
+                    html = (
+                        df_color_gradient_styler(
+                            overall_typ_wide.drop(columns="entryId").sort_values(
+                                stage_cols[::-1]
+                            ),
+                            cols=stage_cols,
+                            within_cols_gradient=input.rprog_rebase_incols(),
+                            # reverse_palette=rebase_reverse_palette,
+                        )
+                        .hide()
+                        .to_html()
                     )
+                    return ui.HTML(html)
 
                 @render.plot(
                     alt="Line chart of rally progression of selected dimension."
