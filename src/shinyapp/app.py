@@ -117,7 +117,7 @@ with ui.accordion(open=False):
         # TO DO - remark on championship lead
         # TO DO - remark on next upcoming round
 
-        with ui.accordion(open=False, id="season_events_accordion"):
+        with ui.accordion(open=False, id="season_elements_accordion"):
             with ui.accordion_panel("Season Events"):
                 @render.data_frame
                 @reactive.event(input.rally_seasonId)
@@ -134,6 +134,24 @@ with ui.accordion(open=False):
                         "surfaces",
                     ]
                     return render.DataGrid(season[retcols])
+
+            with ui.accordion_panel("Season Event Winners"):
+                @render.data_frame
+                @reactive.event(input.rally_seasonId, input.championships)
+                def season_winners():
+                    season_winners = wrc.getChampionshipByRound(on_season=True, on_championship=True, raw=False)
+                    if season_winners.empty:
+                        return
+                    season_winners = season_winners[season_winners["position"]==1]
+                    retcols = [
+                        "eventName",
+                        "startDate",
+                        "LastName",
+                        "totalPoints",
+                        "pointsBreakdown",
+                        "surfaces"
+                    ]
+                    return render.DataGrid(season_winners[retcols])
 
     with ui.accordion_panel("Championship results"):
         # TO DO  - select championships based on wrc.getChampionships() ?

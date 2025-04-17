@@ -65,8 +65,8 @@ def format_timedelta(t, units="ms", addplus=False):
 
 # TO DO - refactor this into the WRCLiveTimingAPIClient class
 def enrich_stage_winners(stagewinners, inplace=True):
-    if "wins_overall" in stagewinners:
-        # Already enriched
+    # Return if empty or already enriched
+    if stagewinners.empty or "wins_overall" in stagewinners:
         return stagewinners
 
     if not inplace:
