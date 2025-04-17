@@ -76,6 +76,7 @@ with ui.sidebar(open="desktop"):
         {},
     )
 
+    # TO DO - Category should be condensed from full list of championships
     ui.input_select(
         "season_round",
         "Rounds:",
@@ -135,7 +136,7 @@ with ui.accordion(open=False):
                     return render.DataGrid(season[retcols])
 
     with ui.accordion_panel("Championship results"):
-        # TO DO  - select chapionships based on wrc.getChampionships() ?
+        # TO DO  - select championships based on wrc.getChampionships() ?
         # TO DO wrc.setChampionship()
         # wrc.getChampionshipOverall() gives championshipEntryId
         # wrc.getChampionshipByRound() gives championshipEntryId
@@ -278,6 +279,8 @@ with ui.accordion(open=False):
         # TO DO remarks regarding how much pace required to make back time over N stages.
         with ui.accordion(open=False, id="event_championship_points_accordion"):
             with ui.accordion_panel("Championship Points on Event"):
+                # Create championships selector
+                # TO DO - should this be limited by Category?
                 ui.input_select(
                     "event_championships",
                     "Championships:",
