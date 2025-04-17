@@ -2325,17 +2325,20 @@ class WRCTimingResultsAPIClientV2:
         # if len(2): the delta is the advantage
         pass
 
-
-    def getStageWinners(self, on_event=True, priority=None, raw=True):
-        if not self.eventId or not self.rallyId:
             return DataFrame()
 
+    def getStageWinners(self, on_event=True, eventId=None, priority=None, raw=True):
+        if not eventId and (on_event and (not self.eventId or not self.rallyId)):
+            return DataFrame()
+        # TO DO - do we need the rallyId ? Are there examples of multiple rallyId for eventId ?
         # TO DO - handle priority; maybe create a category_stagewinners db table?
         _on_event = (
-            f"""AND w.eventId={self.eventId} AND w.rallyId={self.rallyId}"""
-            if on_event
-            else ""
-        )
+        if eventId:
+            _on_event = f"AND w.eventId={eventId}"
+        elif on_event:
+            _on_event = f"AND w.eventId={self.eventId} AND w.rallyId={self.rallyId}"
+        else:
+            _on_event=""
 
         if raw:
             sql = f"""SELECT * FROM stagewinners AS w WHERE 1=1 {_on_event};"""
