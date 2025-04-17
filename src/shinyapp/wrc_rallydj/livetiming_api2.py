@@ -975,7 +975,7 @@ class WRCTimingResultsAPIClientV2:
         else:
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON cr.championshipEntryId=ce.championshipEntryId"
             _championship_rounds_join = f"INNER JOIN championship_rounds_detail AS chd ON cr.eventId=chd.eventId"
-            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, ce.Name as Team, chd.name AS eventName, chd.startDate, chd.Round, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_} {on_season_} ORDER BY chd.startDate, position ASC;"""
+            q = f"""SELECT cr.*, ce.LastName, ce.Manufacturer, ce.tyreManufacturer, ce.Name as Team, chd.name AS eventName, chd.startDate, chd.Round, chd.surfaces, chd.finishDate FROM championship_results AS cr {_championship_entry_join} {_championship_rounds_join} WHERE 1=1 {championship_} {event_} {on_season_} ORDER BY chd.startDate, position ASC;"""
 
         championshipEntryResultsByRound_df = self.db_manager.read_sql(q)
         if not raw:
