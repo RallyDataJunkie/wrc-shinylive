@@ -2325,14 +2325,44 @@ class WRCTimingResultsAPIClientV2:
         # if len(2): the delta is the advantage
         pass
 
+    def _getStageWinsCount(self, on_event=True, eventId=None, entryId=None, eventEntry=None, raw=True):
+        # TO DO WIP : should we use entryId or entrantId ?
+        if (not eventId and not eventEntry) or (on_event and (not self.eventId or not self.rallyId)):
             return DataFrame()
+        if eventEntry:
+            if isinstance(eventEntry, tuple):
+                eventEntry = [eventEntry]
+
+            conditions = []
+            for evt_id, ent_id in eventEntry:
+                conditions.append(f"(eventId={evt_id} AND entryId={ent_id})")
+
+            _on_event_entry = "AND (" + " OR ".join(conditions) + ")"
+            _on_event = _on_entry = ""
+        else:
+            if eventId:
+                eventIds = [eventId] if isinstance(eventId, str) else eventId
+                eventId_str = ",".join(str(eid) for eid in eventIds)
+                _on_event = f"AND eventId IN ({eventId_str})"
+            elif on_event:
+                _on_event = f"AND eventId={self.eventId} AND rallyId={self.rallyId}"
+            else:
+                _on_event=""
+
+            _on_entry = f"""AND entryId={entryId}""" if entryId else ""
+            _on_event_entry = ""
+
+        sql = f"""SELECT entryId, COUNT(*) AS stage_wins FROM stagewinners WHERE 1=1 {_on_event} {_on_entry} {_on_event_entry} GROUP BY entryId, eventId ORDER BY stage_wins DESC;"""
+        print(sql)
+        print("wtaf")
+        r = self.db_manager.read_sql(sql)
+        return r
 
     def getStageWinners(self, on_event=True, eventId=None, priority=None, raw=True):
         if not eventId and (on_event and (not self.eventId or not self.rallyId)):
             return DataFrame()
         # TO DO - do we need the rallyId ? Are there examples of multiple rallyId for eventId ?
         # TO DO - handle priority; maybe create a category_stagewinners db table?
-        _on_event = (
         if eventId:
             _on_event = f"AND w.eventId={eventId}"
         elif on_event:
