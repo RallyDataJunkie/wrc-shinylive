@@ -110,27 +110,29 @@ with ui.accordion(open=False):
             "TO DO - round winners; next rally; previous round result; championship hero"
         )
 
-        @render.data_frame
-        @reactive.event(input.rally_seasonId)
-        def season_frame():
-            season = wrc.getSeasonRounds()
-            if season.empty:
-                return
-            retcols = [
-                "order",
-                "name",
-                "country.name",
-                "location",
-                "startDate",
-                "surfaces",
-            ]
-            return render.DataGrid(season[retcols])
-
         # TO DO remarks on the season
         # TO DO - remark on number of rounds
         # TO DO - remark on number of completed rounds
         # TO DO - remark on championship lead
         # TO DO - remark on next upcoming round
+
+        with ui.accordion(open=False, id="season_events_accordion"):
+            with ui.accordion_panel("Season Events"):
+                @render.data_frame
+                @reactive.event(input.rally_seasonId)
+                def season_frame():
+                    season = wrc.getSeasonRounds()
+                    if season.empty:
+                        return
+                    retcols = [
+                        "order",
+                        "name",
+                        "country.name",
+                        "location",
+                        "startDate",
+                        "surfaces",
+                    ]
+                    return render.DataGrid(season[retcols])
 
     with ui.accordion_panel("Championship results"):
         # TO DO  - select chapionships based on wrc.getChampionships() ?
