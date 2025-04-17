@@ -278,7 +278,6 @@ with ui.accordion(open=False):
         # TO DO remarks regarding how much pace required to make back time over N stages.
         with ui.accordion(open=False, id="event_championship_points_accordion"):
             with ui.accordion_panel("Championship Points on Event"):
-
                 ui.input_select(
                     "event_championships",
                     "Championships:",
@@ -1707,6 +1706,11 @@ def update_championships_select():
     championships = (
         championships_df[["championshipId", "name"]]
         .set_index("championshipId")["name"]
+        .str.replace("World Rally Championship", "WRC")
+        .str.replace("European Rally Championship", "ERC")
+        .str.replace("Championship for", "")
+        .str.replace("Masters ", "")
+        .str.replace(" for ", " ")
         .to_dict()
     )
     ui.update_select("championships", choices=championships)
