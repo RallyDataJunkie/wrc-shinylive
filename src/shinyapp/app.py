@@ -828,12 +828,15 @@ with ui.accordion(open=False):
                     by="number", ascending=True
                 )
                 stageId = input.stage()
-                if stagesInfo.empty or not stageId:
+                priority = input.category()
+                if stagesInfo.empty or not stageId or not priority:
                     return
 
                 if stageId and not stagesInfo.empty:
                     stageId = int(stageId)
-                stage_times_data = wrc.getStageTimes(raw=False)
+                stage_times_data = wrc.getStageTimes(priority=priority, raw=False).sort_values("position")
+                stage_times_data["position"] = range(1, len(stage_times_data)+1)
+                stage_times_data["diffFirstMs"] = stage_times_data["diffFirstMs"] - stage_times_data["diffFirstMs"].iloc[0]
                 return get_stage_result_hero(stageId, stagesInfo, stage_times_data)
 
             with ui.accordion(open=False, id="stage_review_accordion"):
