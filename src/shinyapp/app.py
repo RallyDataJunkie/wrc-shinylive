@@ -269,7 +269,7 @@ with ui.accordion(open=False):
         # TO DO - section/loop report
 
         @render.ui
-        @reactive.event(input.stage, input.display_latest_overall)
+        @reactive.event(input.stage, input.display_latest_overall, input.category)
         def rally_overview_latest_hero():
             # TO DO - for winner give overal stage distance, av speed, av pace
             # TO DO for 2nd / 3rd, av speed, av pace delta
@@ -287,8 +287,15 @@ with ui.accordion(open=False):
 
             if stageId and not stagesInfo.empty:
                 stageId = int(stageId)
-                overallResults = wrc.getStageOverallResults(stageId=stageId, raw=False)
+                priority = input.category()
+                overallResults = wrc.getStageOverallResults(
+                    stageId=stageId, priority=priority, raw=False
+                )
                 if not overallResults.empty:
+                    if priority!="P0":
+                        overallResults["position"] = range(1, len(overallResults)+1)
+                        overallResults["diffFirstMs"] = overallResults["diffFirstMs"] - overallResults["diffFirstMs"].iloc[0]
+
                     return get_overall_result_hero(stageId, stagesInfo, overallResults)
             else:
                 print("Missing stage results data?")
@@ -819,8 +826,6 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
-
-            # TO DO XX hero needs updating to reflect Category selection
             @render.ui
             def stageresult_hero():
                 setStageData()
@@ -835,8 +840,9 @@ with ui.accordion(open=False):
                 if stageId and not stagesInfo.empty:
                     stageId = int(stageId)
                 stage_times_data = wrc.getStageTimes(priority=priority, raw=False).sort_values("position")
-                stage_times_data["position"] = range(1, len(stage_times_data)+1)
-                stage_times_data["diffFirstMs"] = stage_times_data["diffFirstMs"] - stage_times_data["diffFirstMs"].iloc[0]
+                if priority!="P0":
+                    stage_times_data["position"] = range(1, len(stage_times_data)+1)
+                    stage_times_data["diffFirstMs"] = stage_times_data["diffFirstMs"] - stage_times_data["diffFirstMs"].iloc[0]
                 return get_stage_result_hero(stageId, stagesInfo, stage_times_data)
 
             with ui.accordion(open=False, id="stage_review_accordion"):
