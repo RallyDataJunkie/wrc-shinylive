@@ -452,6 +452,14 @@ with ui.accordion(open=False):
                     {},
                 )
 
+                with ui.tooltip(id="rprog_rebase_incols_tt"):
+                    ui.input_checkbox(
+                        "rprog_rebase_incols",
+                        "Within column heatmap",
+                        True,
+                    ),
+                    "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+
                 @render.ui
                 @reactive.event(
                     input.category,
@@ -460,6 +468,7 @@ with ui.accordion(open=False):
                     input.event_section,
                     input.progression_rebase_type,
                     input.rally_progression_rebase_driver,
+                    input.rprog_rebase_incols,
                 )
                 def stage_progression_heat():
                     progression_rebase_type = input.progression_rebase_type()
