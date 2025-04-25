@@ -126,6 +126,7 @@ with ui.accordion(open=False):
 
         with ui.accordion(open=False, id="season_elements_accordion"):
             with ui.accordion_panel("Season Events"):
+
                 @render.data_frame
                 @reactive.event(input.rally_seasonId)
                 def season_frame():
@@ -143,20 +144,23 @@ with ui.accordion(open=False):
                     return render.DataGrid(season[retcols])
 
             with ui.accordion_panel("Season Event Winners"):
+
                 @render.data_frame
                 @reactive.event(input.rally_seasonId, input.championships)
                 def season_winners():
-                    season_winners = wrc.getChampionshipByRound(on_season=True, on_championship=True, raw=False)
+                    season_winners = wrc.getChampionshipByRound(
+                        on_season=True, on_championship=True, raw=False
+                    )
                     if season_winners.empty:
                         return
-                    season_winners = season_winners[season_winners["position"]==1]
+                    season_winners = season_winners[season_winners["position"] == 1]
                     retcols = [
                         "eventName",
                         "startDate",
                         "LastName",
                         "totalPoints",
                         "pointsBreakdown",
-                        "surfaces"
+                        "surfaces",
                     ]
                     return render.DataGrid(season_winners[retcols])
 
@@ -278,34 +282,49 @@ with ui.accordion(open=False):
         @render.ui
         @reactive.event(input.stage, input.display_latest_overall, input.category)
         def rally_overview_latest_hero():
-            # TO DO - for winner give overal stage distance, av speed, av pace
+            # TO DO - for winner give overall stage distance, av speed, av pace
             # TO DO for 2nd / 3rd, av speed, av pace delta
-            setStageData()
-            stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
-                by="number", ascending=True
-            )
-            stageId = None
-            if input.display_latest_overall() and "status" in stagesInfo:
-                completed_stages = stagesInfo[stagesInfo["status"] == "Completed"]
-                if not completed_stages.empty:
-                    stageId = completed_stages.iloc[-1]["stageId"]
-            else:
-                stageId = input.stage()
-
-            if stageId and not stagesInfo.empty:
-                stageId = int(stageId)
-                priority = input.category()
-                overallResults = wrc.getStageOverallResults(
-                    stageId=stageId, priority=priority, raw=False
-                )
-                if not overallResults.empty:
-                    if priority!="P0":
-                        overallResults["position"] = range(1, len(overallResults)+1)
-                        overallResults["diffFirstMs"] = overallResults["diffFirstMs"] - overallResults["diffFirstMs"].iloc[0]
-
-                    return get_overall_result_hero(stageId, stagesInfo, overallResults)
+            stageId, stagesInfo, overallResults = getOverallStageResultsData()
+            if not overallResults.empty:
+                return get_overall_result_hero(stageId, stagesInfo, overallResults)
             else:
                 print("Missing stage results data?")
+
+        with ui.accordion(open=False, id="event_results_accordion"):
+            with ui.accordion_panel("Event Results"):
+
+                @render.data_frame
+                @reactive.event(
+                    input.stage,
+                    input.category,
+                    input.display_latest_overall,
+                )
+                def event_results_frame():
+                    setStageData()
+                    _, _, overallResults = getOverallStageResultsData()
+                    inputCategory = input.category()
+                    pos = "position" if inputCategory == "P0" else "categoryPosition"
+                    cols = [
+                        "Position",
+                        "driverCode",
+                        "carNo",
+                        "driverName",
+                        "stageTime",
+                        "stageCode",
+                        "diffFirst",
+                        "diffPrev",
+                        "penaltyTime",
+                        "vehicleModel",
+                        "entrantName",
+                    ]
+                    if overallResults.empty:
+                        return
+
+                    overallResults = overallResults.copy().rename(
+                        columns={pos: "Position"}
+                    )
+                    # TO DO also add retirements onto end, reverse ordered by how far they got through rally
+                    return render.DataGrid(overallResults[cols])
 
         # TO DO  if still stages to run, give eg 7 stages / 120km of 18 stages / 250km completed, 11 stages / 130km still to run. BUT how to handle cancelled stages?
         # TO DO remarks regarding how much pace required to make back time over N stages.
@@ -350,6 +369,9 @@ with ui.accordion(open=False):
                         raw=False,
                         # on_event=True
                     )
+                    if championship_event.empty:
+                        return
+
                     # TO DO limit columns
                     cols = [
                         "position",
