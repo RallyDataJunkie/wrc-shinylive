@@ -1664,6 +1664,7 @@ class WRCTimingResultsAPIClientV2:
 
     def getLiveStages(self, on_event=True):
         """Get a list of running stages."""
+        # Stage statuses are: = "completed", "interrupted", "cancelled", "running", "to run".
         stage_info = self.getStageInfo(updateDB=False, noLiveCheck=True, on_event=on_event)
         stage_info = stage_info[stage_info['status'].str.lower().isin({'running', 'interrupted'})]
         return stage_info

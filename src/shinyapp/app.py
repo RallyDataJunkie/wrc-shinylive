@@ -2,6 +2,9 @@ from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
 from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, dateNow
+
+from wrcapi_rallydj.data_api import WRCDataAPIClient
+
 from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame, isna, to_numeric
@@ -11,6 +14,7 @@ import re
 from rules_processor import Nth, p
 
 from ipyleaflet import Map, Marker, DivIcon
+import matplotlib.pyplot as plt
 
 from requests_cache import CachedSession
 session = CachedSession(expire_after=5)
@@ -45,6 +49,8 @@ from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
 wrc = WRCTimingResultsAPIClientV2(
     use_cache=True, backend="memory", expire_after=30, liveCatchup=True
 )
+
+wrcapi = WRCDataAPIClient(usegeo=True)
 
 progression_report_types = {
     "bystagetime": "timeInS",  # not yet
@@ -102,6 +108,35 @@ with ui.sidebar(open="desktop"):
         "Stage:",
         {},
     )
+
+
+@reactive.calc
+@reactive.event(input.year, input.season_round, input.category)
+def getWRCAPI2event():
+    if not input.year() or not input.category() or not input.season_round():
+        return {}
+
+    # TO DO year, sas-eventid is round, typ is .upper() on championship
+    # Could we get a race here from wrc.championship?
+    r = wrcapi.get_rallies_data(int(input.year()), typ=wrc.championship.upper())
+    print(r)
+    r = r[r["sas-eventid"].astype(str) == str(input.season_round())]
+    print(r, int(input.season_round()), r["sas-eventid"].dtype)
+    retval = r.to_dict(orient="records")[0] if not r.empty else {}
+    print(retval)
+    return retval
+
+
+@reactive.calc
+@reactive.event(getWRCAPI2event)
+def rally_geodata():
+    geodata = getWRCAPI2event()
+    if "kmlfile" in geodata:
+        kmlstub = geodata["kmlfile"]
+        geostages = wrcapi.read_kmlfile(kmlstub)
+        return geostages
+    return DataFrame()
+
 
 # The accordion widget provides collapsible elements
 with ui.accordion(open=False):
@@ -269,15 +304,27 @@ with ui.accordion(open=False):
             )
             return so
 
+        # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
+        # but we may have all the resultd in for the priority group
         ui.input_checkbox(
             "display_latest_overall",
-            "Display latest result",
+            "Display result at last completed stage",
             True,
         )
 
         # TO DO - overall report
         # TO DO - day report
         # TO DO - section/loop report
+
+        with ui.accordion(open=False):
+            with ui.accordion_panel("Stages map"):
+
+                @render_widget
+                @reactive.event(rally_geodata)
+                def allstages_map():
+                    geostages = rally_geodata()
+                    m = wrcapi.GeoTools.simple_stage_map(geostages)
+                    return m
 
         @render.ui
         @reactive.event(input.stage, input.display_latest_overall, input.category)
@@ -514,7 +561,7 @@ with ui.accordion(open=False):
                         "Within column heatmap",
                         True,
                     ),
-                    "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+                    "Create heatmap palette within a column rather than across all columns."
 
                 @render.ui
                 @reactive.event(
@@ -883,6 +930,32 @@ with ui.accordion(open=False):
 
             with ui.accordion(open=False, id="stage_review_accordion"):
 
+                with ui.accordion_panel("Stage map"):
+
+                    @render_widget
+                    @reactive.event(rally_geodata, input.stage)
+                    def single_stage_map():
+                        stageId = input.stage()
+                        if not stageId:
+                            return ui.markdown("No stage to report on...")
+
+                        geostages = rally_geodata()
+                        if geostages.empty:
+                            return ui.markdown("No route data available...")
+
+                        stages_info = wrc.getStageInfo(raw=False)
+                        if stages_info.empty:
+                            return ui.markdown("Awaiting stages data...")
+
+                        stage_info = stages_info[
+                            stages_info["stageId"] == int(stageId)
+                        ].iloc[0]
+                        #print(geostages["stages"], stage_info["code"])
+                        m = wrcapi.GeoTools.simple_stage_map(
+                            geostages, stage_info["code"]
+                        )
+                        return m
+
                 with ui.accordion_panel("Stage notes"):
 
                     @render.ui
@@ -1137,6 +1210,55 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel(title="Splits Analysis"):
 
+        with ui.accordion(open=False, id="splits_geo1_accordion"):
+
+            with ui.accordion_panel("Split route sections map"):
+
+                @render.plot(alt="Route map split sections.")
+                @reactive.event(
+                    input.year, input.season_round, input.category, input.stage, rally_geodata
+                )
+                def split_tests():
+                    stageId = input.stage()
+
+                    if not stageId:
+                        return
+                    splits = wrc.getStageSplitPoints(stageId=int(stageId))
+                    geostages = rally_geodata()
+                    stages_info = wrc.getStageInfo(raw=False)
+                    if splits.empty or geostages.empty or stages_info.empty:
+                        return
+
+                    stage_info = stages_info[
+                        stages_info["stageId"] == int(stageId)
+                    ].iloc[0]
+                    colors = ["lightgrey", "blue"]
+                    colors = [colors[i % len(colors)] for i in range(len(splits)+1)]
+
+                    fig2, ax2 = plt.subplots()
+                    dists = (splits["distance"]*1000).tolist()
+
+                    geostage = geostages[geostages["stages"].apply(lambda x: stage_info["code"] in x)]
+                    if geostage.empty:
+                        return
+                    line = geostage["geometry"].iloc[0]
+                    gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(line, dists, toend=True)
+                    gdf_segments2.plot(ax=ax2, lw=3, color=colors)
+                    ax2.set_axis_off()
+
+                    # Add a green dot at start and a red dot at endl s is the dot size
+                    # Get first point coordinates from first row
+                    first_x, first_y = gdf_segments2.iloc[0].geometry.coords[0]
+                    # Get last point coordinates from last row
+                    last_x, last_y = gdf_segments2.iloc[-1].geometry.coords[-1]
+                    # Plot the points directly with matplotlib
+                    ax2.scatter(first_x, first_y, color='green', s=10, zorder=5)
+                    ax2.scatter(last_x, last_y, color='red', s=10, zorder=5)
+
+                    return ax2
+
+        ui.markdown("\n\n")
+                    
         ui.input_action_button("splits_refresh", "Refresh split times")
         ui.markdown("*Manually refresh split times in live stage.*\n\n")
 
@@ -1159,7 +1281,7 @@ with ui.accordion(open=False):
                         return
                     split_times_wide = split_times_wide.copy()
                     split_cols = wrc.getSplitCols(split_times_wide)
-                    
+
                     ax = chart_seaborn_linechart_split_positions(
                         wrc, split_times_wide, split_cols
                     )
@@ -1212,12 +1334,12 @@ with ui.accordion(open=False):
                             "splits_section_view",
                             "Section report view",
                             {
-                                "time": "Section time (s)",
-                                "pace": "Av. pace in section (s/km)",
-                                "speed": "Av. speed in section (km/h)",
-                                "time_acc": "Acc. time over sections (s)",
-                                "pos_within": "Section time rank",
-                                "pos_acc": "Acc. time rank",
+                                "time": "Within section time (s)",
+                                "time_acc": "Acc. section time (s)",
+                                "pace": "Av. pace in-section (s/km)",
+                                "speed": "Av. speed in-section (km/h)",
+                                "pos_within": "Within section rank",
+                                "pos_acc": "Acc. section rank",
                             },
                             selected="time",
                         ),
@@ -1311,6 +1433,25 @@ with ui.accordion(open=False):
                         )
                         return pr
 
+                    with ui.tooltip(id="split_prog_rebase_incols_tt"):
+                        ui.input_checkbox(
+                            "split_prog_rebase_incols",
+                            "Within column heatmap",
+                            True,
+                        ),
+                        "Create heatmap palette within a column rather than across all columns."
+
+                    ui.input_switch("rebased_splits_type_switch", "Within section time delta (default is accumulated stage time delta)", False)
+
+                    @render.ui
+                    def rebased_splits_type_value():
+                        typ = (
+                            "Within section"
+                            if input.rebased_splits_type_switch()
+                            else "Accumulated stage"
+                        )
+                        return ui.markdown(f"\n__{typ} time delta across split points.__\n\n")
+
                     @render.ui
                     @reactive.event(
                         input.splits_review_accordion,
@@ -1319,6 +1460,8 @@ with ui.accordion(open=False):
                         input.rebase_driver,
                         input.rebase_reverse_palette,
                         input.splits_refresh,
+                        input.rebased_splits_type_switch,
+                        input.split_prog_rebase_incols,
                     )
                     def split_times_heat():
                         split_times_wide = get_split_times_wide()
@@ -1333,13 +1476,15 @@ with ui.accordion(open=False):
                             else rebase_driver
                         )
                         split_times_wide, split_cols = wrc.rebase_splits_wide_with_ult(
-                            split_times_wide, rebase_driver, use_split_durations=False
+                            split_times_wide,
+                            rebase_driver,
+                            use_split_durations=input.rebased_splits_type_switch(),
                         )
                         html = (
                             df_color_gradient_styler(
                                 split_times_wide,
                                 cols=split_cols,
-                                within_cols_gradient=False,
+                                within_cols_gradient=input.split_prog_rebase_incols(),
                                 reverse_palette=rebase_reverse_palette,
                             )
                             .hide()
@@ -1356,7 +1501,7 @@ with ui.accordion(open=False):
                                     "Heatmap outliers",
                                     False,
                                 ),
-                                "Calculate diff to leader z-scores to identify outliers."
+                                "Pack analysis: calculate z-scores to identify outliers."
 
                             with ui.card(class_="mt-3"):
                                 with ui.card_header():
@@ -1547,6 +1692,114 @@ with ui.accordion(open=False):
                                     return ax
 
 
+
+# @render.ui
+# @reactive.event(input.year, input.season_round, input.category)
+# def WRCapidf():
+#    return str(getWRCAPI2event())
+
+## Reactive calcs
+
+
+## LIVE DATA
+
+
+def get_data_feed():
+    if not wrc.isRallyInDate():
+        return {}
+
+    # If we are running this in a central server, multiuser context, does this let us be nice?
+    json = session.get(
+        "https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000"
+    ).json()["_entries"]
+    return json
+
+
+@reactive.poll(get_data_feed, 5.1)
+@reactive.event(input.live_map_accordion)
+def car_getdata():
+    if input.live_map_accordion():
+        print("polling live position data")
+        return DataFrame(get_data_feed())
+
+
+with ui.accordion(open=False, id="live_map_accordion"):
+
+    with ui.accordion_panel("Live Map"):
+
+        # ui.input_checkbox(
+        #    "pause_live_map",
+        #    "Pause live map updates",
+        #    False,
+        # )
+
+        # Map rendering function using ipyleaflet
+        @render_widget
+        @reactive.event(rally_geodata, car_getdata)  # input.pause_live_map,
+        def show_map():
+            def add_marker(row, m):
+                # Create marker
+                custom_icon = DivIcon(
+                    html=f'<div style="background-color:rgba(51, 136, 255, 0.7); display:inline-block; padding:2px 5px; color:white; font-weight:bold; border-radius:3px; border:none; box-shadow:none;">{row["name"]}</div>',
+                    className="",  # Empty string removes the default leaflet-div-icon class which has styling
+                    icon_size=[0, 0],  # Set icon size to zero
+                    icon_anchor=[0, 0],  # Adjust anchor point
+                    bgcolor="transparent",  # Ensure background is transparent
+                    border_color="transparent",
+                )
+                # DivIcon(
+                #    html=f'<div style="background-color:#3388ff; width:30px; height:30px; border-radius:50%; display:flex; justify-content:center; align-items:center; color:white; font-weight:bold;">{row["name"]}</div>',
+                #    icon_size=(30, 30),
+                #    icon_anchor=(15, 15),
+                # )
+                marker = Marker(
+                    location=(row["lat"], row["lon"]), icon=custom_icon
+                )  # , draggable=False)
+                # Add a popup with the name that opens by default
+                # message = HTML()
+                # message.value = f"<b>{row['name']}</b>"
+                # marker.popup = Popup(
+                #    location=marker.location,
+                #    child=message,
+                # )
+
+                # Add marker to map
+                m.add_layer(marker)
+
+            setStageData()
+            _, _, overallResults = getOverallStageResultsData()
+            carNos = overallResults["carNo"].tolist()
+
+            # Get the latest data
+            # df = car_getdata()
+            # if input.pause_live_map():
+            #    with reactive.isolate():
+            #        df = car_getdata()
+            # else:
+            # Get the latest data
+            #    df = car_getdata()
+            df = car_getdata()
+            df["carNo"] = to_numeric(df["name"], errors="coerce").astype("Int64")
+            df = df[df["carNo"].isin(carNos)]
+            if df.empty:
+                return
+
+            # Create a base map centered on the average location
+            center_lat = df["lat"].mean()
+            center_lon = df["lon"].mean()
+            #m = Map(center=(center_lat, center_lon), zoom=9)
+            geostages = rally_geodata()
+            m = wrcapi.GeoTools.simple_stage_map(geostages)
+            # Add markers for each point in the data
+            # Add markers to map
+            df.apply(lambda row: add_marker(row, m), axis=1)
+
+            m.fit_bounds(
+                [[df["lat"].min(), df["lon"].min()], [df["lat"].max(), df["lon"].max()]]
+            )
+            return m
+
+
 @reactive.calc
 @reactive.event(input.season_round)
 def getEventData():
@@ -1573,7 +1826,8 @@ def getOverallStageResultsData():
     )
     stageId = None
     if input.display_latest_overall() and "status" in stagesInfo:
-        completed_stages = stagesInfo[stagesInfo["status"] == "Completed"]
+        # TO DO  - this is ambiguous; stage may be running /cancelled but the priority group may be complete?
+        completed_stages = stagesInfo[stagesInfo["status"].isin(["Completed", "Cancelled"])]
         if not completed_stages.empty:
             stageId = completed_stages.iloc[-1]["stageId"]
     else:
@@ -1987,7 +2241,6 @@ def _get_overall_typ_wide_core(
     priority,
     progression_report_typ,
 ):
-
     typ = progression_report_types[progression_report_typ]
 
     if "rally" in progression_report_typ.lower():
@@ -2157,100 +2410,3 @@ def get_rebased_data():
 ## Start the data collection
 wrc.seedDB()
 update_year_select()
-
-
-## LIVE DATA
-
-
-def get_data_feed():
-    if not wrc.isRallyInDate():
-        return {}
-
-    # If we are running this in a central server, multiuser context, does this let us be nice?
-    json = session.get(
-        "https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000"
-    ).json()["_entries"]
-    return json
-
-
-@reactive.poll(get_data_feed, 5.1)
-@reactive.event(input.live_map_accordion)
-def car_getdata():
-    if input.live_map_accordion():
-        print("polling live position data")
-        return DataFrame(get_data_feed())
-
-
-with ui.accordion(open=False, id="live_map_accordion"):
-
-    with ui.accordion_panel("Live Map"):
-
-        # ui.input_checkbox(
-        #    "pause_live_map",
-        #    "Pause live map updates",
-        #    False,
-        # )
-
-        # Map rendering function using ipyleaflet
-        @render_widget
-        @reactive.event(car_getdata)  # input.pause_live_map,
-        def show_map():
-            def add_marker(row, m):
-                # Create marker
-                custom_icon = DivIcon(
-                    html=f'<div style="background-color:rgba(51, 136, 255, 0.7); display:inline-block; padding:2px 5px; color:white; font-weight:bold; border-radius:3px; border:none; box-shadow:none;">{row["name"]}</div>',
-                    className="",  # Empty string removes the default leaflet-div-icon class which has styling
-                    icon_size=[0, 0],  # Set icon size to zero
-                    icon_anchor=[0, 0],  # Adjust anchor point
-                    bgcolor="transparent",  # Ensure background is transparent
-                    border_color="transparent",
-                )
-                # DivIcon(
-                #    html=f'<div style="background-color:#3388ff; width:30px; height:30px; border-radius:50%; display:flex; justify-content:center; align-items:center; color:white; font-weight:bold;">{row["name"]}</div>',
-                #    icon_size=(30, 30),
-                #    icon_anchor=(15, 15),
-                # )
-                marker = Marker(
-                    location=(row["lat"], row["lon"]), icon=custom_icon
-                )  # , draggable=False)
-                # Add a popup with the name that opens by default
-                # message = HTML()
-                # message.value = f"<b>{row['name']}</b>"
-                # marker.popup = Popup(
-                #    location=marker.location,
-                #    child=message,
-                # )
-
-                # Add marker to map
-                m.add_layer(marker)
-
-            setStageData()
-            _, _, overallResults = getOverallStageResultsData()
-            carNos = overallResults["carNo"].tolist()
-
-            # Get the latest data
-            # df = car_getdata()
-            # if input.pause_live_map():
-            #    with reactive.isolate():
-            #        df = car_getdata()
-            # else:
-            # Get the latest data
-            #    df = car_getdata()
-            df = car_getdata()
-            df["carNo"] = to_numeric(df["name"], errors="coerce").astype("Int64")
-            df = df[df["carNo"].isin(carNos)]
-            if df.empty:
-                return
-
-            # Create a base map centered on the average location
-            center_lat = df["lat"].mean()
-            center_lon = df["lon"].mean()
-            m = Map(center=(center_lat, center_lon), zoom=9)
-            # Add markers for each point in the data
-            # Add markers to map
-            df.apply(lambda row: add_marker(row, m), axis=1)
-
-            m.fit_bounds(
-                [[df["lat"].min(), df["lon"].min()], [df["lat"].max(), df["lon"].max()]]
-            )
-            return m

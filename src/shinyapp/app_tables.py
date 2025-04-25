@@ -99,7 +99,6 @@ def df_color_gradient_styler(
             # Use global max/min values
             col_pos_max = global_pos_max
             col_neg_min = global_neg_min
-
         # Apply styling function to this column
         styler = styler.map(
             lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]

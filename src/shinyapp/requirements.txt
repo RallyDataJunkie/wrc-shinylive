@@ -12,3 +12,5 @@ inflect
 adjustText
 #anywidget
 #itables
+kml2geojson
+geopandas
