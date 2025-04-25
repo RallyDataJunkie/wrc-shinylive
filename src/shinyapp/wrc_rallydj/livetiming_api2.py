@@ -903,7 +903,8 @@ class WRCTimingResultsAPIClientV2:
         championshipId=None,
         eventId=None,
         on_event=False,
-        on_championship=False,
+        on_championship=True,
+        latest=True,
         raw=True,
         updateDB=False,
     ):
@@ -926,11 +927,21 @@ class WRCTimingResultsAPIClientV2:
             event_ = f"AND co.eventId={eventId}"
         else:
             event_ = ""
-        if raw:
-            q = f"""SELECT * FROM championship_overall AS co WHERE 1=1 {championship_} {event_};"""
+        # HACK we are assuming eventId is incremental by round; TO DO sort by date
+        if latest:
+            latest_ = f"""AND co.eventId = (
+    SELECT MAX(eventId)
+    FROM championship_overall AS co
+    WHERE 1=1 {championship_}
+) """
         else:
+            latest_ =""
+        if raw:
+            q = f"""SELECT * FROM championship_overall AS co WHERE 1=1 {championship_} {event_} {latest_};"""
+        else:
+            _championship_results_join = f"INNER JOIN championship_results AS cr ON cr.championshipEntryId=co.championshipEntryId AND cr.eventId=co.eventId"
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON co.championshipEntryId=ce.championshipEntryId"
-            q = f"""SELECT co.*, ce.LastName, ce.Name as Team, ce.Manufacturer, ce.TyreManufacturer FROM championship_overall AS co {_championship_entry_join} WHERE 1=1 {championship_} {event_};"""
+            q = f"""SELECT co.*, ce.LastName, ce.Name as Team, ce.Manufacturer, ce.TyreManufacturer, cr.entryId FROM championship_overall AS co {_championship_entry_join} {_championship_results_join} WHERE 1=1 {championship_} {event_} {latest_};"""
 
         championshipEntryResultsOverall_df = self.db_manager.read_sql(q)
 
@@ -1694,7 +1705,7 @@ class WRCTimingResultsAPIClientV2:
         return not running.empty
 
     def isRallyLive(self):
-        """Flag to show that rally is live, so there are"""
+        """Flag to show that rally is live."""
         season = self.getSeasonRounds()
         event_ = season[season["eventId"] == self.eventId]
         if not event_.empty:
