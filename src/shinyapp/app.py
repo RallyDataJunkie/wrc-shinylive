@@ -7,6 +7,8 @@ from icons import question_circle_fill
 from pandas import DataFrame, isna
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
+import re
+from rules_processor import Nth, p
 
 ## Heros and banners
 from .app_heroes import (
@@ -835,14 +837,22 @@ with ui.accordion(open=False):
                 stageId = input.stage()
                 priority = input.category()
                 if stagesInfo.empty or not stageId or not priority:
-                    return
+                    return ui.markdown("*No results available for this stage.*")
 
                 if stageId and not stagesInfo.empty:
                     stageId = int(stageId)
-                stage_times_data = wrc.getStageTimes(priority=priority, raw=False).sort_values("position")
-                if priority!="P0":
-                    stage_times_data["position"] = range(1, len(stage_times_data)+1)
-                    stage_times_data["diffFirstMs"] = stage_times_data["diffFirstMs"] - stage_times_data["diffFirstMs"].iloc[0]
+                stage_times_data = wrc.getStageTimes(
+                    priority=priority, raw=False
+                ).sort_values("position")
+                if stage_times_data.empty:
+                    return
+
+                if priority != "P0":
+                    stage_times_data["position"] = range(1, len(stage_times_data) + 1)
+                    stage_times_data["diffFirstMs"] = (
+                        stage_times_data["diffFirstMs"]
+                        - stage_times_data["diffFirstMs"].iloc[0]
+                    )
                 return get_stage_result_hero(stageId, stagesInfo, stage_times_data)
 
             with ui.accordion(open=False, id="stage_review_accordion"):
@@ -857,20 +867,55 @@ with ui.accordion(open=False):
                             return ui.markdown("No stage to report on...")
                         stageId = int(stageId)
 
-                        stages_info = wrc.getStageInfo()
+                        stages_info = wrc.getStageInfo(raw=False)
+                        itinerary_df = getItinerary()
+
+                        stages_info["stageInDay"] = (
+                            stages_info.groupby(["day"]).cumcount() + 1
+                        )
+
                         stage_info = stages_info[
                             stages_info["stageId"] == stageId
                         ].iloc[0]
 
+                        stage_code = stage_info["code"]
+                        ss_index = itinerary_df[
+                            itinerary_df["code"] == stage_code
+                        ].index[0]
+
                         # Remark on stage name
-                        _md = f"""{stage_info["code"]} {stage_info["name"]} ({stage_info["distance"]}km)"""
+                        stage_name = stage_info["name"]
+                        _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
                         md.append(_md)
 
-                        # Remark on, or imply, the repeated run nature of this stage
-                        # TO DO
-
                         # Remark on being the Nth stage of the day
-                        # TO DO
+                        nth_stage = f"""the {Nth(stage_info["stageInDay"])}"""
+                        if (
+                            stage_info["stageInDay"]
+                            == stages_info[stages_info["day"] == stage_info["day"]][
+                                "stageInDay"
+                            ].max()
+                        ):
+                            nth_stage = f"{nth_stage}, and last,"
+
+                        # Remark on stage start time
+                        start_time = datetime.fromisoformat(
+                            itinerary_df.iloc[ss_index]["firstCarDueDateTime"]
+                        )
+                        time_str = (
+                            start_time.strftime("First car due on stage at %I.%M%p.")
+                            # .lower()
+                            .replace(" 0", " ")
+                        )
+                        _md = f"""{stage_code} ({stage_info["day"]}), {nth_stage} stage of the day. {time_str}"""
+
+                        # Remark on, or imply, the repeated run nature of this stage
+                        repeated_run = re.match(r".*\s(\d+)\s*", stage_name)
+                        run_number = (
+                            Nth(int(repeated_run.group(1))) if repeated_run else "only"
+                        )
+                        _md = f"{_md} This is the {run_number} run of this stage."
+                        md.append(_md)
 
                         # Remark on number of split points
                         # TO DO
@@ -882,7 +927,18 @@ with ui.accordion(open=False):
                             md.append(f"{_md}\n\n")
 
                         # Remark on previous liaison stage
-                        # TO DO
+                        previous_tc = itinerary_df.iloc[ss_index - 1]
+                        previous_out = itinerary_df.iloc[ss_index - 2]
+                        previous_location = (
+                            f"previous *{previous_out['location']}* stage"
+                            if previous_out["type"] == "FlyingFinish"
+                            else f'*{previous_out["location"]} {previous_out["type"]}*'
+                        )
+                        art_ = p.a(p.number_to_words(previous_tc["distance"])).split()[
+                            0
+                        ]
+                        _md = f'Prior to the stage, {art_} {previous_tc["distance"]} km liaison section to the *{previous_tc["location"]} {previous_tc["type"]}* from the {previous_location}.'
+                        md.append(_md)
 
                         # Remark on stage status
                         # TO DO
@@ -896,9 +952,25 @@ with ui.accordion(open=False):
                         # Remark on person losing overall lead, if approppriate.
                         # ... ?
 
-                        # Remark on following liason stage
-                        # TO DO
+                        # Remark on following liaison stage
+                        future_ = itinerary_df.iloc[ss_index + 1 :]
+                        # Get indices of time controls
+                        next_tc_idx = future_[
+                            future_["code"].str.startswith("T")
+                        ].index[0]
+                        next_tc = itinerary_df.iloc[next_tc_idx]
+                        art_ = p.a(p.number_to_words(next_tc["distance"])).split()[0]
+                        arrival_time = datetime.fromisoformat(
+                            next_tc["firstCarDueDateTime"]
+                        )
+                        next_arrival_time = (
+                            arrival_time.strftime("from %I.%M%p")
+                            .lower()
+                            .replace(" 0", " ")
+                        )
+                        _md_final = f'Following the stage, {art_} {next_tc["distance"]} km liaison section to *{next_tc["location"]}* (stage running from {next_arrival_time}).'
 
+                        md.append(_md_final)
                         return ui.markdown("\n\n".join(md))
 
                 with ui.accordion_panel("Stage times"):
