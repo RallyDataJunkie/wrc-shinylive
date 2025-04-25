@@ -1887,12 +1887,20 @@ class WRCTimingResultsAPIClientV2:
         split_times_df["number"] = self.SPLIT_PREFIX + split_times_df["number"].astype(
             str
         )
-        split_times_wide = pivot(
-            split_times_df.dropna(subset=["number", "elapsedDurationMs"]),
-            index=["carNo", "driverName", "entryId"],
-            columns="number",
-            values="elapsedDurationMs",
-        ).reset_index()
+
+        # Road order given by startDateTime
+        # road_order = split_times_df.sort_values("entryId")["driverNo"]
+        split_times_wide = (
+            pivot(
+                split_times_df.dropna(subset=["number", "elapsedDurationMs"]),
+                index=["carNo", "driverName", "entryId", "startDateTime"],
+                columns="number",
+                values="elapsedDurationMs",
+            )
+            .reset_index()
+            .sort_values("startDateTime")
+            .drop(columns="startDateTime")
+        )
 
         # Optionally add in the final stage time
         if extended:
@@ -1915,7 +1923,10 @@ class WRCTimingResultsAPIClientV2:
 
         split_times_wide.drop(columns=["entryId"], inplace=True)
 
-        return split_times_wide
+        split_cols = self.getSplitCols(split_times_wide)
+        cols_ = [c for c in split_times_wide if c not in split_cols]
+        cols_ = cols_ + [c for c in split_cols if c in split_times_wide.columns]
+        return split_times_wide[cols_]
 
     # TO DO below but one this as getStageWide and generalise names inside function
     # and maybe introduce a convenience getStageOverallWide
@@ -1989,6 +2000,16 @@ class WRCTimingResultsAPIClientV2:
             for c in split_times_wide.columns
             if c.startswith(self.SPLIT_PREFIX) or c == self.SPLIT_FINAL
         ]
+        # Sort the split sections in increasing order
+        split_cols = sorted(
+            split_cols,
+            key=lambda x: (
+                float("inf")
+                if x == self.SPLIT_FINAL
+                else int(x[len(self.SPLIT_PREFIX) :])
+            ),
+        )
+
         return split_cols
 
     def getStageCols(self, stages_wide):
