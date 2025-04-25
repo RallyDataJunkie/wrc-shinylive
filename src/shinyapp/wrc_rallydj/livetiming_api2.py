@@ -1412,6 +1412,7 @@ class WRCTimingResultsAPIClientV2:
             self._getStages(updateDB=updateDB)
 
         on_event_ = f"""AND si.eventId={self.eventId}""" if on_event else ""
+        on_event_ = f"""AND si.eventId={eventId}""" if eventId else on_event_
         on_leg_ = (
             f"""AND it_l.itineraryLegId={itineraryLegId}""" if itineraryLegId else ""
         )
@@ -1421,6 +1422,7 @@ class WRCTimingResultsAPIClientV2:
             else ""
         )
         on_stage_ = f"""AND si.stageId={stageId}""" if stageId else ""
+        on_stage_name_ = f"""AND si.name LIKE "{stage_name}%" """ if stage_name else ""
 
         if stage_code and not isinstance(stage_code, list):
             stage_code = [stage_code]
@@ -1437,7 +1439,7 @@ class WRCTimingResultsAPIClientV2:
             )
             _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
-            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {on_event_} {on_leg_} {on_section_} {on_stage_} {completed_};"
+            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {on_event_} {on_leg_} {on_section_} {on_stage_} {on_stage_name_} {completed_};"
 
         stages_df = self.db_manager.read_sql(q)
 
