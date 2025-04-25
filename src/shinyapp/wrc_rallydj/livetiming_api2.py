@@ -26,6 +26,7 @@ from pandas import (
     to_datetime,
     notnull,
     to_numeric,
+    isna
 )
 
 from numpy import nan
@@ -223,11 +224,21 @@ class APIClient:
         championshipEntryResultsOverall_df["seasonId"] = seasonId
         championshipEntryResultsByRound_df["seasonId"] = seasonId
 
+        # HACK - we should not assume the eventId is ordered by round.
+        # Need a function to order rounds by date
+        # The eventId gives the last completed event/championship score following that event
+        championshipEntryResultsOverall_df["eventId"] = (
+            championshipEntryResultsByRound_df["eventId"].max()
+        )
+
         if updateDB:
             self.dbfy(
                 championshipEntryResultsOverall_df,
                 "championship_overall",
-                if_exists="replace",
+                # if_exists="replace",
+                pk=["championshipEntryId",
+                "championshipId",
+                "eventId"],
             )
             self.dbfy(
                 championshipEntryResultsByRound_df,
@@ -382,7 +393,7 @@ class APIClient:
         )
 
     def _getStartLists(self, eventId, startListId=None, updateDB=False):
-        if not startListId:
+        if isna(startListId) or not startListId:
             return DataFrame()
 
         stub = f"events/{eventId}/startLists/{startListId}.json"
@@ -462,6 +473,7 @@ class APIClient:
                 itinerarySections2_df, "itinerary_sections", pk="itinerarySectionId"
             )
             self.dbfy(itineraryControls_df, "itinerary_controls", pk="controlId")
+            itineraryLegs_df["startListId"] = itineraryLegs_df["startListId"].astype("Int64")
             for _, row in itineraryLegs_df.iterrows():
                 startListId = row["startListId"]
                 self._getStartLists(

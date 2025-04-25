@@ -68,7 +68,8 @@ CREATE TABLE "championship_overall" (
   "overallPosition" INTEGER,
   "overallPoints" INTEGER,
   "Round" INTEGER,
-  PRIMARY KEY ("championshipEntryId", "championshipId", "Round"),
+  "eventId" INTEGER,
+  PRIMARY KEY ("championshipEntryId", "championshipId", "eventId"),
   FOREIGN KEY ("championshipId") REFERENCES "championship_lookup" ("championshipId")
 );
 
