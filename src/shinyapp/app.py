@@ -1,7 +1,7 @@
 from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
-from wrc_rallydj.utils import enrich_stage_winners, format_timedelta
+from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, dateNow
 from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame, isna
@@ -1508,17 +1508,23 @@ def update_season_round_select():
         ui.update_select("season_round", choices={})
         return
 
+    # Get most current / previous event
+    current_event = season_rounds.sort_values("startDate")[
+        season_rounds["startDate"] <= dateNow(weekend=True)
+    ]["eventId"].iloc[-1]
+
     season_rounds = (
         season_rounds[season_rounds["seasonId"] == seasonId]
         .set_index("eventId")["name"]
         .to_dict()
     )
+
     # TO DO Reset downstream selectors
     ui.update_select("category", choices={})
     ui.update_select("event_day", choices={})
     ui.update_select("stage", choices={})
 
-    ui.update_select("season_round", choices=season_rounds)
+    ui.update_select("season_round", choices=season_rounds, selected=str(current_event))
 
 
 @reactive.effect
@@ -1675,7 +1681,14 @@ def update_stage_select():
     stages["label"] = stages.apply(lambda row: f"{row['code']} ({row['name']})", axis=1)
     stages = stages.set_index("stageId")["label"].to_dict()
 
-    ui.update_select("stage", choices=stages)
+    if wrc.isRallyLive():
+        live_stages = wrc.getLiveStages()
+        if not live_stages.empty:
+            live_stage = live_stages["stageId"].iloc[-1]
+            if live_stage in stages:
+                ui.update_select("stage", choices=stages, selected=str(live_stage))
+    else:
+        ui.update_select("stage", choices=stages)
 
 
 @reactive.effect

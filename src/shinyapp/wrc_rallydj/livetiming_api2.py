@@ -15,7 +15,7 @@ from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_pr
 import os
 import sqlite3
 from wrc_rallydj.db_table_schemas import SETUP_V2_Q
-from wrc_rallydj.utils import is_date_in_range
+from wrc_rallydj.utils import is_date_in_range, dateNow
 from pandas import (
     read_sql,
     DataFrame,
@@ -905,7 +905,7 @@ class WRCTimingResultsAPIClientV2:
             championship_ = ""
         # TO DO some logic for latest completed or running event.
 
-        # TO DO the Teams champiomnship is broken? What do we get team name on?
+        # TO DO the Teams championship is broken? What do we get team name on?
 
         if on_event or eventId:
             # TO DO what is best logic if both are set?
@@ -1503,6 +1503,17 @@ class WRCTimingResultsAPIClientV2:
             self._getEntries(updateDB=updateDB)
             self._getEventItineraries(updateDB=updateDB)
 
+    def setEventLatest(self, seasonId=None, updateDB=True):
+        seasonId = self.seasonId if not seasonId and self.seasonId else seasonId
+        # TO DO can we be more agresseive guessing the seasonId?
+        if not seasonId:
+            return
+
+        q = f"SELECT eventId, name FROM season_rounds WHERE startDate < {dateNow()} AND seasonId={seasonId} ORDER BY startDate DESC LIMIT 1;"
+        r = self.db_manager.read_sql(q)
+        # HACK TO DO this is a fudge
+        self._setEvent(r, updateDB)
+
     def setEventById(self, eventId=None, updateDB=True):
         if not eventId:
             return
@@ -1631,6 +1642,17 @@ class WRCTimingResultsAPIClientV2:
                 return status == "running"
         # ToRun, completed, cancelled; running??
         return False
+
+    def isRallyInDate(self):
+        """A quicker test than .isRallyLive(), just checks by date."""
+        today = dateNow()
+        season = self.getSeasonRounds()
+        running = season[
+            (season["eventId"] == self.eventId)
+            & (season["startDate"] <= today)
+            & (season["finishDate"] >= today)
+        ]
+        return not running.empty
 
     def isRallyLive(self):
         """Flag to show that rally is live, so there are"""

@@ -5,6 +5,11 @@ from datetime import timedelta, datetime, date
 from pandas import to_datetime, date_range, DataFrame, concat, merge
 from numpy import nan
 
+def dateNow(weekend=False):
+    today = date.today()
+    current_date = today + timedelta(days=(6 - today.weekday())) if weekend else today
+
+    return current_date.strftime("%Y-%m-%d")
 
 def is_date_in_range(date_dict):
     # Parse the start and end dates from the dictionary
