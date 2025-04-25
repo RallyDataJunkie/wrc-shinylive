@@ -2140,12 +2140,16 @@ class WRCTimingResultsAPIClientV2:
 
         return scaled_splits_wide
 
-    def rebase_splits_wide_with_ult(self, split_times_wide, rebase_driver):
+    def rebase_splits_wide_with_ult(self, split_times_wide, rebase_driver, use_split_durations=True):
         split_cols = self.getSplitCols(split_times_wide)
 
         # output_ = split_times_wide_numeric
         # Use the split durations rather than split elapsed times
-        output_ = self.getSplitDuration(split_times_wide)
+        output_ = (
+            self.getSplitDuration(split_times_wide)
+            if use_split_durations
+            else split_times_wide
+        )
 
         # output_ = wrc.subtract_from_rows(
         #    output_, split_cols, ignore_first_row=False
