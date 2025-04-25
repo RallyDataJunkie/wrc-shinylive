@@ -1370,6 +1370,25 @@ class WRCTimingResultsAPIClientV2:
             )
         return stages_df, stage_split_points_df, stage_controls_df
 
+    def getRepeatedStages(self, on_event=True, eventId=None):
+        def extract_stage_repetition(text):
+            match = re.search(r'\s(\d+)$', text)
+            if match:
+                return int(match.group(1))
+            else:
+                return 0
+        stages_df = self.getStageInfo(on_event=on_event, eventId=eventId)
+        stages_df["base"] = stages_df['name'].apply(lambda x: re.sub(r'\s\d+$', '', x))
+        # The "repeat" column identifies repeated stages based on trailing "stage name 1" etc
+        stages_df["run"] = stages_df["name"].apply(extract_stage_repetition)
+        repeated_stages = (
+            stages_df.groupby("base")["stageCode"].apply(list).to_dict()
+        )
+        stages_df["runs"] = stages_df["base"].map(repeated_stages)
+
+        # Get the base stage name
+        stages_df["_name"] = stages_df["name"].apply(lambda x: re.sub(r"\s\d+$", "", x))
+
     def getStageInfo(
         self,
         on_event=True,
