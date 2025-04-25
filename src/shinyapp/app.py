@@ -1705,7 +1705,7 @@ with ui.accordion(open=False):
 
 
 def get_data_feed():
-    if not wrc.isRallyInDate():
+    if not wrc.isRallyInDate() or not input.live_map_accordion():
         return {}
 
     # If we are running this in a central server, multiuser context, does this let us be nice?
@@ -1827,7 +1827,7 @@ def getOverallStageResultsData():
     stageId = None
     if input.display_latest_overall() and "status" in stagesInfo:
         # TO DO  - this is ambiguous; stage may be running /cancelled but the priority group may be complete?
-        completed_stages = stagesInfo[stagesInfo["status"].isin(["Completed", "Cancelled"])]
+        completed_stages = stagesInfo[stagesInfo["status"].isin(["Completed", "Cancelled", "Interrupted"])]
         if not completed_stages.empty:
             stageId = completed_stages.iloc[-1]["stageId"]
     else:
