@@ -1116,6 +1116,9 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel(title="Splits Analysis"):
 
+        ui.input_action_button("splits_refresh", "Refresh split times")
+        ui.markdown("*Manually refresh split times in live stage.*\n\n")
+
         with ui.accordion(open=False, id="splits_review_accordion"):
 
             with ui.accordion_panel("Split times summary"):
@@ -1124,11 +1127,18 @@ with ui.accordion(open=False):
 
                 @render.plot(alt="Line chart of elapsed split positions.")
                 @reactive.event(
-                    input.splits_review_accordion, input.category, input.stage
+                    input.splits_review_accordion,
+                    input.category,
+                    input.stage,
+                    input.splits_refresh,
                 )
                 def seaborn_linechart_split_positions():
-                    split_times_wide = get_split_times_wide().copy()
+                    split_times_wide = get_split_times_wide()
+                    if split_times_wide.empty:
+                        return
+                    split_times_wide = split_times_wide.copy()
                     split_cols = wrc.getSplitCols(split_times_wide)
+                    
                     ax = chart_seaborn_linechart_split_positions(
                         wrc, split_times_wide, split_cols
                     )
@@ -1136,7 +1146,10 @@ with ui.accordion(open=False):
 
                 @render.data_frame
                 @reactive.event(
-                    input.splits_review_accordion, input.category, input.stage
+                    input.splits_review_accordion,
+                    input.category,
+                    input.stage,
+                    input.splits_refresh,
                 )
                 def split_results_wide():
                     split_times_data = get_split_times_wide()
@@ -1158,7 +1171,9 @@ with ui.accordion(open=False):
                             "Split section report. View section reports as time in section (s), or, if split distance available, average pace in section (s/km), or average speed in section (km/h)."
 
                     @render.ui
-                    @reactive.event(input.stage, input.splits_section_view)
+                    @reactive.event(
+                        input.stage, input.splits_section_view, input.splits_refresh
+                    )
                     def split_report_view():
                         view = input.splits_section_view()
                         typ = {
@@ -1191,7 +1206,10 @@ with ui.accordion(open=False):
                     # @render.table
                     @render.data_frame
                     @reactive.event(
-                        input.splits_section_view, input.stage, input.category
+                        input.splits_section_view,
+                        input.stage,
+                        input.category,
+                        input.splits_refresh,
                     )
                     def split_report():
                         scaled_splits = get_scaled_splits()
@@ -1205,7 +1223,7 @@ with ui.accordion(open=False):
                         @render.plot(
                             alt="Box plot of split section speed/pace distributions."
                         )
-                        @reactive.event(input.stage, input.splits_section_view)
+                        @reactive.event(input.stage, input.splits_section_view, input.splits_refresh)
                         def plot_split_dists():
                             scaled_splits_wide = get_scaled_splits()
                             if scaled_splits_wide is None or scaled_splits_wide.empty:
@@ -1247,7 +1265,9 @@ with ui.accordion(open=False):
                         '"Rebase" times relative to a nominated driver. The "ULTIMATE" driver is derived from the quickest times within each split sector .'
 
                     @render.ui
-                    @reactive.event(input.stage, input.rebase_driver)
+                    @reactive.event(
+                        input.stage, input.rebase_driver, input.splits_refresh
+                    )
                     def rebase_driver_info():
                         stageId = input.stage()
                         rebase_driver = input.rebase_driver()
@@ -1270,7 +1290,6 @@ with ui.accordion(open=False):
                         )
                         return pr
 
-                    # XX
                     @render.ui
                     @reactive.event(
                         input.splits_review_accordion,
@@ -1278,6 +1297,7 @@ with ui.accordion(open=False):
                         input.stage,
                         input.rebase_driver,
                         input.rebase_reverse_palette,
+                        input.splits_refresh,
                     )
                     def split_times_heat():
                         split_times_wide = get_split_times_wide()
@@ -1292,14 +1312,18 @@ with ui.accordion(open=False):
                             else rebase_driver
                         )
                         split_times_wide, split_cols = wrc.rebase_splits_wide_with_ult(
-                            split_times_wide, rebase_driver
+                            split_times_wide, rebase_driver, use_split_durations=False
                         )
-                        html = df_color_gradient_styler(
-                            split_times_wide,
-                            cols=split_cols,
-                            within_cols_gradient=False,
-                            reverse_palette=rebase_reverse_palette,
-                        ).hide().to_html()
+                        html = (
+                            df_color_gradient_styler(
+                                split_times_wide,
+                                cols=split_cols,
+                                within_cols_gradient=False,
+                                reverse_palette=rebase_reverse_palette,
+                            )
+                            .hide()
+                            .to_html()
+                        )
                         return ui.HTML(html)
 
                     with ui.accordion(open=False):
@@ -1517,6 +1541,39 @@ def setStageData():
         return
     stageId = int(stageId)
     wrc.setStageById(stageId=stageId)
+
+
+@reactive.calc
+@reactive.event(input.stage, input.display_latest_overall, input.category)
+def getOverallStageResultsData():
+    setStageData()
+    stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
+        by="number", ascending=True
+    )
+    stageId = None
+    if input.display_latest_overall() and "status" in stagesInfo:
+        completed_stages = stagesInfo[stagesInfo["status"] == "Completed"]
+        if not completed_stages.empty:
+            stageId = completed_stages.iloc[-1]["stageId"]
+    else:
+        stageId = input.stage()
+
+    overallResults = DataFrame()
+    if stageId and not stagesInfo.empty:
+        stageId = int(stageId)
+        priority = input.category()
+        overallResults = wrc.getStageOverallResults(
+            stageId=stageId, priority=priority, raw=False
+        )
+        if not overallResults.empty:
+            if priority != "P0":
+                overallResults["position"] = range(1, len(overallResults) + 1)
+                overallResults["diffFirstMs"] = (
+                    overallResults["diffFirstMs"]
+                    - overallResults["diffFirstMs"].iloc[0]
+                )
+
+    return stageId, stagesInfo, overallResults
 
 
 ## Update UI widgets
@@ -1825,7 +1882,7 @@ def getStageWinners():
     # TO DO - this needs fixing to reflect category
     priority = input.category()
 
-    # TO DO priority not yet handled below
+    # TO DO priority not yet handled below??
     stagewinners = wrc.getStageWinners(priority=priority, raw=False)
     stagewinners = enrich_stage_winners(stagewinners)
 
@@ -1889,9 +1946,6 @@ def getChampionships():
     return championships
 
 
-# TO DO XXX
-
-
 @reactive.calc
 @reactive.event(input.stage, input.category, input.progression_report_type)
 def get_overall_typ_wide():
@@ -1952,7 +2006,8 @@ def get_overall_typ_wide2_rebased():
     rebase_driver = input.rally_progression_rebase_driver()
 
     if overall_times_wide.empty or not rebase_driver:
-        return
+        return DataFrame()
+
     stage_cols = wrc.getStageCols(overall_times_wide)
     rebase_driver = (
         int(rebase_driver)
@@ -1966,7 +2021,7 @@ def get_overall_typ_wide2_rebased():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category)
+@reactive.event(input.stage, input.category, input.splits_refresh)
 def get_split_times_wide():
     """Cache for split times wide data"""
     stageId = input.stage()
@@ -1979,7 +2034,9 @@ def get_split_times_wide():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category, input.splits_section_view)
+@reactive.event(
+    input.stage, input.category, input.splits_section_view, input.splits_refresh
+)
 def get_scaled_splits():
     """Cache for scaled splits data"""
     stageId = input.stage()
