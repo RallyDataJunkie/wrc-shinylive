@@ -551,288 +551,287 @@ with ui.accordion(open=False):
                     )
                     return ax
 
-        with ui.card(class_="mt-3"):
-            with ui.card_header():
-                with ui.tooltip(placement="right", id="rally_stages_overview_tt"):
-                    ui.span(
-                        "Rally stages overview ",
-                        question_circle_fill,
-                    )
-                    "Summary card for rally event."
+        with ui.accordion(open=False, id="stage_info_accordion"):
+            with ui.accordion_panel("Event details"):
 
-            with ui.accordion(open=False, id="stage_accordion"):
+                with ui.accordion(open=False, id="stage_accordion"):
 
-                with ui.accordion_panel("Stages info"):
+                    with ui.accordion_panel("Stages info"):
 
-                    @render.data_frame
-                    @reactive.event(input.stage, input.event_day, input.event_section)
-                    def stages_frame():
-                        setStageData()
-                        itineraryLegId = input.event_day()
-                        itinerarySectionId = input.event_section()
-                        if itineraryLegId:
-                            itineraryLegId = int(itineraryLegId)
-                            itinerarySectionId = int(itinerarySectionId)
-                        stages = wrc.getStageInfo(
-                            itineraryLegId=itineraryLegId,
-                            itinerarySectionId=itinerarySectionId,
-                            raw=False,
+                        @render.data_frame
+                        @reactive.event(
+                            input.stage, input.event_day, input.event_section
                         )
-                        if stages.empty:
-                            return
-                        retcols = [
-                            "code",
-                            "name",
-                            # "day",
-                            "distance",
-                            "stageType",
-                            "status",
-                            "day",
-                            "sectionName",
-                        ]
+                        def stages_frame():
+                            setStageData()
+                            itineraryLegId = input.event_day()
+                            itinerarySectionId = input.event_section()
+                            if itineraryLegId:
+                                itineraryLegId = int(itineraryLegId)
+                                itinerarySectionId = int(itinerarySectionId)
+                            stages = wrc.getStageInfo(
+                                itineraryLegId=itineraryLegId,
+                                itinerarySectionId=itinerarySectionId,
+                                raw=False,
+                            )
+                            if stages.empty:
+                                return
+                            retcols = [
+                                "code",
+                                "name",
+                                # "day",
+                                "distance",
+                                "stageType",
+                                "status",
+                                "day",
+                                "sectionName",
+                            ]
 
-                        return render.DataGrid(stages[retcols])
+                            return render.DataGrid(stages[retcols])
 
-                with ui.accordion_panel(title="Itinerary"):
+                    with ui.accordion_panel(title="Itinerary"):
 
-                    @render.data_frame
-                    def itinerary_frame():
-                        itinerary = getItinerary()
-                        if itinerary.empty:
-                            return
+                        @render.data_frame
+                        def itinerary_frame():
+                            itinerary = getItinerary()
+                            if itinerary.empty:
+                                return
 
-                        retcols = [
-                            "name",
-                            "code",
-                            "type",
-                            "location",
-                            "distance",
-                            "firstCarDueDateTime",
-                            "targetDuration",
-                            "timingPrecision",
-                            "controlPenalties",
-                            "status",
-                        ]
-                        return render.DataGrid(itinerary[retcols])
+                            retcols = [
+                                "name",
+                                "code",
+                                "type",
+                                "location",
+                                "distance",
+                                "firstCarDueDateTime",
+                                "targetDuration",
+                                "timingPrecision",
+                                "controlPenalties",
+                                "status",
+                            ]
+                            return render.DataGrid(itinerary[retcols])
 
-                with ui.accordion_panel("Startlist"):
+                    with ui.accordion_panel("Startlist"):
 
-                    # Create startlist type selector
-                    # Dynamically populated using available startlists
-                    ui.input_select("startlist", "Startlist:", {})
+                        # Create startlist type selector
+                        # Dynamically populated using available startlists
+                        ui.input_select("startlist", "Startlist:", {})
 
-                    @render.data_frame
-                    @reactive.event(
-                        input.startlist, input.season_round, input.event_day
-                    )
-                    def startlist_frame():
-                        startlist = wrc.getStartList(raw=False)
-                        if startlist.empty:
-                            return
-                        retcols = [
-                            "order",
-                            "carNo",
-                            "driverName",
-                            "startDateTimeLocal",
-                            "codriverName",
-                            "manufacturerName",
-                            "entrantName",
-                            "vehicleModel",
-                            "eligibility",
-                            "priority",
-                            # "groupClass",
-                        ]
-                        startlist = startlist[startlist["name"] == input.startlist()]
-                        return render.DataGrid(startlist[retcols])
-
-                with ui.accordion_panel("Shakedown"):
-                    # TO DO in ERC the Qualifying stage (QS) is shakedown run number 2
-                    @render.data_frame
-                    @reactive.event(
-                        input.stage_review_accordion, input.category, input.stage
-                    )
-                    def shakedown_short():
-                        eventId = input.season_round()
-                        priority = input.category()
-                        if not eventId:
-                            return
-                        eventId = int(eventId) if eventId else eventId
-
-                        shakedown_df = wrc.getEventShakeDownTimes(
-                            eventId=eventId, priority=priority, raw=False
+                        @render.data_frame
+                        @reactive.event(
+                            input.startlist, input.season_round, input.event_day
                         )
-                        if shakedown_df.empty:
-                            return
-                        shakedown_df["runDurationMs"] = shakedown_df[
-                            "runDurationMs"
-                        ].apply(format_timedelta)
-                        shakedown_df_wide = shakedown_df.pivot(
-                            index=[
+                        def startlist_frame():
+                            startlist = wrc.getStartList(raw=False)
+                            if startlist.empty:
+                                return
+                            retcols = [
+                                "order",
+                                "carNo",
+                                "driverName",
+                                "startDateTimeLocal",
+                                "codriverName",
+                                "manufacturerName",
+                                "entrantName",
+                                "vehicleModel",
+                                "eligibility",
+                                "priority",
+                                # "groupClass",
+                            ]
+                            startlist = startlist[
+                                startlist["name"] == input.startlist()
+                            ]
+                            return render.DataGrid(startlist[retcols])
+
+                    with ui.accordion_panel("Shakedown"):
+                        # TO DO in ERC the Qualifying stage (QS) is shakedown run number 2
+                        @render.data_frame
+                        @reactive.event(
+                            input.stage_review_accordion, input.category, input.stage
+                        )
+                        def shakedown_short():
+                            eventId = input.season_round()
+                            priority = input.category()
+                            if not eventId:
+                                return
+                            eventId = int(eventId) if eventId else eventId
+
+                            shakedown_df = wrc.getEventShakeDownTimes(
+                                eventId=eventId, priority=priority, raw=False
+                            )
+                            if shakedown_df.empty:
+                                return
+                            shakedown_df["runDurationMs"] = shakedown_df[
+                                "runDurationMs"
+                            ].apply(format_timedelta)
+                            shakedown_df_wide = shakedown_df.pivot(
+                                index=[
+                                    "driverCode",
+                                    "driverName",
+                                    "codriverName",
+                                    "manufacturerName",
+                                    "entrantName",
+                                    "vehicleModel",
+                                    "carNo",
+                                ],
+                                columns="runNumber",
+                                values="runDurationMs",
+                            )
+
+                            # Rename the columns to run1, run2, etc.
+                            shakedown_df_wide.columns = [
+                                f"run{col}" for col in shakedown_df_wide.columns
+                            ]
+                            shakedown_df_wide.reset_index(inplace=True)
+                            return render.DataGrid(shakedown_df_wide)
+
+                        @render.data_frame
+                        @reactive.event(
+                            input.stage_review_accordion, input.category, input.stage
+                        )
+                        def shakedown_long():
+                            eventId = input.season_round()
+                            priority = input.category()
+                            if not eventId:
+                                return
+                            eventId = int(eventId) if eventId else eventId
+
+                            shakedown_df = wrc.getEventShakeDownTimes(
+                                eventId=eventId, priority=priority, raw=False
+                            )
+                            if shakedown_df.empty:
+                                return
+                            shakedown_df = shakedown_df.sort_values("runDurationMs")
+                            shakedown_df["runTime"] = shakedown_df[
+                                "runDurationMs"
+                            ].apply(format_timedelta)
+                            cols = [
+                                "carNo",
                                 "driverCode",
+                                "shakedownNumber",
+                                "runNumber",
+                                "runTime",
                                 "driverName",
                                 "codriverName",
                                 "manufacturerName",
                                 "entrantName",
                                 "vehicleModel",
+                            ]
+                            return render.DataGrid(shakedown_df[cols])
+
+                    with ui.accordion_panel("Stage winners"):
+
+                        @render.data_frame
+                        def stage_winners_short():
+                            stagewinners = getStageWinners()
+                            if stagewinners.empty:
+                                return
+                            # TO DO - need enrichers
+                            retcols = [
+                                # "stageType",
+                                "code",
+                                "stageName",
+                                "driverName",
+                                "codriverName",
+                                "manufacturerName",
+                                "entrantName",
+                                "vehicleModel",
+                                "elapsedDuration",
+                                "day",
+                                "sectionName",
                                 "carNo",
-                            ],
-                            columns="runNumber",
-                            values="runDurationMs",
+                                # "time",
+                                # "eligibility",
+                                "wins_overall",
+                                "daily_wins",
+                                "timeInS",
+                                "distance",
+                                "pace (s/km)",
+                                "speed (km/h)",
+                            ]
+                            # TO DO have option to limit view of stages up to and including selected stage
+                            return render.DataGrid(stagewinners[retcols])
+
+                        @render.plot(alt="Bar chart of stage wins.")
+                        def plot_driver_stagewins():
+                            stage_winners = getStageWinners()
+                            if stage_winners.empty:
+                                return
+                            # TO DO - make use of commented out elements
+                            # which limit counts  up to and including current stage
+                            # stage_winners["_stagenum"] = stage_winners["stageNo"].str.replace("SS", "")
+                            # stage_winners["_stagenum"] = stage_winners["_stagenum"].astype(int)
+
+                            # idx = stage_winners[stage_winners["stageId"] == input.stage()].index
+                            # if len(idx) == 0:
+                            #    return]
+
+                            # Drop empty rows
+                            # stage_winners = stage_winners[stage_winners["carNo"].str.strip() != ""]
+                            ax = chart_plot_driver_stagewins(stage_winners)
+                            return ax
+
+                    with ui.accordion_panel("Retirements"):
+                        # Try to be sensible about how often we call
+                        # getRetirements and getPenalties
+                        # If the event has completed
+                        # we need only do this one
+                        @render.data_frame
+                        @reactive.event(
+                            input.season_round, input.stage, input.stage_accordion
                         )
+                        def retirements_frame():
+                            if "Retirements" not in input.stage_accordion():
+                                return
+                            retirements = wrc.getRetirements(raw=False)
+                            if retirements.empty:
+                                return
+                            retcols = [
+                                "carNo",
+                                "driverName",
+                                "code",
+                                "type",
+                                "reason",
+                                "retirementDateTime",
+                                "status",
+                                "codriverName",
+                                "vehicleModel",
+                                "location",
+                                "manufacturerName",
+                                "entrantName",
+                            ]
+                            return render.DataGrid(retirements[retcols])
 
-                        # Rename the columns to run1, run2, etc.
-                        shakedown_df_wide.columns = [
-                            f"run{col}" for col in shakedown_df_wide.columns
-                        ]
-                        shakedown_df_wide.reset_index(inplace=True)
-                        return render.DataGrid(shakedown_df_wide)
+                    with ui.accordion_panel("Penalties"):
 
-                    @render.data_frame
-                    @reactive.event(
-                        input.stage_review_accordion, input.category, input.stage
-                    )
-                    def shakedown_long():
-                        eventId = input.season_round()
-                        priority = input.category()
-                        if not eventId:
-                            return
-                        eventId = int(eventId) if eventId else eventId
-
-                        shakedown_df = wrc.getEventShakeDownTimes(
-                            eventId=eventId, priority=priority, raw=False
+                        @render.data_frame
+                        @reactive.event(
+                            input.season_round, input.stage, input.stage_accordion
                         )
-                        if shakedown_df.empty:
-                            return
-                        shakedown_df = shakedown_df.sort_values("runDurationMs")
-                        shakedown_df["runTime"] = shakedown_df["runDurationMs"].apply(
-                            format_timedelta
-                        )
-                        cols = [
-                            "carNo",
-                            "driverCode",
-                            "shakedownNumber",
-                            "runNumber",
-                            "runTime",
-                            "driverName",
-                            "codriverName",
-                            "manufacturerName",
-                            "entrantName",
-                            "vehicleModel",
-                        ]
-                        return render.DataGrid(shakedown_df[cols])
-
-                with ui.accordion_panel("Stage winners"):
-
-                    @render.data_frame
-                    def stage_winners_short():
-                        stagewinners = getStageWinners()
-                        if stagewinners.empty:
-                            return
-                        # TO DO - need enrichers
-                        retcols = [
-                            # "stageType",
-                            "code",
-                            "stageName",
-                            "driverName",
-                            "codriverName",
-                            "manufacturerName",
-                            "entrantName",
-                            "vehicleModel",
-                            "elapsedDuration",
-                            "day",
-                            "sectionName",
-                            "carNo",
-                            # "time",
-                            # "eligibility",
-                            "wins_overall",
-                            "daily_wins",
-                            "timeInS",
-                            "distance",
-                            "pace (s/km)",
-                            "speed (km/h)",
-                        ]
-                        # TO DO have option to limit view of stages up to and including selected stage
-                        return render.DataGrid(stagewinners[retcols])
-
-                    @render.plot(alt="Bar chart of stage wins.")
-                    def plot_driver_stagewins():
-                        stage_winners = getStageWinners()
-                        if stage_winners.empty:
-                            return
-                        # TO DO - make use of commented out elements
-                        # which limit counts  up to and including current stage
-                        # stage_winners["_stagenum"] = stage_winners["stageNo"].str.replace("SS", "")
-                        # stage_winners["_stagenum"] = stage_winners["_stagenum"].astype(int)
-
-                        # idx = stage_winners[stage_winners["stageId"] == input.stage()].index
-                        # if len(idx) == 0:
-                        #    return]
-
-                        # Drop empty rows
-                        # stage_winners = stage_winners[stage_winners["carNo"].str.strip() != ""]
-                        ax = chart_plot_driver_stagewins(stage_winners)
-                        return ax
-
-                with ui.accordion_panel("Retirements"):
-                    # Try to be sensible about how often we call
-                    # getRetirements and getPenalties
-                    # If the event has completed
-                    # we need only do this one
-                    @render.data_frame
-                    @reactive.event(
-                        input.season_round, input.stage, input.stage_accordion
-                    )
-                    def retirements_frame():
-                        if "Retirements" not in input.stage_accordion():
-                            return
-                        retirements = wrc.getRetirements(raw=False)
-                        if retirements.empty:
-                            return
-                        retcols = [
-                            "carNo",
-                            "driverName",
-                            "code",
-                            "type",
-                            "reason",
-                            "retirementDateTime",
-                            "status",
-                            "codriverName",
-                            "vehicleModel",
-                            "location",
-                            "manufacturerName",
-                            "entrantName",
-                        ]
-                        return render.DataGrid(retirements[retcols])
-
-                with ui.accordion_panel("Penalties"):
-
-                    @render.data_frame
-                    @reactive.event(
-                        input.season_round, input.stage, input.stage_accordion
-                    )
-                    def penalties_frame():
-                        if "Penalties" not in input.stage_accordion():
-                            return
-                        penalties = wrc.getPenalties(raw=False)
-                        if penalties.empty:
-                            return
-                        retcols = [
-                            "carNo",
-                            "driverName",
-                            "code",
-                            "type",
-                            "penaltyDuration",
-                            "reason",
-                            "codriverName",
-                            "vehicleModel",
-                            "location",
-                            "manufacturerName",
-                            "entrantName",
-                        ]
-                        return render.DataGrid(penalties[retcols])
+                        def penalties_frame():
+                            if "Penalties" not in input.stage_accordion():
+                                return
+                            penalties = wrc.getPenalties(raw=False)
+                            if penalties.empty:
+                                return
+                            retcols = [
+                                "carNo",
+                                "driverName",
+                                "code",
+                                "type",
+                                "penaltyDuration",
+                                "reason",
+                                "codriverName",
+                                "vehicleModel",
+                                "location",
+                                "manufacturerName",
+                                "entrantName",
+                            ]
+                            return render.DataGrid(penalties[retcols])
 
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
+
             @render.ui
             def stageresult_hero():
                 setStageData()
