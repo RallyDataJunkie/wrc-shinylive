@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, date
 from sqlite_utils import Database
 from jupyterlite_simple_cors_proxy.cacheproxy import CorsProxy, create_cached_proxy
 import os
+import re
 import sqlite3
 from wrc_rallydj.db_table_schemas import SETUP_V2_Q
 from wrc_rallydj.utils import is_date_in_range, dateNow
@@ -1154,6 +1155,10 @@ class WRCTimingResultsAPIClientV2:
             q = f"SELECT * FROM itinerary_controls WHERE eventId={int(eventId)};"
 
         itineraryControls_df = self.db_manager.read_sql(q)
+        itineraryControls_df['startTime'] = to_datetime(itineraryControls_df['firstCarDueDateTime'])
+
+        # Extract day of week name
+        itineraryControls_df['day'] = itineraryControls_df['startTime'].dt.strftime('%A')
 
         return itineraryControls_df
 
@@ -1403,10 +1408,12 @@ class WRCTimingResultsAPIClientV2:
     def getStageInfo(
         self,
         on_event=True,
+        eventId=None,
         itineraryLegId=None,
         itinerarySectionId=None,
         stageId=None,
         stage_code=None,
+        stage_name=None,
         completed=False,
         raw=True,
         updateDB=False,
@@ -1416,6 +1423,7 @@ class WRCTimingResultsAPIClientV2:
         if legacyCheck:
             pass
         elif updateDB or self.liveCatchup:
+            # What is the sense of noLiveCheck?
             if not noLiveCheck:
                 updateDB = updateDB or self.isStageLive(
                     stageId=stageId, stage_code=stage_code
@@ -2008,6 +2016,9 @@ class WRCTimingResultsAPIClientV2:
                 completed=completed,
                 updateDB=updateDB,
             )
+        if overall_times.empty:
+            return overall_times
+
         stage_order = overall_times["stageCode"].unique()
         # Optionally return just up to and including specified stageId
         # TO DO
