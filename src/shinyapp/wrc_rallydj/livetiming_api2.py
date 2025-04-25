@@ -1641,6 +1641,12 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageTimes(*args, **kwargs)
 
+    def getLiveStages(self, on_event=True):
+        """Get a list of running stages."""
+        stage_info = self.getStageInfo(updateDB=False, noLiveCheck=True, on_event=on_event)
+        stage_info = stage_info[stage_info['status'].str.lower().isin({'running', 'interrupted'})]
+        return stage_info
+
     def isStageLive(self, stageId=None, stage_code=None):
         """Flag that shows a stage is live, so we need to keep updating stage related data."""
         stageId = self.stageId if not stageId and not stage_code else stageId
