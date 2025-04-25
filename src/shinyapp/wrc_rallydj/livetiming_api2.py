@@ -1448,7 +1448,8 @@ class WRCTimingResultsAPIClientV2:
         else:
             stage_code = []
 
-        completed_ = """AND si.status="Completed" """ if completed else ""
+        # completed_ = """AND si.status="Completed" """ if completed else ""
+        completed_ = """AND si.status IN ("Completed", "Cancelled", "Interrupted") """ if completed else ""
 
         if raw:
             q = f"SELECT * FROM stage_info AS si WHERE 1=1 {on_event_} {on_stage_} {completed_};"
@@ -2329,7 +2330,8 @@ class WRCTimingResultsAPIClientV2:
                 on_stage_ = f"AND o.stageId={stageId}" if stageId else ""
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
-            completed_ = """AND si.status="Completed" """ if completed else ""
+            #completed_ = """AND si.status="Completed" """ if completed else ""
+            completed_ = """AND si.status IN ("Completed", "Cancelled", "Interrupted") """ if completed else ""
 
             if raw:
                 sql = f"""SELECT * FROM stage_overall AS o {_entry_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_};"""
