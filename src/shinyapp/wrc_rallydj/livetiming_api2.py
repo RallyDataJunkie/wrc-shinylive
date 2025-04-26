@@ -2077,8 +2077,10 @@ class WRCTimingResultsAPIClientV2:
         self, split_times_wide, split_cols=None, ret_id=True, id_col=None
     ):
         """The time it takes a car to traverse a split section (split_times_wide)."""
-        id_col = "carNo" if not id_col else id_col
+
+        id_col = ["carNo", "driverName"] if not id_col else id_col
         id_col = [id_col] if isinstance(id_col, str) else id_col
+        id_col = [c for c in id_col if c in split_times_wide.columns]
 
         # Ensure split_cols are strings
         split_cols = (
@@ -2107,7 +2109,8 @@ class WRCTimingResultsAPIClientV2:
 
         return diff_df
 
-    def getScaledSplits(self, stageId, priority, view):
+    def getScaledSplits(self, stageId, priority, view, id_col=None):
+        id_col = ["carNo", "driverName"] if not id_col else id_col
 
         split_times_wide = self.getSplitTimesWide(
             stageId=stageId, priority=priority, extended=True, timeInS=True
@@ -2138,7 +2141,7 @@ class WRCTimingResultsAPIClientV2:
             return split_times_wide
 
         split_durations = self.getSplitDuration(
-            split_times_wide, id_col=["carNo", "driverName"]
+            split_times_wide, id_col=id_col,
         )
 
         split_dists_ = self.getStageSplitPoints(stageId=stageId, extended=True)
@@ -2330,7 +2333,7 @@ class WRCTimingResultsAPIClientV2:
                 on_stage_ = f"AND o.stageId={stageId}" if stageId else ""
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
-            #completed_ = """AND si.status="Completed" """ if completed else ""
+            # completed_ = """AND si.status="Completed" """ if completed else ""
             completed_ = """AND si.status IN ("Completed", "Cancelled", "Interrupted") """ if completed else ""
 
             if raw:
