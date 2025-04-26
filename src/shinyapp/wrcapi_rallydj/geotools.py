@@ -100,7 +100,14 @@ class RallyGeoTools:
         return gdf
 
     @staticmethod
-    def simple_stage_map(stages_gdf, stages=None, poi_gdf=None, zoom=9, buffer_percentage=0.05):
+    def simple_stage_map(
+        stages_gdf,
+        labelcoords=None,
+        stages=None,
+        poi_gdf=None,
+        zoom=9,
+        buffer_percentage=0.05,
+    ):
         # TO DO - we need to handle/ignore duplicate stage routes
         if stages is not None:
             stages = {stages} if isinstance(stages, str) else set(stages)
@@ -134,20 +141,38 @@ class RallyGeoTools:
         )
 
         m.add(geo_data)
+
+        if labelcoords:
+            for label, coords in labelcoords:
+                icon_text = (
+                    f'<div style="background-color:rgba(50, 50, 50, 0.7); display:inline-block; padding:4px 8px; color:white; font-weight:bold; border-radius:3px;">{label}</div>'
+                )
+                icon = DivIcon(
+                    html=icon_text,
+                    icon_anchor=[0, 0],
+                )
+                marker = Marker(location=(coords[1], coords[0]), icon=icon)
+                m.add_layer(marker)
+
         if poi_gdf is not None:
             # desription (sic)
-            poi_gdf = poi_gdf[poi_gdf["desription"].isin(stages)]
+            if stages:
+                poi_gdf = poi_gdf[poi_gdf["desription"].isin(stages)]
             for idx, row in poi_gdf.dropna(subset="label").iterrows():
-                icon_text = row["name"].split(" ")[-1]
+                icon_text = (
+                    f'<div style="background-color:lightgrey; display:inline-block; padding:2px 5px; color:white; font-weight:bold; border-radius:3px; border:none; box-shadow:none;">{row["label"]}</div>'
+                )
                 icon = DivIcon(
-                    html=icon_text, bg_pos=[0, 0], icon_size=[8 * len(icon_text), 15]
+                    html=icon_text,
+                    icon_size=[len(icon_text), 15],
+                    icon_anchor=[0, 0],
                 )
                 marker = Marker(location=(row["latitude"], row["longitude"]), icon=icon)
-                message = HTML()
-                message.value = str(row["label"])
-                #marker.popup = Popup(
+                # message = HTML()
+                # message.value = str(row["label"])
+                # marker.popup = Popup(
                 #    location=(row["latitude"], row["longitude"]), child=message
-                #)
+                # )
 
                 m.add_layer(marker)
         return m

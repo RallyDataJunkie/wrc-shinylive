@@ -357,7 +357,10 @@ with ui.accordion(open=False):
                 @reactive.event(rally_geodata)
                 def allstages_map():
                     geostages = rally_geodata()
-                    m = wrcapi.GeoTools.simple_stage_map(geostages)
+                    # eventgeodata = getWRCAPI2event()
+                    # poi_df = wrcapi.get_poilist_data(eventgeodata["poilistid"])
+                    labelcoords = list(zip(geostages['name'], geostages['start']))
+                    m = wrcapi.GeoTools.simple_stage_map(geostages, labelcoords=labelcoords)
                     return m
 
         # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
