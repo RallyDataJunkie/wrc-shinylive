@@ -152,6 +152,12 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
 
     split_times_long["distance"] = split_times_long["roundN"].map(split_dists)
 
+    fig, ax = plt.subplots()
+    # Highlight the region where y > 0 (drawn FIRST)
+    ax.axhspan(
+        split_times_long["time"].min(), 0, facecolor="lightgrey", alpha=0.5, zorder=0
+    )
+
     ax = lineplot(
         data=split_times_long.sort_values(
             [
@@ -161,6 +167,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
         x="distance",
         y="time",
         hue="carNo",
+        ax=ax
     )
 
     if rebase_driver and rebase_driver != "ult":
