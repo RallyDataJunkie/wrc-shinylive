@@ -1080,8 +1080,9 @@ with ui.accordion(open=False):
                         # XX
                         splits_ = wrc.getStageSplitPoints(stageId=int(stageId))
                         if not splits_.empty:
+                            splitsLen_ = len(splits_)
                             # For example: There are three split points, at Pkm, Qkm and Rkm.
-                            _md = f"""{_md}. *En route*, there are {p.number_to_words(len(splits_))} split points (at {andNums(splits_["distance"].to_list())} km respectively)."""
+                            _md = f"""{_md}. *En route*, there {p.plural("is", splitsLen_)} {p.number_to_words(splitsLen_)} split {p.plural("point", splitsLen_)} (at {andNums(splits_["distance"].to_list())} km)."""
 
                         md.append(f"{_md}\n\n")
 
