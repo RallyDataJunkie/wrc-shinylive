@@ -7,11 +7,11 @@ from wrcapi_rallydj.data_api import WRCDataAPIClient
 
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, isna, to_numeric
+from pandas import DataFrame, isna, to_numeric, to_datetime
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 import re
-from rules_processor import Nth, p
+from rules_processor import Nth, nth, p
 
 from ipyleaflet import Map, Marker, DivIcon
 import matplotlib.pyplot as plt
@@ -304,13 +304,47 @@ with ui.accordion(open=False):
             )
             return so
 
-        # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
-        # but we may have all the resultd in for the priority group
-        ui.input_checkbox(
-            "display_latest_overall",
-            "Display result at last completed stage",
-            True,
-        )
+        @render.ui
+        def event_remarks():
+            md = []
+            season = wrc.getSeasonRounds()
+            eventId = input.season_round()
+            if season.empty or not eventId:
+                return ui.markdown("\n\nNo event info...")
+            season["surfaceCount"] = season.groupby("surfaces").cumcount() + 1
+            event = season[season["eventId"]==int(eventId)]
+            if event.empty:
+                return ui.markdown("\n\nNo event info...")
+
+            event = event.iloc[0]
+
+            last_event_ = f""", and the last event of the year""" if event["order"]== season["order"].max() else ""
+            _and = "and " if not last_event_ else ""
+            surface_ = f""" {_and}{Nth(event["surfaceCount"])} {event["surfaces"].lower()} rally"""
+            md_ = f"""*{event["name"]}* ({event["country.name"]}, {event["country.iso3"]}), the {Nth(event["order"])} event of the season, {surface_}{last_event_}."""
+            md.append(md_)
+            start_date = to_datetime(event["finishDate"])
+            finish_date = to_datetime(event["startDate"])
+            date_now = to_datetime(dateNow())
+            if start_date > date_now:
+                run_state_ = "runs from"
+            elif date_now <= finish_date:
+                run_state_ = "running from"
+            else:
+                run_state_ = "ran from"
+            start_month = to_datetime(start_date).strftime("%B")
+            finish_month = to_datetime(finish_date).strftime("%B")
+            same_month = start_month==finish_month
+            if same_month:
+                monthdates_ = f"""{nth(start_date.day)} to {nth(finish_date.day)} {start_month}, {start_date.year}"""
+            else:
+                monthdates_ = f"""{nth(start_date.day)} {start_month} to {th(finish_date.day)} {finish_month}, {finish_month.year}"""
+            md_ = f"""Based in  {event["location"]} {event["timeZoneName"]}, the event {run_state_} {monthdates_}."""
+            md.append(md_)
+
+            # TO DO - add itinerary remarks if available
+
+            return ui.markdown("\n\n".join(md))
 
         # TO DO - overall report
         # TO DO - day report
@@ -325,6 +359,24 @@ with ui.accordion(open=False):
                     geostages = rally_geodata()
                     m = wrcapi.GeoTools.simple_stage_map(geostages)
                     return m
+
+        # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
+        # but we may have all the resultd in for the priority group
+        ui.input_checkbox(
+            "display_latest_overall",
+            "Display result at last completed stage",
+            True,
+        )
+
+        with ui.accordion(open=False):
+            with ui.accordion_panel("Stage times"):
+
+                @render.ui
+                def event_remarks():
+                    md = []
+                    md.append(" TO DO ")
+                    # also include status
+                    return ui.markdown("\n\n".join(md))
 
         @render.ui
         @reactive.event(input.stage, input.display_latest_overall, input.category)
@@ -901,6 +953,8 @@ with ui.accordion(open=False):
     with ui.accordion_panel("Stage Review"):
         with ui.card(class_="mt-3"):
 
+            # TO DO - do an stage summary hero, colour black
+
             @render.ui
             def stageresult_hero():
                 setStageData()
@@ -1042,15 +1096,6 @@ with ui.accordion(open=False):
                         # Remark on stage status
                         # TO DO
 
-                        # Remarks on stage result / items of interest
-                        # TO DO
-                        # Remark on stage winner and their overall position
-                        # Remark on stage winner's stage win stats.
-                        # Remark on rally leader at start of stage position if not stage winner.
-                        # Remark on rally leader at end of stage position if not stage winner.
-                        # Remark on person losing overall lead, if approppriate.
-                        # ... ?
-
                         # Remark on following liaison stage
                         future_ = itinerary_df.iloc[ss_index + 1 :]
                         # Get indices of time controls
@@ -1063,7 +1108,7 @@ with ui.accordion(open=False):
                             next_tc["firstCarDueDateTime"]
                         )
                         next_arrival_time = (
-                            arrival_time.strftime("from %I.%M%p")
+                            arrival_time.strftime("%I.%M%p")
                             .lower()
                             .replace(" 0", " ")
                         )
@@ -1072,6 +1117,12 @@ with ui.accordion(open=False):
                         md.append(_md_final)
                         return ui.markdown("\n\n".join(md))
 
+                # TO DO
+                # Add a stage briefing accordion panel:
+                # Overall lead coming into the stage (use championship if SS1; for first round, announce new season.)
+                # Some comment on the road order.
+                # If this is the second run of a stage, add commentary about the first run
+
                 with ui.accordion_panel("Stage times"):
                     # Create stage driver rebase selector
                     ui.input_select(
@@ -1079,6 +1130,15 @@ with ui.accordion(open=False):
                         "Driver rebase:",
                         {},
                     )
+
+                    # Remarks on stage result / items of interest
+                    # TO DO
+                    # Remark on stage winner and their overall position
+                    # Remark on stage winner's stage win stats.
+                    # Remark on rally leader at start of stage position if not stage winner.
+                    # Remark on rally leader at end of stage position if not stage winner.
+                    # Remark on person losing overall lead, if approppriate.
+                    # If this is N>1st run of a stage, make comparisons with previous run(s)
 
                     @render.plot(alt="Barplot of stage times.")
                     @reactive.event(
@@ -1136,6 +1196,12 @@ with ui.accordion(open=False):
                         return render.DataGrid(stage_times_df[cols])
 
                 with ui.accordion_panel("Overall rally positions"):
+
+                    # TO DO
+                    # Remarks on the overall rally positions
+                    # Changes in overall
+                    # Progress of previous overall / top three
+                    # Maybe a mention of manufacturer or team progress?
 
                     @render.data_frame
                     @reactive.event(
