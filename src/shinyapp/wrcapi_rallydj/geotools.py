@@ -102,9 +102,9 @@ class RallyGeoTools:
     @staticmethod
     def simple_stage_map(
         stages_gdf,
-        labelcoords=None,
         stages=None,
         poi_gdf=None,
+        labelcoords=None,
         zoom=9,
         buffer_percentage=0.05,
     ):

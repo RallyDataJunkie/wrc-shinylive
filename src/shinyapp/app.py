@@ -1009,7 +1009,7 @@ with ui.accordion(open=False):
                         ].iloc[0]
                         # print(geostages["stages"], stage_info["code"])
                         m = wrcapi.GeoTools.simple_stage_map(
-                            geostages, stage_info["code"]
+                            geostages, stages=stage_info["code"]
                         )
                         return m
 
