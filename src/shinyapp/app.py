@@ -950,7 +950,7 @@ with ui.accordion(open=False):
                         stage_info = stages_info[
                             stages_info["stageId"] == int(stageId)
                         ].iloc[0]
-                        #print(geostages["stages"], stage_info["code"])
+                        # print(geostages["stages"], stage_info["code"])
                         m = wrcapi.GeoTools.simple_stage_map(
                             geostages, stage_info["code"]
                         )
@@ -1258,7 +1258,7 @@ with ui.accordion(open=False):
                     return ax2
 
         ui.markdown("\n\n")
-                    
+
         ui.input_action_button("splits_refresh", "Refresh split times")
         ui.markdown("*Manually refresh split times in live stage.*\n\n")
 
@@ -1539,8 +1539,12 @@ with ui.accordion(open=False):
                                             split_times_wide, rebase_driver
                                         )
                                     )
-
+                                    # TO DO - find a more flexible /informative way of setting
+                                    # the index / driver identifier
                                     output_.set_index("carNo", inplace=True)
+                                    split_cols = wrc.getSplitCols(output_)
+                                    dropcols = [c for c in output_.columns if c not in split_cols]
+                                    output_.drop(columns=dropcols, inplace=True)
                                     output_.columns = [
                                         f"Split {i}"
                                         for i in range(1, output_.shape[1] + 1)
