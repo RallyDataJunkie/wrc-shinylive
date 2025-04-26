@@ -2,7 +2,7 @@ from parse import parse
 from datetime import timedelta, datetime, date
 
 # import pandas as pd
-from pandas import to_datetime, date_range, DataFrame, concat, merge
+from pandas import to_datetime, date_range, DataFrame, concat, merge, isna
 from numpy import nan
 
 def dateNow(weekend=False):
@@ -43,7 +43,9 @@ def format_timedelta(t, units="ms", addplus=False):
     """
     # Create timedelta
     t = round(t/1000, 1) if units.lower() in ["ms", "milliseconds"] else t
-
+    if isna(t):
+        return "No time?"
+    
     td = timedelta(seconds=t)
 
     # Extract total seconds with high precision

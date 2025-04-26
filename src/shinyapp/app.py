@@ -11,7 +11,7 @@ from pandas import DataFrame, isna, to_numeric, to_datetime
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 import re
-from rules_processor import Nth, nth, p
+from rules_processor import Nth, nth, p, andNums
 
 from ipyleaflet import Map, Marker, DivIcon
 import matplotlib.pyplot as plt
@@ -372,7 +372,7 @@ with ui.accordion(open=False):
             with ui.accordion_panel("Stage times"):
 
                 @render.ui
-                def event_remarks():
+                def stage_remarks():
                     md = []
                     md.append(" TO DO ")
                     # also include status
@@ -1068,16 +1068,19 @@ with ui.accordion(open=False):
                             Nth(int(repeated_run.group(1))) if repeated_run else "only"
                         )
                         _md = f"{_md} This is the {run_number} run of this stage."
-                        md.append(_md)
-
-                        # Remark on number of split points
-                        # TO DO
-                        # For example: There are three split points, at Pkm, Qkm and Rkm.
 
                         # Remark on being the longest stage of the rally
                         if stage_info["distance"] == stages_info["distance"].max():
-                            _md = f"{_md} It is the longest stage on the rally."
-                            md.append(f"{_md}\n\n")
+                            _md = f"{_md} *It is the longest stage on the rally.*"
+
+                        # Remark on number of split points
+                        # XX
+                        splits_ = wrc.getStageSplitPoints(stageId=int(stageId))
+                        if not splits_.empty:
+                            # For example: There are three split points, at Pkm, Qkm and Rkm.
+                            _md = f"""{_md}. *En route*, there are {p.number_to_words(len(splits_))} split points (at {andNums(splits_["distance"].to_list())} km respectively)."""
+
+                        md.append(f"{_md}\n\n")
 
                         # Remark on previous liaison stage
                         previous_tc = itinerary_df.iloc[ss_index - 1]
@@ -1284,7 +1287,7 @@ with ui.accordion(open=False):
                 @reactive.event(
                     input.year, input.season_round, input.category, input.stage, rally_geodata
                 )
-                def split_tests():
+                def split_sections_map():
                     stageId = input.stage()
 
                     if not stageId:

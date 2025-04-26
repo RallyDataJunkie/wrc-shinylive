@@ -5,6 +5,14 @@ p = engine()
 
 import random
 
+def andNums(numsList):
+    if len(numsList) > 1:
+        output_ = ", ".join(map(str, numsList[:-1])) + " and " + str(numsList[-1])
+    else:
+        output_ = str(numsList[0])
+    return output_
+
+
 def nth(n):
     return p.ordinal(n)
 
