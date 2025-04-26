@@ -76,14 +76,23 @@ def df_color_gradient_styler(
 
     # Calculate global max/min values if not using within-column gradients
     if not within_cols_gradient:
-        all_values = df[cols].values.flatten()
-        all_values = all_values[~isna(all_values)]  # Remove NaN values
+        # all_values = df[cols].values.flatten()
+        # all_values = all_values[~isna(all_values)]  # Remove NaN values
+        all_values = df[cols].stack()
 
         pos_vals = all_values[all_values > 0]
         neg_vals = all_values[all_values < 0]
 
-        global_pos_max = pos_vals.max() if len(pos_vals) > 0 else 1
-        global_neg_min = neg_vals.min() if len(neg_vals) > 0 else -1
+        global_pos_max = (
+            pos_vals[pos_vals < pos_vals.quantile(0.9)].max()
+            if len(pos_vals) > 0
+            else 1
+        )
+        global_neg_min = (
+            neg_vals[neg_vals > neg_vals.quantile(0.1)].min()
+            if len(neg_vals) > 0
+            else -1
+        )
 
     # Process each column
     for col in cols:
@@ -100,8 +109,12 @@ def df_color_gradient_styler(
             col_pos_max = global_pos_max
             col_neg_min = global_neg_min
         # Apply styling function to this column
-        styler = styler.map(
-            lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
+        # styler = styler.map(
+        #    lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
+        # )
+        color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value(
+            x, pos_max, neg_max
         )
+        styler = styler.map(color_func, subset=[col])
 
     return styler
