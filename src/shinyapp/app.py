@@ -1692,7 +1692,6 @@ with ui.accordion(open=False):
                                     return ax
 
 
-
 # @render.ui
 # @reactive.event(input.year, input.season_round, input.category)
 # def WRCapidf():
@@ -1705,17 +1704,21 @@ with ui.accordion(open=False):
 
 
 def get_data_feed():
+    if not hasattr(get_data_feed, "prev"):
+        get_data_feed.prev = {}  # Initialize on first call
+
     if not wrc.isRallyInDate() or not input.live_map_accordion():
-        return {}
+        get_data_feed.prev
 
     # If we are running this in a central server, multiuser context, does this let us be nice?
     json = session.get(
         "https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000"
     ).json()["_entries"]
+    get_data_feed.prev = json
     return json
 
 
-@reactive.poll(get_data_feed, 5.1)
+@reactive.poll(get_data_feed, 30) # 5.1 if we want to collect max telemetry, see if a car has stopped
 @reactive.event(input.live_map_accordion)
 def car_getdata():
     if input.live_map_accordion():
@@ -1739,8 +1742,14 @@ with ui.accordion(open=False, id="live_map_accordion"):
         def show_map():
             def add_marker(row, m):
                 # Create marker
+                # TO DO use a red bg color if the car is stopped?
+                speed_color = (
+                    "rgba(51, 136, 255, 0.7)"
+                    if row["speed"]>0
+                    else "rgba(255, 136, 51, 0.7)"
+                )
                 custom_icon = DivIcon(
-                    html=f'<div style="background-color:rgba(51, 136, 255, 0.7); display:inline-block; padding:2px 5px; color:white; font-weight:bold; border-radius:3px; border:none; box-shadow:none;">{row["name"]}</div>',
+                    html=f'<div style="background-color:{speed_color}; display:inline-block; padding:2px 5px; color:white; font-weight:bold; border-radius:3px; border:none; box-shadow:none;">{row["name"]}</div>',
                     className="",  # Empty string removes the default leaflet-div-icon class which has styling
                     icon_size=[0, 0],  # Set icon size to zero
                     icon_anchor=[0, 0],  # Adjust anchor point
@@ -1787,16 +1796,27 @@ with ui.accordion(open=False, id="live_map_accordion"):
             # Create a base map centered on the average location
             center_lat = df["lat"].mean()
             center_lon = df["lon"].mean()
-            #m = Map(center=(center_lat, center_lon), zoom=9)
+            # m = Map(center=(center_lat, center_lon), zoom=9)
             geostages = rally_geodata()
             m = wrcapi.GeoTools.simple_stage_map(geostages)
             # Add markers for each point in the data
             # Add markers to map
             df.apply(lambda row: add_marker(row, m), axis=1)
 
-            m.fit_bounds(
-                [[df["lat"].min(), df["lon"].min()], [df["lat"].max(), df["lon"].max()]]
-            )
+            buffer_percentage=0.05
+            minx, miny, maxx, maxy = (
+            df["lon"].min(), df["lat"].min(), df["lon"].max(), df["lat"].max()
+            )  # total_bounds returns (minx, miny, maxx, maxy)
+            x_buffer = (maxx - minx) * buffer_percentage
+            y_buffer = (maxy - miny) * buffer_percentage
+
+            # Expand the bounding box
+            minx -= x_buffer
+            maxx += x_buffer
+            miny -= y_buffer
+            maxy += y_buffer
+            m.fit_bounds([[miny, minx], [maxy, maxx]])
+
             return m
 
 
