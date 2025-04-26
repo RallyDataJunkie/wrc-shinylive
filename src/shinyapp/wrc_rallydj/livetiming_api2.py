@@ -16,7 +16,7 @@ import os
 import re
 import sqlite3
 from wrc_rallydj.db_table_schemas import SETUP_V2_Q
-from wrc_rallydj.utils import is_date_in_range, dateNow
+from wrc_rallydj.utils import is_date_in_range, dateNow, timeNow
 from pandas import (
     read_sql,
     DataFrame,
@@ -27,7 +27,7 @@ from pandas import (
     to_datetime,
     notnull,
     to_numeric,
-    isna
+    isna,
 )
 
 from numpy import nan
@@ -106,9 +106,12 @@ class APIClient:
         "https://p-p.redbull.com/rb-wrccom-lintegration-yv-prod/api/"
     )
 
+    ITINERARY_REFRESH_PERIOD = 30
+
     def __init__(self, db_manager=None, use_cache=False, **cache_kwargs):
         self.db_manager = db_manager
         self.proxy = create_cached_proxy(**cache_kwargs) if use_cache else CorsProxy()
+        self.lastreferenced = {}
 
     def dbfy(self, *args, **kwargs):
         self.db_manager.dbfy(*args, **kwargs)
@@ -237,9 +240,7 @@ class APIClient:
                 championshipEntryResultsOverall_df,
                 "championship_overall",
                 # if_exists="replace",
-                pk=["championshipEntryId",
-                "championshipId",
-                "eventId"],
+                pk=["championshipEntryId", "championshipId", "eventId"],
             )
             self.dbfy(
                 championshipEntryResultsByRound_df,
@@ -294,7 +295,9 @@ class APIClient:
         # renamers["tyreManufacturer"] = "tyreManufacturer_"
         championshipEntries_df.rename(columns=renamers, inplace=True)
 
-        championshipRounds_df = championshipRounds_df.sort_values(by='startDate', ascending=True).reset_index(drop=True)
+        championshipRounds_df = championshipRounds_df.sort_values(
+            by="startDate", ascending=True
+        ).reset_index(drop=True)
         championshipRounds_df["Round"] = range(1, len(championshipRounds_df) + 1)
 
         if updateDB:
@@ -425,6 +428,35 @@ class APIClient:
         return eventGroups_df
 
     def _getEventItineraries(self, eventId, itineraryId, updateDB=False):
+        # TO DO need to mark an itinerary as having been fetched
+        # using something similar to _updateCompletedStagesStatus
+        # OR maybe not - the itinerary has a lot of status information.
+        # We can maybe set up an ad hoc cache
+        # TO DO -if the event is completed,  can add this to completed...
+        # In fact, we can have a generic test that if the event is completed
+        # we can add to the db and not have to fetch again.
+        if "itinerary_json" not in self.lastreferenced:
+            self.itineraryLegs_df = DataFrame()
+            self.itinerarySections2_df = DataFrame()
+            self.itineraryControls_df = DataFrame()
+            self.itineraryStages_df = DataFrame()
+            self.lastreferenced["itinerary_json"] = {'key':None, "t": 0}
+        _key=f"{eventId}_{itineraryId}"
+        if self.lastreferenced["itinerary_json"]["key"]!=_key:
+            self.lastreferenced["itinerary_json"]["key"] = _key
+            self.lastreferenced["itinerary_json"]["t"] = 0
+        if (timeNow(typ="s") - self.lastreferenced["itinerary_json"]["t"]) < (
+            self.ITINERARY_REFRESH_PERIOD
+        ):
+            return (
+                self.itineraryLegs_df,
+                self.itinerarySections2_df,
+                self.itineraryControls_df,
+                self.itineraryStages_df,
+            )
+        else:
+            self.lastreferenced["itinerary_json"]["t"] = timeNow(typ="s")
+
         stub = f"events/{eventId}/itineraries/{itineraryId}.json"
         json_data = self._WRC_RedBull_json(stub)
         if "itineraryLegs" not in json_data:
@@ -474,12 +506,19 @@ class APIClient:
                 itinerarySections2_df, "itinerary_sections", pk="itinerarySectionId"
             )
             self.dbfy(itineraryControls_df, "itinerary_controls", pk="controlId")
-            itineraryLegs_df["startListId"] = itineraryLegs_df["startListId"].astype("Int64")
+            itineraryLegs_df["startListId"] = itineraryLegs_df["startListId"].astype(
+                "Int64"
+            )
             for _, row in itineraryLegs_df.iterrows():
                 startListId = row["startListId"]
                 self._getStartLists(
                     eventId=eventId, startListId=startListId, updateDB=updateDB
                 )
+
+        self.itineraryLegs_df = itineraryLegs_df
+        self.itinerarySections2_df = itinerarySections2_df
+        self.itineraryControls_df = itineraryControls_df
+        self.itineraryStages_df = itineraryStages_df
 
         return (
             itineraryLegs_df,
@@ -513,6 +552,23 @@ class APIClient:
         return shakedownTimes_df
 
     def _getStages(self, eventId, updateDB=False):
+        if "stages_json" not in self.lastreferenced:
+            self.stages_df  = DataFrame()
+            self.stage_split_points_df  = DataFrame()
+            self.stage_controls_df = DataFrame()
+            self.lastreferenced["stages_json"] = {"key": None, "t": 0}
+
+        if self.lastreferenced["stages_json"]["key"]!=eventId:
+            self.lastreferenced["stages_json"]["key"] = eventId
+            self.lastreferenced["stages_json"]["t"] = 0
+
+        if (timeNow(typ="s") - self.lastreferenced["stages_json"]["t"]) < (
+            self.ITINERARY_REFRESH_PERIOD
+        ):
+            return (self.stages_df, self.stage_split_points_df, self.stage_controls_df)
+        else:
+            self.lastreferenced["stages_json"]["t"] = timeNow(typ="s")
+
         stub = f"events/{eventId}/stages.json"
         json_data = self._WRC_RedBull_json(stub)
         stages_df = DataFrame(json_data)
@@ -540,6 +596,10 @@ class APIClient:
             self.dbfy(stages_df, "stage_info", pk="stageId")
             self.dbfy(stage_split_points_df, "split_points", pk="splitPointId")
             self.dbfy(stage_controls_df, "stage_controls", pk="controlId")
+
+        self.stages_df =stages_df
+        self.stage_split_points_df = stage_split_points_df
+        self.stage_controls_df =stage_controls_df
 
         return stages_df, stage_split_points_df, stage_controls_df
 
@@ -763,7 +823,9 @@ class WRCTimingResultsAPIClientV2:
         """Rebase times based on the time for a particular vehicle."""
         if not rebaseId or rebaseId == "ult" or idCol is None or rebaseCol is None:
             return times
-        rebase_times = times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
+        rebase_times = (
+            times[rebaseCol] - times.loc[times[idCol] == rebaseId, rebaseCol].iloc[0]
+        )
         return rebase_times.round(1)
 
     @staticmethod
@@ -775,16 +837,14 @@ class WRCTimingResultsAPIClientV2:
             if not rebaseId:
                 return times
             times = times.copy()
-        rebaseId = int(rebaseId) if rebaseId and rebaseId!="ult" else rebaseId
+        rebaseId = int(rebaseId) if rebaseId and rebaseId != "ult" else rebaseId
         if rebaseId:
             # Ensure rebaseCols is a list
             rebaseCols = [rebaseCols] if isinstance(rebaseCols, str) else rebaseCols
 
             # Fetch the reference values for the specified 'rebaseId'
 
-            reference_values = times.loc[
-                times[idCol] == rebaseId, rebaseCols
-            ]
+            reference_values = times.loc[times[idCol] == rebaseId, rebaseCols]
             if reference_values.empty:
                 return times
 
@@ -936,7 +996,7 @@ class WRCTimingResultsAPIClientV2:
     WHERE 1=1 {championship_}
 ) """
         else:
-            latest_ =""
+            latest_ = ""
         if raw:
             q = f"""SELECT * FROM championship_overall AS co WHERE 1=1 {championship_} {event_} {latest_};"""
         else:
@@ -1155,10 +1215,14 @@ class WRCTimingResultsAPIClientV2:
             q = f"SELECT * FROM itinerary_controls WHERE eventId={int(eventId)};"
 
         itineraryControls_df = self.db_manager.read_sql(q)
-        itineraryControls_df['startTime'] = to_datetime(itineraryControls_df['firstCarDueDateTime'])
+        itineraryControls_df["startTime"] = to_datetime(
+            itineraryControls_df["firstCarDueDateTime"]
+        )
 
         # Extract day of week name
-        itineraryControls_df['day'] = itineraryControls_df['startTime'].dt.strftime('%A')
+        itineraryControls_df["day"] = itineraryControls_df["startTime"].dt.strftime(
+            "%A"
+        )
 
         return itineraryControls_df
 
@@ -1347,16 +1411,15 @@ class WRCTimingResultsAPIClientV2:
         return r
 
     def _updateCompletedEventTableStatus(self, eventId, table):
-        if table and isinstance(table,str):
-            table=[table]
+        if table and isinstance(table, str):
+            table = [table]
         for t in table:
             self.dbfy(
-                DataFrame(
-                    [{"eventId": int(eventId), "tableType": t}]
-                ),
+                DataFrame([{"eventId": int(eventId), "tableType": t}]),
                 "meta_completed_event_tables",
                 pk=["tableType", "eventId"],
             )
+
     def checkCompletedEventTableStatus(self, eventId, table):
         """Return a True flag if we have stored this table."""
         sql = f"""SELECT * FROM meta_completed_event_tables WHERE eventId={int(eventId)} AND tableType="{table}";"""
@@ -1368,10 +1431,19 @@ class WRCTimingResultsAPIClientV2:
         eventId = self.eventId
         kwargs["eventId"] = eventId
         # if the event is finished and we have this already
-        stage_info_completed = self.checkCompletedEventTableStatus(eventId, "stage_info")
-        split_points_completed = self.checkCompletedEventTableStatus(eventId, "split_points")
-        stage_controlsd_completed = self.checkCompletedEventTableStatus(eventId, "stage_controls")
-        if (stage_info_completed and split_points_completed and stage_controlsd_completed
+        stage_info_completed = self.checkCompletedEventTableStatus(
+            eventId, "stage_info"
+        )
+        split_points_completed = self.checkCompletedEventTableStatus(
+            eventId, "split_points"
+        )
+        stage_controlsd_completed = self.checkCompletedEventTableStatus(
+            eventId, "stage_controls"
+        )
+        if (
+            stage_info_completed
+            and split_points_completed
+            and stage_controlsd_completed
         ):
             return self.getStageInfo(legacyCheck=True)
         stages_df, stage_split_points_df, stage_controls_df = (
@@ -1388,18 +1460,17 @@ class WRCTimingResultsAPIClientV2:
 
     def getRepeatedStages(self, on_event=True, eventId=None):
         def extract_stage_repetition(text):
-            match = re.search(r'\s(\d+)$', text)
+            match = re.search(r"\s(\d+)$", text)
             if match:
                 return int(match.group(1))
             else:
                 return 0
+
         stages_df = self.getStageInfo(on_event=on_event, eventId=eventId)
-        stages_df["base"] = stages_df['name'].apply(lambda x: re.sub(r'\s\d+$', '', x))
+        stages_df["base"] = stages_df["name"].apply(lambda x: re.sub(r"\s\d+$", "", x))
         # The "repeat" column identifies repeated stages based on trailing "stage name 1" etc
         stages_df["run"] = stages_df["name"].apply(extract_stage_repetition)
-        repeated_stages = (
-            stages_df.groupby("base")["stageCode"].apply(list).to_dict()
-        )
+        repeated_stages = stages_df.groupby("base")["stageCode"].apply(list).to_dict()
         stages_df["runs"] = stages_df["base"].map(repeated_stages)
 
         # Get the base stage name
@@ -1449,7 +1520,11 @@ class WRCTimingResultsAPIClientV2:
             stage_code = []
 
         # completed_ = """AND si.status="Completed" """ if completed else ""
-        completed_ = """AND si.status IN ("Completed", "Cancelled", "Interrupted") """ if completed else ""
+        completed_ = (
+            """AND si.status IN ("Completed", "Cancelled", "Interrupted") """
+            if completed
+            else ""
+        )
 
         if raw:
             q = f"SELECT * FROM stage_info AS si WHERE 1=1 {on_event_} {on_stage_} {completed_};"
@@ -1666,8 +1741,12 @@ class WRCTimingResultsAPIClientV2:
     def getLiveStages(self, on_event=True):
         """Get a list of running stages."""
         # Stage statuses are: = "completed", "interrupted", "cancelled", "running", "to run".
-        stage_info = self.getStageInfo(updateDB=False, noLiveCheck=True, on_event=on_event)
-        stage_info = stage_info[stage_info['status'].str.lower().isin({'running', 'interrupted'})]
+        stage_info = self.getStageInfo(
+            updateDB=False, noLiveCheck=True, on_event=on_event
+        )
+        stage_info = stage_info[
+            stage_info["status"].str.lower().isin({"running", "interrupted"})
+        ]
         return stage_info
 
     def isStageLive(self, stageId=None, stage_code=None):
@@ -1984,8 +2063,9 @@ class WRCTimingResultsAPIClientV2:
         priority=None,
         completed=False,
         typ="position",
-        extent="stage", # stage | overall
-        updateDB=False,):
+        extent="stage",  # stage | overall
+        updateDB=False,
+    ):
         return self.getStageOverallWide(
             stageId=stageId,
             priority=priority,
@@ -2001,14 +2081,20 @@ class WRCTimingResultsAPIClientV2:
         priority=None,
         completed=False,
         typ="position",
-        extent="overall", # stage | overall
+        extent="overall",  # stage | overall
         updateDB=False,
     ):
         # typ: position, totalTimeInS
         if self.eventId and self.rallyId and stageId:
             priority = None if priority == "P0" else priority
-        if extent=="stage":
-            overall_times =self.getStageTimes(stageId=stageId, completed=completed,priority=priority, raw=False,updateDB=updateDB)
+        if extent == "stage":
+            overall_times = self.getStageTimes(
+                stageId=stageId,
+                completed=completed,
+                priority=priority,
+                raw=False,
+                updateDB=updateDB,
+            )
             # rebaseToCategory=True ??
         else:
             overall_times = self.getStageOverallResults(
@@ -2141,7 +2227,8 @@ class WRCTimingResultsAPIClientV2:
             return split_times_wide
 
         split_durations = self.getSplitDuration(
-            split_times_wide, id_col=id_col,
+            split_times_wide,
+            id_col=id_col,
         )
 
         split_dists_ = self.getStageSplitPoints(stageId=stageId, extended=True)
@@ -2175,7 +2262,9 @@ class WRCTimingResultsAPIClientV2:
 
         return scaled_splits_wide
 
-    def rebase_splits_wide_with_ult(self, split_times_wide, rebase_driver, use_split_durations=True):
+    def rebase_splits_wide_with_ult(
+        self, split_times_wide, rebase_driver, use_split_durations=True
+    ):
         split_cols = self.getSplitCols(split_times_wide)
 
         # output_ = split_times_wide_numeric
@@ -2217,23 +2306,27 @@ class WRCTimingResultsAPIClientV2:
         # stageId is the up to an including stageId, else all TO DO still
         completed_stages = (
             self.getStageInfo(raw=False, on_event=on_event, completed=True)
-            .sort_values("number").reset_index(drop=True)
-            
+            .sort_values("number")
+            .reset_index(drop=True)
         )
         if stageId:
             # if we have a single stageId, get stages up to that
-            if isinstance(stageId, int) and stageMode=="uptoincl":
-                upto_idx = completed_stages[completed_stages["stageId"] == stageId].index.tolist()
+            if isinstance(stageId, int) and stageMode == "uptoincl":
+                upto_idx = completed_stages[
+                    completed_stages["stageId"] == stageId
+                ].index.tolist()
                 # Get frames up to an including the specified stage
                 if upto_idx:
-                    completed_stages = completed_stages[:upto_idx[0]+1]
+                    completed_stages = completed_stages[: upto_idx[0] + 1]
             elif isinstance(stageId, list):
                 # if we have a list of stageIds, just get those
                 completed_stages = completed_stages[
                     completed_stages["stageId"].isin(stageId)
                 ]
 
-        completed_stages = completed_stages[["stageId", "code"]].set_index("stageId")["code"].to_dict()
+        completed_stages = (
+            completed_stages[["stageId", "code"]].set_index("stageId")["code"].to_dict()
+        )
         return completed_stages
 
     def _updateCompletedStagesStatus(self, stageId, table, status):
@@ -2253,7 +2346,7 @@ class WRCTimingResultsAPIClientV2:
         return status
 
     def handleStageCompleted(self, stageId, tables=None):
-        """Check to see if we have alos"""
+        """Check to see if we have a completed stage."""
 
         def _isStageCompleted(stageId):
             """Check to see if the stage is listed as completed or cancelled."""
@@ -2334,7 +2427,11 @@ class WRCTimingResultsAPIClientV2:
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
             # completed_ = """AND si.status="Completed" """ if completed else ""
-            completed_ = """AND si.status IN ("Completed", "Cancelled", "Interrupted") """ if completed else ""
+            completed_ = (
+                """AND si.status IN ("Completed", "Cancelled", "Interrupted") """
+                if completed
+                else ""
+            )
 
             if raw:
                 sql = f"""SELECT * FROM stage_overall AS o {_entry_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_};"""
@@ -2439,9 +2536,13 @@ class WRCTimingResultsAPIClientV2:
         # if len(2): the delta is the advantage
         pass
 
-    def _getStageWinsCount(self, on_event=True, eventId=None, entryId=None, eventEntry=None, raw=True):
+    def _getStageWinsCount(
+        self, on_event=True, eventId=None, entryId=None, eventEntry=None, raw=True
+    ):
         # TO DO WIP : should we use entryId or entrantId ?
-        if (not eventId and not eventEntry) or (on_event and (not self.eventId or not self.rallyId)):
+        if (not eventId and not eventEntry) or (
+            on_event and (not self.eventId or not self.rallyId)
+        ):
             return DataFrame()
         if eventEntry:
             if isinstance(eventEntry, tuple):
@@ -2461,7 +2562,7 @@ class WRCTimingResultsAPIClientV2:
             elif on_event:
                 _on_event = f"AND eventId={self.eventId} AND rallyId={self.rallyId}"
             else:
-                _on_event=""
+                _on_event = ""
 
             _on_entry = f"""AND entryId={entryId}""" if entryId else ""
             _on_event_entry = ""
@@ -2482,7 +2583,7 @@ class WRCTimingResultsAPIClientV2:
         elif on_event:
             _on_event = f"AND w.eventId={self.eventId} AND w.rallyId={self.rallyId}"
         else:
-            _on_event=""
+            _on_event = ""
 
         if raw:
             sql = f"""SELECT * FROM stagewinners AS w WHERE 1=1 {_on_event};"""
