@@ -1452,6 +1452,8 @@ with ui.accordion(open=False):
                         )
                         return ui.markdown(f"\n__{typ} time delta across split points.__\n\n")
 
+                    ui.markdown("TO DO - option to sort by start order, stage position")
+
                     @render.ui
                     @reactive.event(
                         input.splits_review_accordion,
@@ -1657,10 +1659,10 @@ with ui.accordion(open=False):
                                         id="splits_in_sectionlineplot_tt",
                                     ):
                                         ui.span(
-                                            "Time gained / lost across sections in seconds relative to rebase driver (line chart) ",
+                                            "Accumulated time gained / lost across sections in seconds relative to rebase driver (line chart) ",
                                             question_circle_fill,
                                         )
-                                        "Accumumluated time deltas across each split section. Times are relative to rebased driver's time. Lines above x=0 are cars ahead, lines below are times behind."
+                                        "Accumuluated time deltas across each split section. Times are relative to rebased driver's time. Lines above x=0 are cars ahead, lines below are times behind."
 
                                 @render.plot(
                                     alt="Line chart of within split delta times."
