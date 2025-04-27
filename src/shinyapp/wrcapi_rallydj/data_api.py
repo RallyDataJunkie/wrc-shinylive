@@ -265,8 +265,16 @@ class WRCDataAPIClient:
         # The seasons data
         # return { s['name']:s for s in seasondata }
         # return seasons[typ]
-        if not typ or typ.lower() != "all":
-            return self._wrc_events_to_df(seasons)
+        if not typ or typ.lower() == "all" or typ not in seasons:
+            all_champs = pd.concat(
+                [
+                    self._wrc_events_to_df(seasons["WRC"]),
+                    self._wrc_events_to_df(seasons["ERC"]),
+                ],
+                axis=0,
+                ignore_index=True,
+            )
+            return all_champs.reset_index(drop=True)
 
         return self._wrc_events_to_df(seasons[typ])
 
