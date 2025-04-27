@@ -133,11 +133,8 @@ def getWRCAPI2event():
     # TO DO year, sas-eventid is round, typ is .upper() on championship
     # Could we get a race here from wrc.championship?
     r = wrcapi.get_rallies_data(int(input.year()), typ=wrc.championship.upper())
-    print(r)
     r = r[r["sas-eventid"].astype(str) == str(input.season_round())]
-    print(r, int(input.season_round()), r["sas-eventid"].dtype)
     retval = r.to_dict(orient="records")[0] if not r.empty else {}
-    print(retval)
     return retval
 
 
@@ -670,6 +667,7 @@ with ui.accordion(open=False):
                     input.progression_rebase_type,
                     input.rally_progression_rebase_driver,
                     input.rprog_rebase_incols,
+                    input.display_latest_overall,
                 )
                 def stage_progression_heat():
                     progression_rebase_type = input.progression_rebase_type()
@@ -704,6 +702,7 @@ with ui.accordion(open=False):
                     input.event_section,
                     input.progression_rebase_type,
                     input.rally_progression_rebase_driver,
+                    input.display_latest_overall,
                 )
                 def seaborn_linechart_stage_typ():
                     # HACK this chart is harwdired:
@@ -2413,7 +2412,7 @@ def getChampionships():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category, input.progression_report_type)
+@reactive.event(input.stage, input.category, input.progression_report_type, input.display_latest_overall)
 def get_overall_typ_wide():
     stageId = input.stage()
     if not stageId:
@@ -2423,24 +2422,21 @@ def get_overall_typ_wide():
     # TO DO - up to
     stageId = None
     priority = input.category()
-
-    return _get_overall_typ_wide_core(stageId, priority, progression_report_typ)
+    running = not input.display_latest_overall()
+    return _get_overall_typ_wide_core(stageId, priority, progression_report_typ, running=running)
 
 
 def _get_overall_typ_wide_core(
-    stageId,
-    priority,
-    progression_report_typ,
+    stageId, priority, progression_report_typ, running=False
 ):
     typ = progression_report_types[progression_report_typ]
-
     if "rally" in progression_report_typ.lower():
         overall_times_wide = wrc.getStageOverallWide(
-            stageId=stageId, priority=priority, completed=True, typ=typ
+            stageId=stageId, priority=priority, completed=True, running=running, typ=typ
         )  # typ: position, totalTimeInS
     elif "stage" in progression_report_typ.lower():
         overall_times_wide = wrc.getStageTimesWide(
-            stageId=stageId, priority=priority, completed=True, typ=typ
+            stageId=stageId, priority=priority, completed=True, running=running, typ=typ
         )
     else:
         overall_times_wide = DataFrame()
@@ -2452,7 +2448,7 @@ def _get_overall_typ_wide_core(
     input.stage,
     input.category,
     input.rally_progression_rebase_driver,
-    input.progression_rebase_type,
+    input.progression_rebase_type, input.display_latest_overall
 )
 def get_overall_typ_wide2_rebased():
     stageId = input.stage()
@@ -2463,9 +2459,9 @@ def get_overall_typ_wide2_rebased():
     # TO DO - up to
     stageId = None
     priority = input.category()
-
+    running = not input.display_latest_overall()
     overall_times_wide = _get_overall_typ_wide_core(
-        stageId, priority, progression_report_typ
+        stageId, priority, progression_report_typ, running=running
     )
 
     rebase_driver = input.rally_progression_rebase_driver()

@@ -1838,12 +1838,12 @@ class WRCTimingResultsAPIClientV2:
     ):
         # The assumption below is for on_event
         stageIds = (
-            self.getCompletedStages(stageId=stageId)
+            self.getCompletedStages(stageId=stageId, running=running, completed=completed)
             if completed
             else {}  # TO DO map for the default stageId
         )
         if updateDB or self.liveCatchup:
-            if completed:
+            if completed or running:
                 # Check availability of every stage required
                 for stageId in stageIds:
                     updateDB = updateDB or self.isStageLive(stageId=stageId)
@@ -2069,6 +2069,7 @@ class WRCTimingResultsAPIClientV2:
         stageId=None,
         priority=None,
         completed=False,
+        running=False,
         typ="position",
         extent="stage",  # stage | overall
         updateDB=False,
@@ -2076,7 +2077,7 @@ class WRCTimingResultsAPIClientV2:
         return self.getStageOverallWide(
             stageId=stageId,
             priority=priority,
-            completed=completed,
+            completed=completed, running=running,
             typ=typ,
             extent="stage",  # stage | overall
             updateDB=updateDB,
