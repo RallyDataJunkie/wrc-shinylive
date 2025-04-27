@@ -11,7 +11,14 @@ from pandas import DataFrame, isna, to_numeric, to_datetime, NA
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 import re
-from rules_processor import Nth, nth, p, andNums
+from rules_processor import (
+    Nth,
+    nth,
+    p,
+    andNums,
+    core_stage,
+    process_rally_overall_rules,
+)
 
 from ipyleaflet import Map, Marker, DivIcon
 import matplotlib.pyplot as plt
@@ -541,9 +548,7 @@ with ui.accordion(open=False):
 
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
-                ui.markdown(
-                    "*Progress across stages.*"
-                )
+                ui.markdown("*Progress across stages.*")
 
                 # TO DO - tidy up  reactive.event
                 # Move get_overall_pos_wide declaration up the page and use it in decorator
@@ -700,7 +705,7 @@ with ui.accordion(open=False):
                     input.stage,
                     input.event_day,
                     input.event_section,
-                    #input.progression_rebase_type,
+                    # input.progression_rebase_type,
                     input.rally_progression_rebase_driver,
                     input.display_latest_overall,
                 )
@@ -715,7 +720,7 @@ with ui.accordion(open=False):
                     overall_typ_wide = overall_typ_wide.copy()
                     # Replace values > 100 with NaN or clip them
                     split_cols = wrc.getStageCols(overall_typ_wide)
-                    THRESHOLD=100
+                    THRESHOLD = 100
                     overall_typ_wide[split_cols] = overall_typ_wide[split_cols].where(
                         overall_typ_wide[split_cols] <= THRESHOLD, NA
                     )
@@ -2388,7 +2393,11 @@ def get_overall_pos_wide():
     priority = input.category()
     running = not input.display_latest_overall()
     overall_times_wide = wrc.getStageOverallWide(
-        stageId=stageId, priority=priority, completed=True, running=running, typ="position"
+        stageId=stageId,
+        priority=priority,
+        completed=True,
+        running=running,
+        typ="position",
     )  # typ: position, totalTimeInS
 
     return overall_times_wide
@@ -2412,7 +2421,12 @@ def getChampionships():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category, input.progression_report_type, input.display_latest_overall)
+@reactive.event(
+    input.stage,
+    input.category,
+    input.progression_report_type,
+    input.display_latest_overall,
+)
 def get_overall_typ_wide():
     stageId = input.stage()
     if not stageId:
@@ -2423,7 +2437,9 @@ def get_overall_typ_wide():
     stageId = None
     priority = input.category()
     running = not input.display_latest_overall()
-    return _get_overall_typ_wide_core(stageId, priority, progression_report_typ, running=running)
+    return _get_overall_typ_wide_core(
+        stageId, priority, progression_report_typ, running=running
+    )
 
 
 def _get_overall_typ_wide_core(
@@ -2443,13 +2459,13 @@ def _get_overall_typ_wide_core(
     return overall_times_wide
 
 
-def get_overall_typ_wide_core_1(stageId, progression_report_typ,priority,running, rebase_driver):
-    
+def get_overall_typ_wide_core_1(
+    stageId, progression_report_typ, priority, running, rebase_driver
+):
+
     overall_times_wide = _get_overall_typ_wide_core(
         stageId, priority, progression_report_typ, running=running
     )
-
-
 
     if overall_times_wide.empty or not rebase_driver:
         return DataFrame()
