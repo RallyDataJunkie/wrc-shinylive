@@ -5,6 +5,7 @@ p = engine()
 
 import random
 
+
 def andNums(numsList):
     if len(numsList) > 1:
         output_ = ", ".join(map(str, numsList[:-1])) + " and " + str(numsList[-1])
@@ -16,8 +17,10 @@ def andNums(numsList):
 def nth(n):
     return p.ordinal(n)
 
+
 def Nth(n):
     return p.number_to_words(p.ordinal(n))
+
 
 # Utility rule functions
 def sometimes(t, p=0.5, prefix=""):
@@ -53,30 +56,32 @@ def pickfirst_prob(l, p=0.5):
         return random.choice(l[1:])
     return l[0]
 
+
 # ---
 
 
 def core_stage(
     wrc,
-    stage_details, stageId,
+    stage_details,
+    stageId,
 ):
-    retcols_stage = ["carNo", "driverName", "position", "Gap", "Diff"]
+    retcols_stage = ["carNo", "driverName", "position", "Gap", "Diff", "Chase"]
     retcols_overall = [
         "carNo",
         "driverName",
         "position",
-        "overallGap",
-        "overallDiff",
-        "timeToCarBehind",
+        "Gap",
+        "Diff",
+        "Chase",
     ]
     stage_details.reset_index(drop=True, inplace=True)
-    print(stageId, stage_details["stageId"])
+
     curr_idx = stage_details.loc[stage_details["stageId"] == stageId].index[0]
     # Stages are ordered; if we are index 0 stage is first stage, SS1
-    prevStageId = None if not curr_idx else stage_details.loc[curr_idx, "stageId"]
+    prevStageId = None if not curr_idx else stage_details.loc[curr_idx - 1, "stageId"]
     # print(prevStageNo, stageNo)
     _df_stage_curr = wrc.getStageTimes(stageId=stageId, raw=False)
-    print(_df_stage_curr.columns, retcols_stage)
+    print("stagecols", _df_stage_curr.columns, retcols_stage)
     _df_stage_curr = _df_stage_curr[retcols_stage].copy()
 
     _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, raw=False)[
@@ -90,60 +95,81 @@ def core_stage(
         _df_overall_prev.rename(columns={"position": "overallPos"}, inplace=True)
     else:
         _df_overall_prev = DataFrame()
-    
-    # TO DO we need to treat SS1 different to other stages
-    # TO DO this function is currently BROKEN
 
-    # The subtraction is this way to handle signs better
-    # display(_df_overall_prev)
-    # display(_df_overall_curr)
-    _df_overall_diff = (
-        _df_overall_prev.set_index(["carNo", "driverName"])
-        - _df_overall_curr.set_index(["carNo", "driverName"])
-    ).reset_index()
-    _df_overall_diff.rename(
-        columns={
-            "overallPos": "overallPosDelta",
-            "overallGap": "overallGapDelta",
-            "overallDiff": "overallDiffDelta",
-            "timeToCarBehind": "timeToCarBehindDelta",
-        },
-        inplace=True,
-    )
-    _df_overall_curr["currPodium"] = _df_overall_curr["overallPos"] <= 3
-    _df_overall = merge(_df_overall_diff, _df_overall_curr, on=["carNo", "driverName"])
+    # The following only apply when we are in at least the second stage
+    if not _df_overall_prev.empty:
+        # The subtraction is this way to handle signs better
+        # display(_df_overall_prev)
+        # display(_df_overall_curr)
+        # _df_overall_diff gives deltas between curr and prev
+        _df_overall_diff = (
+            _df_overall_prev.set_index(["carNo", "driverName"])
+            - _df_overall_curr.set_index(["carNo", "driverName"])
+        ).reset_index()
 
-    _df_overall_prev["prevLeader"] = _df_overall_prev["overallPos"] == 1
-    _df_overall_prev["prevOverallPos"] = _df_overall_prev["overallPos"]
-    _df_overall_prev["prevPodium"] = _df_overall_prev["overallPos"] <= 3
-    _df_overall = merge(
-        _df_overall,
-        _df_overall_prev[
-            ["carNo", "driveNamer", "prevLeader", "prevOverallPos", "prevPodium"]
-        ],
-        on=["carNo", "driverName"],
-    )
+        _df_overall_diff.rename(
+            columns={
+                "overallPos": "overallPosDelta",
+                "Gap": "overallGapDelta",
+                "Diff": "overallDiffDelta",
+                "Chase": "chaseDelta",
+            },
+            inplace=True,
+        )
 
-    _df_overall["overallPosChange"] = _df_overall["overallPosDelta"] != 0
-    _df_overall["currLeader"] = _df_overall["overallPos"] == 1
-    _df_overall["onto_podium"] = (~_df_overall["prevPodium"]) & _df_overall[
-        "currPodium"
-    ]
-    _df_overall["lost_podium"] = (_df_overall["prevPodium"]) & ~_df_overall[
-        "currPodium"
-    ]
-    _df_overall["newLeader"] = (
-        _df_overall["overallPosChange"] & _df_overall["currLeader"]
-    )
-    _df_overall["lead_changed"] = _df_overall["newLeader"].any()
+        _df_overall_curr["currPodium"] = _df_overall_curr["overallPos"] <= 3
+        _df_overall = merge(
+            _df_overall_diff, _df_overall_curr, on=["carNo", "driverName"]
+        )
+        _df_overall.rename(
+            columns={
+                "Gap": "overallGap",
+                "Diff": "overallDiff",
+                "Chase": "overallChase",
+            },
+            inplace=True,
+        )
+        _df_overall_prev["prevLeader"] = _df_overall_prev["overallPos"] == 1
+        _df_overall_prev["prevLeaderName"] = _df_overall_prev[_df_overall_prev["overallPos"]==1]["driverName"].iloc[0]
+        _df_overall_prev["prevOverallPos"] = _df_overall_prev["overallPos"]
+        _df_overall_prev["prevPodium"] = _df_overall_prev["overallPos"] <= 3
+        _df_overall = merge(
+            _df_overall,
+            _df_overall_prev[
+                [
+                    "carNo",
+                    "driverName",
+                    "prevLeader",
+                    "prevOverallPos",
+                    "prevPodium",
+                    "prevLeaderName",
+                ]
+            ],
+            on=["carNo", "driverName"],
+        )
+        _df_overall["overallPosChange"] = _df_overall["overallPosDelta"] != 0
+        _df_overall["currLeader"] = _df_overall["overallPos"] == 1
+        _df_overall["onto_podium"] = (~_df_overall["prevPodium"]) & _df_overall[
+            "currPodium"
+        ]
+        _df_overall["lost_podium"] = (_df_overall["prevPodium"]) & ~_df_overall[
+            "currPodium"
+        ]
+        _df_overall["newLeader"] = (
+            _df_overall["overallPosChange"] & _df_overall["currLeader"]
+        )
 
-    _df_overall = merge(
-        _df_overall,
-        _df_stage_curr,
-        on=["carNo", "driverName"],
-    )
+        _df_overall["lead_changed"] = _df_overall["newLeader"].any()
 
-    return _df_overall
+        _df_overall = merge(
+            _df_overall,
+            _df_stage_curr,
+            on=["carNo", "driverName"],
+        )
+
+        return _df_overall
+
+    return _df_overall_curr
 
 
 ##---
@@ -151,26 +177,27 @@ def core_stage(
 
 def rule_onto_podium(row):
     remark = ""
-    if row["onto_podium"]:
+    if row.get("onto_podium"):
         remark = f"""{row["driverName"]} moved into a podium position"""
     return (remark, 0.9)
 
 
 def rule_into_first(row):
     remark = ""
-    if row["newLeader"]:
+    if row.get("newLeader"):
         big_jump = (
             f"""jumped { p.number_to_words(row["overallPosDelta"])} places"""
             if row["overallPosDelta"] > 1
-            else "moved"
+            else f"""moved ahead of {row["prevLeaderName"]}"""
         )
-        remark = f"""Taking {Nth(row["position"])} place on stage, {row["driverName"]} {big_jump} into first place overall, taking a lead of {round(row["timeToCarBehind"], 1)}s"""
+        remark = f"""With his {Nth(row["position"])} place on stage, {row["driverName"]} {big_jump} into first place overall, taking a lead of {round(row["overallChase"], 1)}s"""
     return (remark, 1.0)
 
 
 def rule_lost_first(row):
     remark = ""
-    if row["prevLeader"] and not row["currLeader"]:
+    if row.get("prevLeader") and not row.get("currLeader"):
+        print(row.keys(), row)
         remark = f"""Coming in at {Nth(row["position"])} on the stage, {row["Gap"]}s behind the stage winner, {row["driverName"]} lost the overall lead, falling back to {Nth(row["overallPos"])} place"""
         if row["overallPos"] >= 2:
             fell_back = f"""{remark}, {row["overallGap"]}s behind the new leader."""
@@ -185,22 +212,30 @@ def rule_lost_first(row):
 
 def rule_leader_increased_lead(row):
     remark = ""
-    if row["overallGapDelta"] > 0 and row["currLeader"] and not row["newLeader"]:
-        remark = f"""{row["driverName"]} increased his the lead at the front of the rally, moving a furher {row["overallGapDelta"]}s ahead, to {row["overallGapDelta"]}s."""
+    if (
+        row.get("overallGapDelta", 1) < 0
+        and row.get("currLeader")
+        and not row.get("newLeader")
+    ):
+        remark = f"""{row["driverName"]} increased the lead at the front of the rally, moving a furher {row["overallGapDelta"]}s ahead, to {row["overallGapDelta"]}s."""
 
     return (remark, 0.7)
 
 
 def rule_leader_decreased_lead(row):
     remark = ""
-    if row["overallGapDelta"] < 0 and row["currLeader"] and not row["newLeader"]:
+    if (
+        row.get("overallGapDelta", 1) < 0
+        and row.get("currLeader")
+        and not row.get("newLeader")
+    ):
         remark = f"""At the front, {row["driverName"]}'s lead was reduced by {row["overallGapDelta"]}s to {row["overallGapDelta"]}s."""
 
     return (remark, 0.7)
 
 
 def rule_onto_podium(row):
-    if row["onto_podium"]:
+    if row.get("onto_podium"):
         remark = ""
 
 

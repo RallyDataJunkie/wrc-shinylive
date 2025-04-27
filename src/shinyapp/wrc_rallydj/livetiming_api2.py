@@ -1927,7 +1927,7 @@ class WRCTimingResultsAPIClientV2:
             df_stageTimes["timeInS"] = (
                 df_stageTimes["elapsedDurationMs"] / 1000
             ).round(1)
-
+            # This duplicates Chase?
             df_stageTimes["timeToCarBehind"] = (
                 df_stageTimes["timeInS"].diff(-1).round(1)
             )

@@ -1161,10 +1161,19 @@ with ui.accordion(open=False):
                     def stage_report_remarks():
                         priority = input.category()
                         stageId = input.stage()
-                        stages_info = wrc.getStageInfo(raw=False)
-                        if not priority or not stageId or stages_info.empty:
-                            return ui.markdown("*No stage to remark on...*")
+                        if not priority or not stageId:
+                            return  "Still initialising..."
                         stageId = int(stageId)
+                        # TO DO - the following is called all over the place
+                        # TO DO need to address this; the reactivitry has gone to pot
+                        setStageData()
+
+                        stages_info = wrc.getStageInfo(raw=False)
+                        # TO DO elsewhere we return into overallResults not overall_df
+                        _, _, overall_df = getOverallStageResultsCore(
+                            stageId, priority, stages_info
+                        )
+                        print(overall_df)
 
                         stages_info["stageInDay"] = (
                             stages_info.groupby(["day"]).cumcount() + 1
@@ -1177,24 +1186,25 @@ with ui.accordion(open=False):
                         stage_code = stage_info["code"]
                         stage_name = stage_info["name"]
 
+                        print(stage_code, stage_name)
+
                         _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
                         md.append(_md)
 
-                        times = wrc.getStageTimes(stageId = stageId, priority=priority, raw=False)
+                        times = wrc.getStageTimes(
+                            stageId=stageId, priority=priority, raw=False
+                        )
                         times.sort_values("position", inplace=True)
 
-                        # TO DO elsewhere we return into overallResults
-                        _, stagesInfo, overall_df = getOverallStageResultsData()
                         # TO DO do we still need stages_info ? Or could we return it as raw and remove the stages_info requirement previously?
 
                         if times.empty or overall_df.empty:
                             return  # Anything else we could report here?
-
+                        print(overall_df["carNo"], times.iloc[0]["carNo"])
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "position"
                         ].iloc[0]
-
-                        _md = f"""{times.iloc[0]["driverName"]} was in {Nth(1)} position on the stage and {Nth(overall_pos)} overall.
+                        _md = f"""{times.iloc[0]["driverName"]} was in {Nth(1)} position on stage and {Nth(overall_pos)} overall.
                         """
                         md.append(_md)
 
@@ -1208,6 +1218,8 @@ with ui.accordion(open=False):
                             _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
 
                             md.append(_md)
+
+                        # TO DO remark eg team made clean sweep of podium with X in second, M behind, and Y in third, a further Z back.
 
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
@@ -1241,22 +1253,23 @@ with ui.accordion(open=False):
                         ):  # Check if leader exists in times
                             leaderPos = leader_row.iloc[0]["position"]
                             leaderDiff = leader_row.iloc[0]["Gap"]
-                            # eg  00:00:00 seconds behind
+                            # TO DO - the following is badly duped if we get a new leader
                             _md = f"""Rally leader {overall_df.iloc[0]["driverName"]} was {leaderDiff} seconds off the stage winner in {Nth(leaderPos)} position."""
                             md.append(_md)  # Properly append the string
 
                         # External rules test
-                        # TO DO this is current broken
-                        # _overall_diff = core_stage(
-                        #    wrc,
-                        #    stages_info,
-                        #    stageId, #stage_code,
-                        # )
-                        # remarks = process_rally_overall_rules(_overall_diff)
-                        # for remark in remarks:
-                        #    md.append(remark[0])
+                        # TO DO this is currently broken
+                        _overall_diff = core_stage(
+                            wrc,
+                            stages_info,
+                            stageId,  # stage_code,
+                        )
+                        remarks = process_rally_overall_rules(_overall_diff)
+                        for remark in remarks:
+                            md.append(remark[0])
 
-                        return ui.markdown("\n\n".join(md))
+                        if md:
+                            return ui.markdown("\n\n".join(md))
 
                 with ui.accordion_panel("Stage map"):
 
@@ -2121,6 +2134,7 @@ def setStageData():
 @reactive.calc
 @reactive.event(input.stage, input.display_latest_overall, input.category)
 def getOverallStageResultsData():
+    priority = input.category()
     setStageData()
     stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
         by="number", ascending=True
@@ -2135,11 +2149,13 @@ def getOverallStageResultsData():
             stageId = completed_stages.iloc[-1]["stageId"]
     else:
         stageId = input.stage()
+        stageId = int(stageId)
 
+    return getOverallStageResultsCore(stageId, priority, stagesInfo)
+
+def getOverallStageResultsCore(stageId, priority, stagesInfo):
     overallResults = DataFrame()
     if stageId and not stagesInfo.empty:
-        stageId = int(stageId)
-        priority = input.category()
         overallResults = wrc.getStageOverallResults(
             stageId=stageId, priority=priority, raw=False
         )
