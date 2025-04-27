@@ -1154,6 +1154,110 @@ with ui.accordion(open=False):
                         md.append(_md_final)
                         return ui.markdown("\n\n".join(md))
 
+                with ui.accordion_panel("Stage remarks"):
+
+                    @render.ui
+                    @reactive.event(input.category, input.stage)
+                    def stage_report_remarks():
+                        priority = input.category()
+                        stageId = input.stage()
+                        stages_info = wrc.getStageInfo(raw=False)
+                        if not priority or not stageId or stages_info.empty:
+                            return ui.markdown("*No stage to remark on...*")
+                        stageId = int(stageId)
+
+                        stages_info["stageInDay"] = (
+                            stages_info.groupby(["day"]).cumcount() + 1
+                        )
+                        stage_info = stages_info[
+                            stages_info["stageId"] == stageId
+                        ].iloc[0]
+                        md = []
+
+                        stage_code = stage_info["code"]
+                        stage_name = stage_info["name"]
+
+                        _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
+                        md.append(_md)
+
+                        times = wrc.getStageTimes(stageId = stageId, priority=priority, raw=False)
+                        times.sort_values("position", inplace=True)
+
+                        # TO DO elsewhere we return into overallResults
+                        _, stagesInfo, overall_df = getOverallStageResultsData()
+                        # TO DO do we still need stages_info ? Or could we return it as raw and remove the stages_info requirement previously?
+
+                        if times.empty or overall_df.empty:
+                            return  # Anything else we could report here?
+
+                        overall_pos = overall_df.loc[
+                            overall_df["carNo"] == times.iloc[0]["carNo"], "position"
+                        ].iloc[0]
+
+                        _md = f"""{times.iloc[0]["driverName"]} was in {Nth(1)} position on the stage and {Nth(overall_pos)} overall.
+                        """
+                        md.append(_md)
+
+                        stagewinners = getStageWinners()
+                        if not stagewinners.empty:
+                            winner_row = stagewinners.loc[
+                                stagewinners["stageId"] == stageId
+                            ]
+                            print(winner_row.to_dict())
+
+                            _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
+
+                            md.append(_md)
+
+                        if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
+                            leader_row = times.loc[
+                                times["carNo"] == overall_df.iloc[0]["carNo"]
+                            ]
+                            leader = leader_row.iloc[0]["driverName"]
+                        else:
+                            leader = ""
+                            leader_row = DataFrame()
+
+                        CLOSE_PACE = 0.1  # 0.05
+                        on_the_pace = times[times["pace diff (s/km)"] < CLOSE_PACE]
+                        leader_handled = False
+
+                        if len(on_the_pace) > 1:
+                            _md = "Also on the pace"
+                            for _, r in on_the_pace[1:].iterrows():
+                                if leader == r["driverName"]:
+                                    leader_handled = True
+                                    leader_text = "rally leader "
+                                else:
+                                    leader_text = ""
+                                _md = (
+                                    _md
+                                    + f""", {leader_text}{r["driverName"]} was just {r["Gap"]}s behind ({round(r["pace diff (s/km)"], 2)} s/km off the stage winner)"""
+                                )
+                            md.append(_md + ".")
+
+                        if (
+                            not leader_row.empty and not leader_handled
+                        ):  # Check if leader exists in times
+                            leaderPos = leader_row.iloc[0]["position"]
+                            leaderDiff = leader_row.iloc[0]["Gap"]
+                            # eg  00:00:00 seconds behind
+                            _md = f"""Rally leader {overall_df.iloc[0]["driverName"]} was {leaderDiff} seconds off the stage winner in {Nth(leaderPos)} position."""
+                            md.append(_md)  # Properly append the string
+
+                        # External rules test
+                        # TO DO this is current broken
+                        # _overall_diff = core_stage(
+                        #    wrc,
+                        #    stages_info,
+                        #    stageId, #stage_code,
+                        # )
+                        # remarks = process_rally_overall_rules(_overall_diff)
+                        # for remark in remarks:
+                        #    md.append(remark[0])
+
+                        return ui.markdown("\n\n".join(md))
+
                 with ui.accordion_panel("Stage map"):
 
                     @render_widget
