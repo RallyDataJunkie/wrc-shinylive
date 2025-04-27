@@ -1067,10 +1067,14 @@ with ui.accordion(open=False):
                         ss_index = itinerary_df[
                             itinerary_df["code"] == stage_code
                         ].index[0]
+                        itinerary_for_stage = itinerary_df.iloc[ss_index]
 
+                        # Stage status
+                        state_status = itinerary_df.iloc[ss_index]["status"]
+                        stage_status_ = f" [{state_status}]" if state_status else ""
                         # Remark on stage name
                         stage_name = stage_info["name"]
-                        _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
+                        _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)* {stage_status_}"""
                         md.append(_md)
 
                         # Remark on being the Nth stage of the day
@@ -1085,7 +1089,7 @@ with ui.accordion(open=False):
 
                         # Remark on stage start time
                         start_time = datetime.fromisoformat(
-                            itinerary_df.iloc[ss_index]["firstCarDueDateTime"]
+                            itinerary_for_stage["firstCarDueDateTime"]
                         )
                         time_str = (
                             start_time.strftime("First car due on stage at %I.%M%p.")
