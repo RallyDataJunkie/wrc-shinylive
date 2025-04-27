@@ -721,7 +721,7 @@ with ui.accordion(open=False):
                     )
 
                     ax = chart_seaborn_linechart_stage_progress_typ(
-                        wrc, overall_typ_wide, typ
+                        wrc, overall_typ_wide, typ, greyupper=True
                     )
                     return ax
 

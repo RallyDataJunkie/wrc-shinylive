@@ -167,7 +167,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
         x="distance",
         y="time",
         hue="carNo",
-        ax=ax
+        ax=ax,
     )
 
     if rebase_driver and rebase_driver != "ult":
@@ -240,9 +240,11 @@ def chart_seaborn_linechart_stage_progress_positions(wrc, overall_times_wide):
     )
 
 
-def chart_seaborn_linechart_stage_progress_typ(wrc, overall_times_wide, typ="position"):
+def chart_seaborn_linechart_stage_progress_typ(
+    wrc, overall_times_wide, typ="position", greyupper=False
+):
     overall_cols = wrc.getOverallStageCols(overall_times_wide)
-    if typ=="position":
+    if typ == "position":
         # This does essentially a category rank on all passed rows
         # TO DO handle category or overall etc properly
         overall_times_wide[overall_cols] = overall_times_wide[overall_cols].apply(
@@ -256,12 +258,27 @@ def chart_seaborn_linechart_stage_progress_typ(wrc, overall_times_wide, typ="pos
         var_name="roundN",
         value_name=typ,
     )
+    fig, ax = plt.subplots()
+    if greyupper:
+        # Highlight the region where y > 0 (drawn FIRST)
+        if "position" in typ or typ == "timeInS":
+            ax.axhspan(
+                overall_times_pos_long[typ].min(),
+                0,
+                facecolor="lightgrey",
+                alpha=0.5,
+                zorder=0,
+            )
+        else:
+            ax.axhspan(
+                0,
+                overall_times_pos_long[typ].max(),
+                facecolor="lightgrey",
+                alpha=0.5,
+                zorder=0,
+            )
     ax = lineplot(
-        data=overall_times_pos_long,
-        x="roundN",
-        y=typ,
-        hue="carNo",
-        legend=False,
+        data=overall_times_pos_long, x="roundN", y=typ, hue="carNo", legend=False, ax=ax
     )
     x_min, x_max = ax.get_xlim()
     for car in overall_times_pos_long["carNo"].unique():
@@ -307,7 +324,7 @@ def chart_seaborn_linechart_stage_progress_typ(wrc, overall_times_wide, typ="pos
                 fontsize=9,
             )
     ax.set(xlabel=None, ylabel=f"Overall {typ}")
-    if "position" in typ or typ=="timeInS":
+    if "position" in typ or typ == "timeInS":
         ax.invert_yaxis()
 
     # To Do - option for having distance along x esp. for timeInS -> gradient gives pace difference
@@ -413,7 +430,13 @@ def sparks_test():
     fig = plt.figure(figsize=(15, 10), facecolor="white")
 
     # Define metrics to plot
-    metrics = ["overall_pos", "overall_gap", "overall_pos_change", "stage_pos", "stage_gap"]
+    metrics = [
+        "overall_pos",
+        "overall_gap",
+        "overall_pos_change",
+        "stage_pos",
+        "stage_gap",
+    ]
 
     # Set up the grid
     n_rows = len(codes)
@@ -426,7 +449,11 @@ def sparks_test():
     x_gap = 0.95 / len(metrics)
     for metric in metrics:
         plt.figtext(
-            x_pos, 0.95, metric.replace("_", " ").title(), fontsize=12, fontweight="bold"
+            x_pos,
+            0.95,
+            metric.replace("_", " ").title(),
+            fontsize=12,
+            fontweight="bold",
         )
         x_pos += x_gap
 
@@ -503,7 +530,9 @@ def sparks_test():
             xmax=0.95,
         )
 
-    plt.subplots_adjust(wspace=0.1, hspace=0.1, left=0.05, right=0.95, top=0.9, bottom=0.05)
+    plt.subplots_adjust(
+        wspace=0.1, hspace=0.1, left=0.05, right=0.95, top=0.9, bottom=0.05
+    )
     # plt.suptitle("Sparkline Dashboard", fontsize=14, y=0.98)
 
     plt.tight_layout(rect=[0, 0, 1, 0.93])
