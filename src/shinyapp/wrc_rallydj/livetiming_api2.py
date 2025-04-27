@@ -1818,7 +1818,7 @@ class WRCTimingResultsAPIClientV2:
                         )
                 if itinerary_stages.empty:
                     return False
-                
+
                 itinerary_stages["status"] = itinerary_stages["status"].str.lower()
                 # TO DO also put date bounds on this
                 return "running" in itinerary_stages["status"].tolist()
@@ -2489,10 +2489,12 @@ class WRCTimingResultsAPIClientV2:
 
         overall_df = r
         overall_df["roadPos"] = range(1, len(overall_df) + 1)
-        overall_df.sort_values(["stageOrder", "position"], inplace=True)
+
+        sort_keys_ = ["stageOrder", "position"] if "stageOrder" in overall_df.columns else ["position"]
+        overall_df.sort_values(sort_keys_, inplace=True)
         # overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
         overall_df["categoryPosition"] = overall_df.groupby("stageCode").cumcount() + 1
-        overall_df.sort_values(["stageOrder", "roadPos"], inplace=True)
+        #overall_df.sort_values(sort_keys_, inplace=True)
 
         # if we were working wihtin groups, eg for class position
         # overall_df["Diff"] = overall_df.groupby("stageCode")["diffPrevMs"].apply(
