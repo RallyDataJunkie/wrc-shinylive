@@ -545,9 +545,11 @@ with ui.accordion(open=False):
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
                 ui.markdown(
-                    "*Progress across stages.* (TO DO - select position or points)"
+                    "*Progress across stages.*"
                 )
 
+                # TO DO - tidy up  reactive.event
+                # Move get_overall_pos_wide declaration up the page and use it in decorator
                 @render.plot(alt="Line chart of overall rally positions.")
                 @reactive.event(
                     input.category,
@@ -555,6 +557,7 @@ with ui.accordion(open=False):
                     input.event_day,
                     input.event_section,
                     input.progression_report_type,
+                    input.display_latest_overall,
                 )
                 def seaborn_linechart_stage_progress_positions():
                     overall_times_wide = get_overall_pos_wide()
@@ -634,7 +637,7 @@ with ui.accordion(open=False):
                 with ui.tooltip(id="progression_rebase_type_tt"):
                     ui.input_select(
                         "progression_rebase_type",
-                        "Progression rebase type: (TO DO - on stage time rebase)",
+                        "Progression rebase type:",
                         {
                             "bystagetime": "Stage time",
                             "byrallytime": "Overall rally time",
@@ -2369,7 +2372,7 @@ def getItinerary():
 
 
 @reactive.calc
-@reactive.event(input.stage, input.category)
+@reactive.event(input.stage, input.category, input.display_latest_overall)
 def get_overall_pos_wide():
     stageId = input.stage()
     if not stageId:
@@ -2378,8 +2381,9 @@ def get_overall_pos_wide():
     # TO DO - up to
     stageId = None
     priority = input.category()
+    running = not input.display_latest_overall()
     overall_times_wide = wrc.getStageOverallWide(
-        stageId=stageId, priority=priority, completed=True, typ="position"
+        stageId=stageId, priority=priority, completed=True, running=running, typ="position"
     )  # typ: position, totalTimeInS
 
     return overall_times_wide

@@ -1486,6 +1486,7 @@ class WRCTimingResultsAPIClientV2:
         stage_code=None,
         stage_name=None,
         completed=False,
+        running=False,
         raw=True,
         updateDB=False,
         noLiveCheck=False,
@@ -1520,8 +1521,9 @@ class WRCTimingResultsAPIClientV2:
             stage_code = []
 
         # completed_ = """AND si.status="Completed" """ if completed else ""
+        running_ = ', "Running"' if running else ""
         completed_ = (
-            """AND si.status IN ("Completed", "Cancelled", "Interrupted") """
+            f"""AND si.status IN ("Completed", "Cancelled", "Interrupted" {running_}) """
             if completed
             else ""
         )
@@ -1824,6 +1826,7 @@ class WRCTimingResultsAPIClientV2:
         self,
         stageId=None,
         completed=False,
+        running=False,
         omitDNS=True,
         priority=None,
         rebaseToCategory=True,
@@ -2081,6 +2084,7 @@ class WRCTimingResultsAPIClientV2:
         stageId=None,
         priority=None,
         completed=False,
+        running=False,
         typ="position",
         extent="overall",  # stage | overall
         updateDB=False,
@@ -2092,6 +2096,7 @@ class WRCTimingResultsAPIClientV2:
             overall_times = self.getStageTimes(
                 stageId=stageId,
                 completed=completed,
+                running=running,
                 priority=priority,
                 raw=False,
                 updateDB=updateDB,
@@ -2103,6 +2108,7 @@ class WRCTimingResultsAPIClientV2:
                 stageId=stageId,
                 priority=priority,
                 completed=completed,
+                running=running,
                 updateDB=updateDB,
             )
         if overall_times.empty:
@@ -2303,10 +2309,11 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageOverallResults(*args, **kwargs)
 
-    def getCompletedStages(self, stageId=None, stageMode="uptoincl", on_event=True):
+    # TO DO  - improve this; have a function that gets stages by status (Running, To run, completed, cancelled, posotponed etc)
+    def getCompletedStages(self, stageId=None, completed=True, running=False, stageMode="uptoincl", on_event=True):
         # stageId is the up to an including stageId, else all TO DO still
         completed_stages = (
-            self.getStageInfo(raw=False, on_event=on_event, completed=True)
+            self.getStageInfo(raw=False, on_event=on_event, completed=completed, running=running)
             .sort_values("number")
             .reset_index(drop=True)
         )
@@ -2379,17 +2386,17 @@ class WRCTimingResultsAPIClientV2:
         return False
 
     def getStageOverallResults(
-        self, stageId=None, priority=None, completed=False, raw=True, updateDB=False
+        self, stageId=None, priority=None, completed=False, running=False, raw=True, updateDB=False
     ):
         # The assumption below is for on_event
         stageIds = (
-            self.getCompletedStages(stageId=stageId)
-            if completed
+            self.getCompletedStages(stageId=stageId, completed=completed, running=running)
+            if completed or running
             else {}  # TO DO map for the default stageId
         )
         if updateDB or self.liveCatchup:
             logger.debug(
-                f"getStageOverallResults: completed: {completed} updateDB:{updateDB} liveCatchup: {self.liveCatchup} isStageLive: {self.isStageLive(stageId=stageId)}"
+                f"getStageOverallResults: completed: {completed} running: {running} updateDB:{updateDB} liveCatchup: {self.liveCatchup} isStageLive: {self.isStageLive(stageId=stageId)}"
             )
             if completed:
                 # Check availability of every stage required
@@ -2414,7 +2421,7 @@ class WRCTimingResultsAPIClientV2:
 
         stageId = stageId if stageId else self.stageId
         # TO DO if stageId and completed treat that as up to?
-        if self.eventId and self.rallyId and (stageId or completed):
+        if self.eventId and self.rallyId and (stageId or completed or running):
             priority = None if priority == "P0" else priority
             _entry_join = f"INNER JOIN entries AS e ON o.entryId=e.entryId"
             _stage_info_join = f"INNER JOIN stage_info AS si ON si.stageId=o.stageId"
@@ -2428,8 +2435,9 @@ class WRCTimingResultsAPIClientV2:
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
             # completed_ = """AND si.status="Completed" """ if completed else ""
+            running_ = ', "Running"' if running else ""
             completed_ = (
-                """AND si.status IN ("Completed", "Cancelled", "Interrupted") """
+                f"""AND si.status IN ("Completed", "Cancelled", "Interrupted" {running_}) """
                 if completed
                 else ""
             )
