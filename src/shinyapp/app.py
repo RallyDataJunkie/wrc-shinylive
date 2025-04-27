@@ -7,7 +7,7 @@ from wrcapi_rallydj.data_api import WRCDataAPIClient
 
 from datetime import datetime
 from icons import question_circle_fill
-from pandas import DataFrame, isna, to_numeric, to_datetime
+from pandas import DataFrame, isna, to_numeric, to_datetime, NA
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap
 import re
@@ -713,6 +713,14 @@ with ui.accordion(open=False):
                     if overall_typ_wide.empty or not progression_type:
                         return
                     typ = progression_report_types[progression_type]
+                    overall_typ_wide = overall_typ_wide.copy()
+                    # Replace values > 100 with NaN or clip them
+                    split_cols = wrc.getStageCols(overall_typ_wide)
+                    THRESHOLD=100
+                    overall_typ_wide[split_cols] = overall_typ_wide[split_cols].where(
+                        overall_typ_wide[split_cols] <= THRESHOLD, NA
+                    )
+
                     ax = chart_seaborn_linechart_stage_progress_typ(
                         wrc, overall_typ_wide, typ
                     )
@@ -1094,7 +1102,6 @@ with ui.accordion(open=False):
                             _md = f"{_md} *It is the longest stage on the rally.*"
 
                         # Remark on number of split points
-                        # XX
                         splits_ = wrc.getStageSplitPoints(stageId=int(stageId))
                         if not splits_.empty:
                             splitsLen_ = len(splits_)
@@ -2273,7 +2280,6 @@ def update_stage_select():
 
     stages["label"] = stages.apply(lambda row: f"{row['code']} ({row['name']})", axis=1)
     stages = stages.set_index("stageId")["label"].to_dict()
-
     if wrc.isRallyLive():
         live_stages = wrc.getLiveStages()
         if not live_stages.empty:

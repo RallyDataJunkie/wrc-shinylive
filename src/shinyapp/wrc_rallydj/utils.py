@@ -22,11 +22,10 @@ def is_date_in_range(date_dict):
 
     # Add leeway of 12 hours on both sides
     start_with_leeway = start_date - timedelta(hours=12)
-    end_with_leeway = end_date + timedelta(hours=12)
+    end_with_leeway = end_date + timedelta(hours=18)
 
     # Get current date and time
     now = datetime.now()
-
     # Check if now is within the range (inclusive)
     return start_with_leeway <= now <= end_with_leeway
 

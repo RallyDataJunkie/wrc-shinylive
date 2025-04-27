@@ -1801,6 +1801,7 @@ class WRCTimingResultsAPIClientV2:
         event_ = season[season["eventId"] == self.eventId]
         if not event_.empty:
             event = event_.iloc[0].to_dict()
+
             if is_date_in_range(event):
                 # TO DO - various itinerary controls report status
                 # itinerarySections: status: ToRun, Running
@@ -1817,9 +1818,11 @@ class WRCTimingResultsAPIClientV2:
                         )
                 if itinerary_stages.empty:
                     return False
+                
                 itinerary_stages["status"] = itinerary_stages["status"].str.lower()
                 # TO DO also put date bounds on this
                 return "running" in itinerary_stages["status"].tolist()
+
         return False
 
     def getStageTimes(
@@ -2578,8 +2581,6 @@ class WRCTimingResultsAPIClientV2:
             _on_event_entry = ""
 
         sql = f"""SELECT entryId, COUNT(*) AS stage_wins FROM stagewinners WHERE 1=1 {_on_event} {_on_entry} {_on_event_entry} GROUP BY entryId, eventId ORDER BY stage_wins DESC;"""
-        print(sql)
-        print("wtaf")
         r = self.db_manager.read_sql(sql)
         return r
 
