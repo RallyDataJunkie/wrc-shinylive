@@ -700,14 +700,14 @@ with ui.accordion(open=False):
                     input.stage,
                     input.event_day,
                     input.event_section,
-                    input.progression_rebase_type,
+                    #input.progression_rebase_type,
                     input.rally_progression_rebase_driver,
                     input.display_latest_overall,
                 )
                 def seaborn_linechart_stage_typ():
                     # HACK this chart is harwdired:
                     # - line chart makes no sense for stage progression
-                    overall_typ_wide = get_overall_typ_wide2_rebased()
+                    overall_typ_wide = get_overall_typ_wide3_rebased()
                     progression_type = "byrallytime"  # input.progression_rebase_type()
                     if overall_typ_wide.empty or not progression_type:
                         return
@@ -2443,28 +2443,13 @@ def _get_overall_typ_wide_core(
     return overall_times_wide
 
 
-@reactive.calc
-@reactive.event(
-    input.stage,
-    input.category,
-    input.rally_progression_rebase_driver,
-    input.progression_rebase_type, input.display_latest_overall
-)
-def get_overall_typ_wide2_rebased():
-    stageId = input.stage()
-    if not stageId:
-        return DataFrame()
-    stageId = int(stageId)
-    progression_report_typ = input.progression_rebase_type()
-    # TO DO - up to
-    stageId = None
-    priority = input.category()
-    running = not input.display_latest_overall()
+def get_overall_typ_wide_core_1(stageId, progression_report_typ,priority,running, rebase_driver):
+    
     overall_times_wide = _get_overall_typ_wide_core(
         stageId, priority, progression_report_typ, running=running
     )
 
-    rebase_driver = input.rally_progression_rebase_driver()
+
 
     if overall_times_wide.empty or not rebase_driver:
         return DataFrame()
@@ -2479,6 +2464,41 @@ def get_overall_typ_wide2_rebased():
         overall_times_wide, rebase_driver, "carNo", stage_cols
     )
     return output_
+
+
+@reactive.calc
+@reactive.event(
+    input.stage,
+    input.category,
+    input.rally_progression_rebase_driver,
+    input.progression_rebase_type,
+    input.display_latest_overall,
+)
+def get_overall_typ_wide2_rebased():
+    return get_overall_typ_wide_core_1(
+        stageId=None,
+        progression_report_typ=input.progression_rebase_type(),
+        priority=input.category(),
+        running=not input.display_latest_overall(),
+        rebase_driver=input.rally_progression_rebase_driver(),
+    )
+
+
+@reactive.calc
+@reactive.event(
+    input.stage,
+    input.category,
+    input.rally_progression_rebase_driver,
+    input.display_latest_overall,
+)
+def get_overall_typ_wide3_rebased():
+    return get_overall_typ_wide_core_1(
+        stageId=None,
+        progression_report_typ="byrallytime",
+        priority=input.category(),
+        running=not input.display_latest_overall(),
+        rebase_driver=input.rally_progression_rebase_driver(),
+    )
 
 
 @reactive.calc
