@@ -1913,6 +1913,7 @@ class WRCTimingResultsAPIClientV2:
             df_stageTimes["Diff"] = df_stageTimes["diffPrevMs"].apply(
                 lambda x: round(x / 1000, 1) if notnull(x) else nan
             )
+            df_stageTimes["Chase"] = df_stageTimes["Diff"].shift(-1)
         if "elapsedDurationMs" in df_stageTimes:
             # df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
             #    lambda x: x / 1000 if notnull(x) else nan
@@ -2499,6 +2500,7 @@ class WRCTimingResultsAPIClientV2:
             ].transform(
                 lambda group: where(notnull(group), group.div(1000).round(1), nan)
             )
+            overall_df["Chase"] = overall_df["Diff"].shift(-1)
         if "totalTimeMs" in overall_df:
             # df_stageTimes["timeInS"] = df_stageTimes["elapsedDurationMs"].apply(
             #    lambda x: x / 1000 if notnull(x) else nan
