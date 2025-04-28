@@ -792,7 +792,7 @@ with ui.accordion(open=False):
                 @reactive.event(input.rally_progression_base_interpretation_switch)
                 def rally_progression_report_base_interpretation():
                     if input.rally_progression_base_interpretation_switch():
-                        md = f"""\n\nThe *rally progression report* includes two components. A *rally progression rebase heatmap* table and an *overall rally time progression* line chart.\n\nBoth reports rely on the notion of *rebasing*. *Rebased* values are calculated as the delta between each driver and selected driver.\n\nTwo different rebase options are provided:\n\n - __Stage time__: rebase each driver's *stage time* relative to a selected driver. This view allows to identify stages on which particular driver's performed well, or poorly, for example;\n\n  - __Overall rally time__: rebase each driver's *overall elapsed rally time* relative to a selected driver. This view allows us to compare the overall gaps between a selected driver and each other driver at the end of each stage."""
+                        md = f"""\n\nThe *rally progression report* includes two components. A *rally progression rebase heatmap* table and an *overall rally time progression* line chart.\n\nBoth reports rely on the notion of *rebasing*. *Rebased* values are calculated as the delta between each driver and the selected rebase driver.\n\nTwo different rebase options are provided:\n\n - __Stage time__: rebase each driver's *stage time* relative to a selected driver. This view allows to identify stages on which particular driver's performed well, or poorly, for example;\n\n  - __Overall rally time__: rebase each driver's *overall elapsed rally time* relative to a selected driver. This view allows us to compare the overall gaps between a selected driver and each other driver at the end of each stage."""
 
                         return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
@@ -1888,6 +1888,8 @@ with ui.accordion(open=False):
                             'Rebased delta times and pace are calculated relative to the selected "rebase" driver.'
 
                     """ TO DO: sort order dropdown (SP.., RoadPos, position); show: Top10, Top20, All"""
+
+
                     # Create driver rebase selector
                     with ui.tooltip(id="rebase_driver_tt"):
                         ui.input_select(
@@ -1897,6 +1899,28 @@ with ui.accordion(open=False):
                         ),
                         '"Rebase" times relative to a nominated driver. The "ULTIMATE" driver is derived from the quickest times within each split sector .'
 
+                    @render.express
+                    @reactive.event(input.interpretation_prompt_switch)
+                    def stage_progression_rebase_select_interpretation_container():
+                        ui.input_switch(
+                            "stage_progression_rebase_select_interpretation_switch",
+                            "Show interpretation prompts",
+                            False,
+                        )
+
+                    @render.ui
+                    @reactive.event(
+                        input.stage_progression_rebase_select_interpretation_switch
+                    )
+                    def stage_progression_report_rebase_select_interpretation():
+                        if (
+                            input.stage_progression_rebase_select_interpretation_switch()
+                        ):
+                            md = "The driver rebase selector sets a selected rebase driver against whom delta times for all the other drivers are caluclated at each split point.\n\nThe selector also includes an *ULTIMATE* driver, whose times are made up from the best *in-section* split duration for each split (that is, the quickest time recorded to get from one split to the next, irrespective of the overall elasped time at each split point.\n\n*Note that the *ULTIMATE* time may not represent an achievable time. For example, a driver might record a particularly fast time on one split section but aat the cost of doing so much damage to the tyres that it is difficult, it not inmpossible, to record any good times on later split sections in the same stage. Changeable weather conditions may also affect times on particular split sections at different times when the stage is running, and so on.*"
+                            return ui.markdown(
+                                f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                            )
+                        
                     @render.ui
                     @reactive.event(
                         input.stage, input.rebase_driver, input.splits_refresh
@@ -1992,7 +2016,9 @@ with ui.accordion(open=False):
                                 cols=split_cols,
                                 within_cols_gradient=input.split_prog_rebase_incols(),
                                 reverse_palette=rebase_reverse_palette,
-                                # TO DO  - explore using seaborn approach
+                                # TO DO - consider pace bsed thresholds
+                                # Pass in sector/stage distances and set a nominal pace threshold (s/km)
+                                # Then set colour based on on maxing the color at the pace threshold
                                 use_linear_cmap=True,
                             )
                             .hide()
@@ -2129,8 +2155,7 @@ with ui.accordion(open=False):
                                 if (
                                     input.stage_progression_barchart_interpretation_switch()
                                 ):
-                                    md = """\n\n TO DO  also the dropdown  
-                                    Two flavours of rebased split time bar chart can be displayed:\n\n  - __Split section groups:__ \n\n\n\n  - __Driver groups:__ \n\n"""
+                                    md = f"""\n\nThe *stage progression bar chart* uses a grouped horizontal bar chart to display time deltas to a selected rebase driver in two possible ways: *split section groups* and *driver groups*. In each case, *rebased* values are calculated as the delta between each driver and the selected rebase driver.\n\nTwo different rebase options are provided\n\n - __Split section groups__: group the bars within split sections. Each bar in the group corresponds to a different driver, in road position order;\n\n  - __Driver groups__: group the bars by driver. Each bar in the group corresponds to a split section, in split section order.\n\nThe bars are coloured with respect to each driver's delta, so *negative* deltas (other driver is quicker than selected rebase driver) are coloured *green*, and *positive* deltas (other driver is *slower*) are coloured *red*. The hotizontal axis is reversed, so *positive* deltas (*red*, other driver is *slower* compared to selected rebase driver) extend to the *left* and *negative* deltas (*green*, other driver is *slower* compared to selected rebase driver) extend to the *right*.\n\n__Things to look for__:\n\n  - __Split section groups__: if all the bars in a particular group have __green bars to the right__, all the other drivers compared to the selected rebase driver were faster on that split section, so the selected rebase driver had a *bad* stage. If the bars within a single group are all *red* and to the *left*, all the other drivers performed worse than the selected rebase driver, so the selected rebase driver had a *good* stage. If a single bar consistently points in the opposite direction compared to the other bars across all groups, the driver associated with that bar (given by road order /  the order in the rebase driver selection box) fared counter to all the other drivers on that stage. So for example, if all the bars but one are red and the the left, and the same single bar across the driver groups is consistently green and to the right, that singleton driver was doing better than the selected rease driver, and all the other drivers were doing worse. If a single bar extends a long way red and to the left, that driver on that split had a particularly bad time.\n\n__Driver groups__: if all the bars point in the same direction within a driver group, that indicates that the driver performed better (green, to the right) or worse (red, to the left) than the selected rebase driver. If a single bar extends a long way red and to the left, that driver on that split had a particularly bad time.\n\n"""
 
                                     ui.markdown(
                                         f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""

@@ -158,6 +158,9 @@ def df_color_gradient_styler(
             elif abs(col_neg_min)<col_pos_max and abs(col_neg_min) * multiplier_ > col_pos_max:
                 col_neg_min = -1 * col_pos_max
 
+        # TO DO - consider pace bsed thresholds
+        # Pass in sector/stage distances and set a nominal pace threshold (s/km)
+        # Then set colour based on on maxing the color at the pace threshold
         if use_linear_cmap:
             color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value_with_cmap(
                 x, pos_max, neg_max
