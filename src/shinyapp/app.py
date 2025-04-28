@@ -188,7 +188,9 @@ with ui.accordion(open=False):
 
             if seasons_info["name"].nunique() > 1:
                 others_ = [
-                    f"`{c}`" for c in seasons_info["name"].unique() if c != season_info["name"]
+                    f"`{c}`"
+                    for c in seasons_info["name"].unique()
+                    if c != season_info["name"]
                 ]
                 md = f"""{md}\n\n*Also available, data for {andList(others_)}.*"""
 
@@ -863,11 +865,13 @@ with ui.accordion(open=False):
                     input.rally_progression_rebase_driver,
                     input.rprog_rebase_incols,
                     input.display_latest_overall,
-                    input.rebase_rally_progression_reverse_palette
+                    input.rebase_rally_progression_reverse_palette,
                 )
                 def stage_progression_heat():
                     progression_rebase_type = input.progression_rebase_type()
-                    rebase_reverse_palette = input.rebase_rally_progression_reverse_palette()
+                    rebase_reverse_palette = (
+                        input.rebase_rally_progression_reverse_palette()
+                    )
                     overall_typ_wide = (
                         get_overall_typ_wide2_rebased()
                     )  # get_overall_typ_wide() #XX
@@ -904,7 +908,7 @@ with ui.accordion(open=False):
                     if input.rally_progression_linechart_interpretation_switch():
                         md = """\n\nThe *overall rally time progression* line chart displays the rally progression data in a tabular form as a *heatmap*. Once again, this is rebased relative to a selected driver.\n\nNote the the vertical `y`-axis, giving the *overall elapsed rally time delta*, is inverted, with negative deltas (cars going *faster* than the selected rebase driver) *above* the origin in the *grey* coloured area of the chart."""
 
-                        md = f"""{md}\n\n__Things to look for in the line chart:__\n\n - how far a way a line is from the `y=0` origin line, indicates an increasing time delta bewteen that driver and the selected rease driver;\n\n  - a line with a __constant gradient__ shows a similar amopunt of time lost across each stage;\n\n  - a rebased line that goes *__into__ the grey area and then __out__ of it again* shows a driver getting *ahead then falling back behind* the selected rebase driver;\n\n - a rebased line that goes *__out of__ the grey area and then __into__ it again* shows a driver *falling behind* the selected rebase driver and then getting *ahead* of them again;\n\n  - a __single line that rapidly falls__ during a particular stage indicates that that driver had a particularly *bad* stage;\n\n  - The __more lines__ in the grey part of the chart, the *lower* the positin of the selected rebase driver. Conversely, the *more* lines below the `y=0` line, the higher ranked the selected rebase driver;\n\n  - if __all the lines suddenly go up__, the selected rebase driver lost a lot of time on that stage."""
+                        md = f"""{md}\n\n__Things to look for in the line chart:__\n\n - how far a way a line is from the `y=0` origin line, indicates an increasing time delta bewteen that driver and the selected rease driver;\n\n  - a line with a __constant gradient__ shows a similar amopunt of time lost across each stage;\n\n  - a rebased line that goes *__into__ the grey area and then __out__ of it again* shows a driver getting *ahead then falling back behind* the selected rebase driver;\n\n - a rebased line that goes *__out of__ the grey area and then __into__ it again* shows a driver *falling behind* the selected rebase driver and then getting *ahead* of them again;\n\n  - a __single line that rapidly falls__ during a particular stage indicates that that driver had a particularly *bad* stage.  *Check the splits data to see if there was a particular section where time was lost, or whether time was lost increasingly across stages;*\n\n  - The __more lines__ in the grey part of the chart, the *lower* the position of the selected rebase driver. Conversely, the *more* lines below the `y=0` line, the higher ranked the selected rebase driver;\n\n  - if __all the lines suddenly go up__, the selected rebase driver lost a lot of time on that stage. *Check the splits data to see if there was a particular section where time was lost, or whether time was lost increasingly across stages.*"""
 
                         md = f"""{md}\n\n*__TO DO__ - provide the option to select rally distance on the `x`-axis, with faint vertical lines indicating each stage; the constant graident would then indicate a constaint `pace` difference.*"""
 
@@ -1734,7 +1738,7 @@ with ui.accordion(open=False):
 
         with ui.accordion(open=False, id="splits_review_accordion"):
 
-            with ui.accordion_panel("Split times summary"):
+            with ui.accordion_panel("Split sections summary"):
 
                 ui.markdown("*Position / elapsed time across the split sections.*")
 
@@ -1771,7 +1775,44 @@ with ui.accordion(open=False):
                         return
                     return render.DataGrid(split_times_data)
 
-            with ui.accordion_panel("Split times detail"):
+            with ui.accordion_panel("Split sections detail"):
+
+                with ui.tooltip(id="splits_section_view_tt"):
+                    ui.input_select(
+                        "splits_section_view",
+                        "Section report view",
+                        {
+                            "time": "Within section time (s)",
+                            "time_acc": "Acc. section time (s)",
+                            "pace": "Av. pace in-section (s/km)",
+                            "speed": "Av. speed in-section (km/h)",
+                            "pos_within": "Within section rank",
+                            "pos_acc": "Acc. section rank",
+                        },
+                        selected="time",
+                    ),
+                    "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
+                    # Scope the view if data available
+
+                @render.express
+                @reactive.event(input.interpretation_prompt_switch)
+                def stage_progression_report_interpretation_container():
+                    ui.input_switch(
+                        "stage_progression_interpretation_switch",
+                        "Show interpretation prompts",
+                        False,
+                    )
+
+                @render.ui
+                @reactive.event(input.stage_progression_interpretation_switch)
+                def stage_progression_report_interpretation():
+                    md = """View options for the stage progression report include:\n\n- __Time (s) within each split__: the time taken *within each split*, i.e. the time to get from one split point to the next. *Lower* is better.* Use this to see which split sections a driver gained / lost time on.\n\n- __Speed (km/h) within each split__: the within split time divided by the distance between split points. *__Higher__ is better. Gives a sense of whether a particular section was fast or slow.*\n\n- __Pace (s/km) within each split__: the distance between split points divided by the within split time. *__Lower__ is better.* Comparison allows you to see how much time was gained / lost per km, compared to other driver.\n\n- __Accumulated time (s) across all splits__: view elapsed / accumulated stage time (in seconds) across each split. Use this to get a sense of how the stage times progressed across the stage.  *Lower* is better.*  If the split was the stage end, this would be the stage time. Use this to see how the "overall" stage time evolved across the splits.\n\n- __Rank position within split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* Treat the split as a "stage" in its own right. Use this to how the driver ranked ourely on the basis of this split section.\n\n- _Rank position of accumulated time at each split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* If the split was the stage end, this would be the stage position. Use this to see how the "overall" stage position evolved across the splits.\n\n"""
+
+                    if input.stage_progression_interpretation_switch():
+
+                        return ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
 
                 with ui.card(class_="mt-3"):
                     with ui.card_header():
@@ -1799,43 +1840,6 @@ with ui.accordion(open=False):
                             "pos_acc": "Rank position of accumulated time at each split",
                         }
                         return ui.markdown(typ[view])
-
-                @render.express
-                @reactive.event(input.interpretation_prompt_switch)
-                def stage_progression_report_interpretation_container():
-                    ui.input_switch(
-                        "stage_progression_interpretation_switch",
-                        "Show interpretation prompts",
-                        False,
-                    )
-
-                @render.ui
-                @reactive.event(input.stage_progression_interpretation_switch)
-                def stage_progression_report_interpretation():
-                    md = """View options for the stage progression report include:\n\n- __Time (s) within each split__: the time taken *within each split*, i.e. the time to get from one split point to the next. *Lower* is better.* Use this to see which split sections a driver gained / lost time on.\n\n- __Speed (km/h) within each split__: the within split time divided by the distance between split points. *__Higher__ is better. Gives a sense of whether a particular section was fast or slow.*\n\n- __Pace (s/km) within each split__: the distance between split points divided by the within split time. *__Lower__ is better.* Comparison allows you to see how much time was gained / lost per km, compared to other driver.\n\n- __Accumulated time (s) across all splits__: view elapsed / accumulated stage time (in seconds) across each split. Use this to get a sense of how the stage times progressed across the stage.  *Lower* is better.*  If the split was the stage end, this would be the stage time. Use this to see how the "overall" stage time evolved across the splits.\n\n- __Rank position within split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* Treat the split as a "stage" in its own right. Use this to how the driver ranked ourely on the basis of this split section.\n\n- _Rank position of accumulated time at each split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* If the split was the stage end, this would be the stage position. Use this to see how the "overall" stage position evolved across the splits.\n\n"""
-
-                    if input.progression_interpretation_switch():
-
-                        return ui.markdown(
-                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
-                        )
-
-                    with ui.tooltip(id="splits_section_view_tt"):
-                        ui.input_select(
-                            "splits_section_view",
-                            "Section report view",
-                            {
-                                "time": "Within section time (s)",
-                                "time_acc": "Acc. section time (s)",
-                                "pace": "Av. pace in-section (s/km)",
-                                "speed": "Av. speed in-section (km/h)",
-                                "pos_within": "Within section rank",
-                                "pos_acc": "Acc. section rank",
-                            },
-                            selected="time",
-                        ),
-                        "Select split section report type; time (s), position within or across splits, or, if available, average Pace (s/km) or average Speed (km/h)."
-                        # Scope the view if data available
 
                     # @render.table
                     @render.data_frame
@@ -1883,13 +1887,6 @@ with ui.accordion(open=False):
                             )
                             'Rebased delta times and pace are calculated relative to the selected "rebase" driver.'
 
-                        with ui.tooltip(id="rebase_reverse_palette_tt"):
-                            ui.input_checkbox(
-                                "rebase_reverse_palette",
-                                "Reverse rebase palette",
-                                False,
-                            ),
-                            "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
                     """ TO DO: sort order dropdown (SP.., RoadPos, position); show: Top10, Top20, All"""
                     # Create driver rebase selector
                     with ui.tooltip(id="rebase_driver_tt"):
@@ -1933,6 +1930,14 @@ with ui.accordion(open=False):
                             True,
                         ),
                         "Create heatmap palette within a column rather than across all columns."
+
+                    with ui.tooltip(id="rebase_reverse_palette_tt"):
+                        ui.input_checkbox(
+                            "rebase_reverse_palette",
+                            "Reverse rebase palette",
+                            False,
+                        ),
+                        "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
                     ui.input_switch(
                         "rebased_splits_type_switch",
@@ -1987,6 +1992,8 @@ with ui.accordion(open=False):
                                 cols=split_cols,
                                 within_cols_gradient=input.split_prog_rebase_incols(),
                                 reverse_palette=rebase_reverse_palette,
+                                # TO DO  - explore using seaborn approach
+                                use_linear_cmap=True,
                             )
                             .hide()
                             .to_html()
@@ -2213,6 +2220,11 @@ with ui.accordion(open=False):
 
 
 def get_data_feed():
+    if not hasattr(get_data_feed, "available"):
+        get_data_feed.available = True
+    if not get_data_feed.available:
+        return ()
+
     if not hasattr(get_data_feed, "prev"):
         get_data_feed.prev = {}  # Initialize on first call
 
