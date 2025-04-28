@@ -6,11 +6,15 @@ p = engine()
 import random
 
 
-def andNums(numsList):
-    if len(numsList) > 1:
-        output_ = ", ".join(map(str, numsList[:-1])) + " and " + str(numsList[-1])
+def numToWords(n):
+    return p.number_to_words(n)
+
+
+def andList(l):
+    if len(l) > 1:
+        output_ = ", ".join(map(str, l[:-1])) + " and " + str(l[-1])
     else:
-        output_ = str(numsList[0])
+        output_ = str(l[0])
     return output_
 
 
@@ -95,6 +99,7 @@ def core_stage(
         _df_overall_prev.rename(columns={"position": "overallPos"}, inplace=True)
     else:
         _df_overall_prev = DataFrame()
+
 
     # The following only apply when we are in at least the second stage
     if not _df_overall_prev.empty:

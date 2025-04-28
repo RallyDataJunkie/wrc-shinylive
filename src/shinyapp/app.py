@@ -15,7 +15,8 @@ from rules_processor import (
     Nth,
     nth,
     p,
-    andNums,
+    numToWords,
+    andList,
     core_stage,
     process_rally_overall_rules,
 )
@@ -167,12 +168,138 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel("Season info"):
 
-        ui.markdown(
-            "TO DO - round winners; next rally; previous round result; championship hero"
-        )
+        @render.ui
+        @reactive.event(input.rally_seasonId)
+        def season_headline():
+            seasonId = input.rally_seasonId()
+            if not seasonId:
+                return "No season available."
+            seasonId = int(seasonId)
+            season_rounds = wrc.getSeasonRounds(seasonId=seasonId)
 
-        # TO DO remarks on the season
-        # TO DO - remark on number of rounds
+            if season_rounds.empty:
+                return "No season information available."
+
+            seasons_info = seasonInfo()
+            season_info = seasons_info[seasons_info["seasonId"] == seasonId].iloc[0]
+            md = f"""__{season_info["year"]} {season_info["name"]}__"""
+
+            if seasons_info["name"].nunique() > 1:
+                others_ = [
+                    f"`{c}`" for c in seasons_info["name"].unique() if c != season_info["name"]
+                ]
+                md = f"""{md}\n\n*Also available, data for {andList(others_)}.*"""
+
+            return ui.markdown(md)
+
+        with ui.accordion(open=False, id="season_overview_accordion"):
+            with ui.accordion_panel("Season Overview"):
+
+                @render.ui
+                @reactive.event(input.rally_seasonId)
+                def season_info_remarks():
+                    seasonId = input.rally_seasonId()
+                    if not seasonId:
+                        return "No season available."
+                    seasonId = int(seasonId)
+                    season_rounds = wrc.getSeasonRounds(seasonId=seasonId)
+
+                    if season_rounds.empty:
+                        return "No season information available."
+
+                    seasons_info = seasonInfo()
+                    season_info = seasons_info[
+                        seasons_info["seasonId"] == seasonId
+                    ].iloc[0]
+                    banner_ = f"""{season_info["year"]} {season_info["name"]}"""
+
+                    first_date = to_datetime(season_rounds["startDate"].iloc[0])
+                    last_date = to_datetime(season_rounds["startDate"].iloc[-1])
+                    months_ = (last_date.year - first_date.year) * 12 + (
+                        last_date.month - first_date.month
+                    )
+                    if first_date.month == last_date.month:
+                        months2_ = f"(*{first_date.strftime('%B')}*)"
+                    else:
+                        months2_ = f"(*{first_date.strftime('%B')}* to *{last_date.strftime('%B')}*)"
+
+                    md = f"""The complete *__{banner_}__* season takes in *__{numToWords(len(season_rounds))}__ rounds* over *__{numToWords(months_)} months__* {months2_}"""
+
+                    # Surfaces - we need two strategies: all surfaces available, some surfaces available.
+                    surfaces_available = season_rounds[
+                        ~(season_rounds["surfaces"].isna())
+                        & ~(season_rounds["surfaces"] == "")
+                    ]
+                    surfaces_available_n = surfaces_available.shape[0]
+                    if surfaces_available_n == len(season_rounds):
+                        # All surfaces available
+                        surfaces_ = [
+                            f"*__{s}__*"
+                            for s in season_rounds["surfaces"].str.lower().unique()
+                        ]
+                        surfaces_ = andList(surfaces_)
+
+                        md = f"""{md} and *{numToWords(season_rounds["surfaces"].nunique())} surface types* ({surfaces_})."""
+                    elif surfaces_available_n:
+                        surfaces_ = [
+                            f"""*__{s.lower()}__*"""
+                            for s in season_rounds["surfaces"].unique()
+                            if s
+                        ]
+                        surfaces_ = ", ".join(surfaces_)
+                        md = f"""{md} and includes at least {numToWords(surfaces_available_n)} surface {p.plural("type", surfaces_available_n)} ({surfaces_})."""
+                    else:
+                        md = f"""{md}."""
+
+                    rallies_ = []
+                    for _, row in season_rounds.iterrows():
+                        startDate = to_datetime(row["startDate"])
+                        finishDate = to_datetime(row["finishDate"])
+
+                        if startDate.month == finishDate.month:
+                            month_ = startDate.strftime("%B")
+                        else:
+                            month_ = f"""{startDate.strftime('%B')}/{finishDate.strftime('%B')}"""
+                        rallies_.append(f"*{row['name']}* ({month_})")
+
+                    md = f"""{md}\n\nSpecifically, the *{banner_}* incorporates the following rallies: {andList(rallies_)}"""
+
+                    if surfaces_available_n == len(season_rounds):
+                        # Group by surface and collect the names
+                        surface_groups = (
+                            season_rounds.groupby("surfaces")["name"]
+                            .apply(list)
+                            .to_dict()
+                        )
+
+                        # Create parts of the sentence for each surface
+                        parts = []
+                        for i, (surface, names) in enumerate(surface_groups.items()):
+                            count = numToWords(len(names))
+                            names_str = ", ".join([f"*{n}*" for n in names])
+                            parts.append(
+                                f"*__{count} {surface.lower()}__* {p.plural("rally", len(names))} ({names_str})"
+                            )
+
+                        surface_rallies_ = (
+                            f"""There {p.plural("is", len(parts))} {andList(parts)}"""
+                        )
+
+                        md = f"""{md}\n\n{surface_rallies_}"""
+
+                    championships = wrc.getChampionships()
+                    if not championships.empty:
+                        championships_ = [f"""*{c}*""" for c in championships["name"]]
+                        championships_ = ", ".join(championships_)
+                        championship_types_ = [
+                            f"""*{c}*""" for c in championships["type"].unique()
+                        ]
+                        md = f"""{md}\n\n The season also incorporates *__{numToWords(len(championships))} championships__*, including championships for {andList(championship_types_)}.\n\nMore specifically, the championships are: {championships_}\n\n"""
+                    else:
+                        md = f"""{md}."""
+
+                    return ui.markdown(f"""{md}\n\n""")
+
         # TO DO - remark on number of completed rounds
         # TO DO - remark on championship lead
         # TO DO - remark on next upcoming round
@@ -184,17 +311,18 @@ with ui.accordion(open=False):
                 @reactive.event(input.rally_seasonId)
                 def season_frame():
                     season = wrc.getSeasonRounds()
-                    if season.empty:
-                        return
-                    retcols = [
-                        "order",
-                        "name",
-                        "country.name",
-                        "location",
-                        "startDate",
-                        "surfaces",
-                    ]
-                    return render.DataGrid(season[retcols])
+                    if not season.empty:
+                        retcols = [
+                            "order",
+                            "name",
+                            "country.name",
+                            "location",
+                            "startDate",
+                            "surfaces",
+                        ]
+                        return render.DataGrid(season[retcols])
+
+                    return "No season information available."
 
             with ui.accordion_panel("Season Event Winners"):
 
@@ -478,7 +606,7 @@ with ui.accordion(open=False):
                     if not seasonId or not eventId:
                         return
                     # The following is the latest overall, not keyed by anything
-                    # need a swtich for ERC etc
+                    # need a switch for ERC etc
                     # Need a different function if we specify at a particular round
                     eventId = int(eventId)
                     championshipId = int(championshipId)
@@ -1114,7 +1242,7 @@ with ui.accordion(open=False):
                         if not splits_.empty:
                             splitsLen_ = len(splits_)
                             # For example: There are three split points, at Pkm, Qkm and Rkm.
-                            _md = f"""{_md}. *En route*, there {p.plural("is", splitsLen_)} {p.number_to_words(splitsLen_)} split {p.plural("point", splitsLen_)} (at {andNums(splits_["distance"].to_list())} km)."""
+                            _md = f"""{_md}. *En route*, there {p.plural("is", splitsLen_)} {p.number_to_words(splitsLen_)} split {p.plural("point", splitsLen_)} (at {andList(splits_["distance"].to_list())} km)."""
 
                         md.append(f"{_md}\n\n")
 
@@ -1162,7 +1290,7 @@ with ui.accordion(open=False):
                         priority = input.category()
                         stageId = input.stage()
                         if not priority or not stageId:
-                            return  "Still initialising..."
+                            return "Still initialising..."
                         stageId = int(stageId)
                         # TO DO - the following is called all over the place
                         # TO DO need to address this; the reactivitry has gone to pot
@@ -2152,6 +2280,7 @@ def getOverallStageResultsData():
         stageId = int(stageId)
 
     return getOverallStageResultsCore(stageId, priority, stagesInfo)
+
 
 def getOverallStageResultsCore(stageId, priority, stagesInfo):
     overallResults = DataFrame()
