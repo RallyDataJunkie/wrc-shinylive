@@ -1,5 +1,6 @@
 from pandas import DataFrame, isna
-
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from seaborn.utils import relative_luminance
 
 def df_color_gradient_styler(
     df,
@@ -11,8 +12,43 @@ def df_color_gradient_styler(
     reverse_palette=False,
     pos_color=(255, 70, 70),
     neg_color=(40, 255, 40),
-    max_delta=60 # Accepts: None,
+    max_delta=60, # Accepts: None,
+    use_linear_cmap=True,
+    cmap_colors=None
 ):
+
+    ##-- via chatGPT
+    # This is chatGPT's estimate of what seaborn does
+    # but seaborn heatmap changes the text to white for dark colours,
+    # has better color ranges, etc. Reuse seaborn code?
+    def color_by_value_with_cmap(val, vmax, vmin):
+        colors = ["green", "white", "red"] if not cmap_colors else cmap_colors
+        if reverse_palette:
+            colors.reverse()
+
+        cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+        base_style = (
+            "text-align: center; padding: 8px; border-radius: 8px; border: 2px solid white;"
+        )
+
+        if isna(val):
+            return f"{base_style} background-color: #d9d9d9;"  # Light gray for NaN
+        elif val == 0:
+            return f"{base_style} background-color: #f0f0f0;"
+        else:
+            normed = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+            rgba = cmap(normed(val))  # norm maps val to 0-1, cmap maps 0-1 to color
+            r, g, b, a = [int(255 * c) for c in rgba]
+            # Pinched from seaborn heatmap
+            lum = relative_luminance(rgba)
+            text_color = (
+                "rgba(0, 0, 0, 1)" if lum > 0.408 else "rgba(255, 255, 255, 1)"
+            )
+            style_ = f"background-color: rgba({r},{g},{b},{a}); color: {text_color}  !important;"
+            return style_
+
+    # --
+
     # Function to create color-coded background with rounded corners
     def color_by_value(val, pos_max, neg_max):
         # Define base styles for all cells
@@ -112,9 +148,16 @@ def df_color_gradient_styler(
         # styler = styler.map(
         #    lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
         # )
-        color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value(
+
+        if use_linear_cmap:
+            color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value_with_cmap(
+                x, pos_max, neg_max
+            )
+
+        else:
+            color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value(
             x, pos_max, neg_max
-        )
+        ) 
         styler = styler.map(color_func, subset=[col])
 
     return styler
