@@ -2232,11 +2232,16 @@ def get_data_feed():
         get_data_feed.prev
 
     # If we are running this in a central server, multiuser context, does this let us be nice?
-    json = session.get(
-        "https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000"
-    ).json()["_entries"]
-    get_data_feed.prev = json
-    return json
+    # if the service is down, note that and stop trying
+    # TO DO  - provide a way to reet / restart this?
+    try:
+        json = session.get(
+            "https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000"
+        ).json()["_entries"]
+        get_data_feed.prev = json
+        return json
+    except:
+        get_data_feed.available = False
 
 
 @reactive.poll(
