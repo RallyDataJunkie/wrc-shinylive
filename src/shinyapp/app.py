@@ -76,6 +76,8 @@ progression_report_types = {
     "byrallychase": "Chase",  # TO DO
 }
 
+INTEPRETATION_PANEL_COLOUR = "honeydew"
+
 ui.panel_title("RallyDataJunkie WRC Results and Timing Browser", "WRC-RallyDJ")
 
 # TO DO - in creating dropdowns, where index values are integers they should be set to strings BUT
@@ -192,12 +194,12 @@ with ui.accordion(open=False):
 
             return ui.markdown(md)
 
-        with ui.accordion(open=False, id="season_overview_accordion"):
-            with ui.accordion_panel("Season Overview"):
+        with ui.accordion(open=False, id="season_background_accordion"):
+            with ui.accordion_panel("Season Background"):
 
                 @render.ui
                 @reactive.event(input.rally_seasonId)
-                def season_info_remarks():
+                def season_background_remarks():
                     seasonId = input.rally_seasonId()
                     if not seasonId:
                         return "No season available."
@@ -303,6 +305,14 @@ with ui.accordion(open=False):
         # TO DO - remark on number of completed rounds
         # TO DO - remark on championship lead
         # TO DO - remark on next upcoming round
+
+        with ui.accordion(open=False, id="season_overview_accordion"):
+            with ui.accordion_panel("Season Overview"):
+
+                @render.ui
+                def season_overview_remarks():
+                    md = """ TO DO """
+                    return ui.markdown(f"""{md}\n\n""")
 
         with ui.accordion(open=False, id="season_elements_accordion"):
             with ui.accordion_panel("Season Events"):
@@ -731,10 +741,12 @@ with ui.accordion(open=False):
                 @render.ui
                 @reactive.event(input.progression_interpretation_switch)
                 def progression_report_interpretation():
-                    md = """View options for the rally progression report include:\n\n- __Stage time (s)__: time, in seconds, taken to complete the stage.\n\n- __Stage position__: rank position on stage.\n\n- __Stage gap (s)__: the __gap__ is the *gap to leader* on the stage. Gives an indication how how off the stage winnner each driver was.\n\n- __Stage diff (s)__: the *diff* is the time difference to the car ahead on stage. Gives an indication of how far off a driver was from improving their position.\n\n- __Stage chase (s)__: the *chase* is the time difference to the car behind. Gives an indication how threatened a driver was from the car behind.\n\n- __Overall rally time (s)__: the elapsed rally time by the end of a particular stage.\n\n- __Overall rally position__: the overall rally poisition by the end of a stage. If the rally stopped at this point, this would be the driver's rally position.\n\n- __Overall rally class position__: the overall position in class (e.g. WRC, WRC2 etc).\n\n- __Overall rally gap (s)__: the gap to the rally leader based on elapsed rally time. Gives an indication of how far off the rally leader a driver is at the end of each stage.\n\n- __Overall rally diff (s)__: in terms of overall rally time, how far a driver is from the car in the position ahead. Gives an indication of how close they are to improving their overall rally position.\n\n- __Overall rally chase (s)__: in terms of overall rally time, how far a driver is from the car in the position behind. Gives an indication of how threatened a driver is by the car in the position behind."""
-
                     if input.progression_interpretation_switch():
-                        return ui.markdown(md)
+                        md = """View options for the rally progression report include:\n\n- __Stage time (s)__: time, in seconds, taken to complete the stage.\n\n- __Stage position__: rank position on stage.\n\n- __Stage gap (s)__: the __gap__ is the *gap to leader* on the stage. Gives an indication how how off the stage winnner each driver was.\n\n- __Stage diff (s)__: the *diff* is the time difference to the car ahead on stage. Gives an indication of how far off a driver was from improving their position.\n\n- __Stage chase (s)__: the *chase* is the time difference to the car behind. Gives an indication how threatened a driver was from the car behind.\n\n- __Overall rally time (s)__: the elapsed rally time by the end of a particular stage.\n\n- __Overall rally position__: the overall rally poisition by the end of a stage. If the rally stopped at this point, this would be the driver's rally position.\n\n- __Overall rally class position__: the overall position in class (e.g. WRC, WRC2 etc).\n\n- __Overall rally gap (s)__: the gap to the rally leader based on elapsed rally time. Gives an indication of how far off the rally leader a driver is at the end of each stage.\n\n- __Overall rally diff (s)__: in terms of overall rally time, how far a driver is from the car in the position ahead. Gives an indication of how close they are to improving their overall rally position.\n\n- __Overall rally chase (s)__: in terms of overall rally time, how far a driver is from the car in the position behind. Gives an indication of how threatened a driver is by the car in the position behind."""
+
+                        return ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
 
                 # TO DO implement report by type
 
@@ -764,6 +776,26 @@ with ui.accordion(open=False):
                     )
 
             with ui.accordion_panel("Rally progression rebase"):
+
+                @render.express
+                @reactive.event(input.interpretation_prompt_switch)
+                def rally_progression_report_base_interpretation_container():
+                    ui.input_switch(
+                        "rally_progression_base_interpretation_switch",
+                        "Rally progression rebase notes",
+                        False,
+                    )
+
+                @render.ui
+                @reactive.event(input.rally_progression_base_interpretation_switch)
+                def rally_progression_report_base_interpretation():
+                    if input.rally_progression_base_interpretation_switch():
+                        md = f"""\n\nThe *rally progression report* includes two components. A *rally progression rebase heatmap* table and an *overall rally time progression* line chart.\n\nBoth reports rely on the notion of *rebasing*. *Rebased* values are calculated as the delta between each driver and selected driver.\n\nTwo different rebase options are provided:\n\n - __Stage time__: rebase each driver's *stage time* relative to a selected driver. This view allows to identify stages on which particular driver's performed well, or poorly, for example;\n\n  - __Overall rally time__: rebase each driver's *overall elapsed rally time* relative to a selected driver. This view allows us to compare the overall gaps between a selected driver and each other driver at the end of each stage."""
+
+                        return ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
+
                 with ui.tooltip(id="progression_rebase_type_tt"):
                     ui.input_select(
                         "progression_rebase_type",
@@ -791,6 +823,36 @@ with ui.accordion(open=False):
                     ),
                     "Create heatmap palette within a column rather than across all columns."
 
+                with ui.tooltip(id="rebase_rally_progression_reverse_palette_tt"):
+                    ui.input_checkbox(
+                        "rebase_rally_progression_reverse_palette",
+                        "Reverse rebase palette",
+                        False,
+                    ),
+                    "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
+
+                @render.express
+                @reactive.event(input.interpretation_prompt_switch)
+                def rally_progression_report_heatmap_interpretation_container():
+                    ui.input_switch(
+                        "rally_progression_heatmap_interpretation_switch",
+                        "Show interpretation prompts",
+                        False,
+                    )
+
+                @render.ui
+                @reactive.event(input.rally_progression_heatmap_interpretation_switch)
+                def rally_progression_report_heatmap_interpretation():
+                    if input.rally_progression_heatmap_interpretation_switch():
+
+                        md = f"""The *rally progression rebase heatmap* table displays the rally progression data in a tabular form as a *heatmap*. The cells are colour coded to show whether a driver has a *faster* time (a *negative* delta; by default, *green*) or a *slower* time (*positive* delta; by default, *red*). The deltas for the the selected rebase driver are, of course, zero (*grey*). The intensity of the colour indicates how far away from zero the value is. The colour palette can be set based on the range of values within each column (i.e. stage), or using a single range calculated over all columns. The colours used in the rebase palette can also be swapped, giving an indication of the deltas *from the perspective of the rebase driver*. Witn the reverese palette selected, a car with a positive delta (*slower*) than the rebase driver would have a *green* coloured cell and a *faster* car (*negative* delta) woud have *red* coloured cell."""
+
+                        md = f"""{md}\n\n__Things to look for in the heatmap:__\n\n  - __faintly coloured cells_ show times for a particular driver that are particularly colose to the selected rebase driver on that stage;\n\n  - a __brightly coloured *row* of one colour__ shows that the *corresponding driver* was universally fast / slow compared to the selected rebase driver;\n\n  - a __brightly coloured *column* of one colour__ indicates that the *rebase driver* was particularly fast or slow on that stage compared to all the other drivers (i.e. that was a particularly *good* (perhaps counterintuitively, in the default palette, *red*) or, perhaps more likely, *bad* (again, perhaps counterintuitively in the default palette, *green*) stage for the rebase driver. *Select the `Reverse rebase palette` option to switch the sense of the colour interpretations;*\n\n  - __brightly coloured singleton cells__ indicate a particular good or bad performance from one of the other drivers as compared to the rebase selected driver."""
+
+                        ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
+
                 @render.ui
                 @reactive.event(
                     input.category,
@@ -801,9 +863,11 @@ with ui.accordion(open=False):
                     input.rally_progression_rebase_driver,
                     input.rprog_rebase_incols,
                     input.display_latest_overall,
+                    input.rebase_rally_progression_reverse_palette
                 )
                 def stage_progression_heat():
                     progression_rebase_type = input.progression_rebase_type()
+                    rebase_reverse_palette = input.rebase_rally_progression_reverse_palette()
                     overall_typ_wide = (
                         get_overall_typ_wide2_rebased()
                     )  # get_overall_typ_wide() #XX
@@ -818,12 +882,35 @@ with ui.accordion(open=False):
                             ),
                             cols=stage_cols,
                             within_cols_gradient=input.rprog_rebase_incols(),
-                            # reverse_palette=rebase_reverse_palette,
+                            reverse_palette=rebase_reverse_palette,
                         )
                         .hide()
                         .to_html()
                     )
                     return ui.HTML(html)
+
+                @render.express
+                @reactive.event(input.interpretation_prompt_switch)
+                def rally_progression_report_linechart_interpretation_container():
+                    ui.input_switch(
+                        "rally_progression_linechart_interpretation_switch",
+                        "Show interpretation prompts",
+                        False,
+                    )
+
+                @render.ui
+                @reactive.event(input.rally_progression_linechart_interpretation_switch)
+                def rally_progression_report_linechartinterpretation():
+                    if input.rally_progression_linechart_interpretation_switch():
+                        md = """\n\nThe *overall rally time progression* line chart displays the rally progression data in a tabular form as a *heatmap*. Once again, this is rebased relative to a selected driver.\n\nNote the the vertical `y`-axis, giving the *overall elapsed rally time delta*, is inverted, with negative deltas (cars going *faster* than the selected rebase driver) *above* the origin in the *grey* coloured area of the chart."""
+
+                        md = f"""{md}\n\n__Things to look for in the line chart:__\n\n - how far a way a line is from the `y=0` origin line, indicates an increasing time delta bewteen that driver and the selected rease driver;\n\n  - a line with a __constant gradient__ shows a similar amopunt of time lost across each stage;\n\n  - a rebased line that goes *__into__ the grey area and then __out__ of it again* shows a driver getting *ahead then falling back behind* the selected rebase driver;\n\n - a rebased line that goes *__out of__ the grey area and then __into__ it again* shows a driver *falling behind* the selected rebase driver and then getting *ahead* of them again;\n\n  - a __single line that rapidly falls__ during a particular stage indicates that that driver had a particularly *bad* stage;\n\n  - The __more lines__ in the grey part of the chart, the *lower* the positin of the selected rebase driver. Conversely, the *more* lines below the `y=0` line, the higher ranked the selected rebase driver;\n\n  - if __all the lines suddenly go up__, the selected rebase driver lost a lot of time on that stage."""
+
+                        md = f"""{md}\n\n*__TO DO__ - provide the option to select rally distance on the `x`-axis, with faint vertical lines indicating each stage; the constant graident would then indicate a constaint `pace` difference.*"""
+
+                        ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
 
                 @render.plot(
                     alt="Line chart of rally progression of selected dimension."
@@ -856,6 +943,7 @@ with ui.accordion(open=False):
                     ax = chart_seaborn_linechart_stage_progress_typ(
                         wrc, overall_typ_wide, typ, greyupper=True
                     )
+                    ax.tick_params(axis="x", labelrotation=45)
                     return ax
 
         with ui.accordion(open=False, id="stage_info_accordion"):
@@ -1667,6 +1755,7 @@ with ui.accordion(open=False):
                     ax = chart_seaborn_linechart_split_positions(
                         wrc, split_times_wide, split_cols
                     )
+                    ax.tick_params(axis="x", labelrotation=45)
                     return ax
 
                 @render.data_frame
@@ -1726,7 +1815,10 @@ with ui.accordion(open=False):
                     md = """View options for the stage progression report include:\n\n- __Time (s) within each split__: the time taken *within each split*, i.e. the time to get from one split point to the next. *Lower* is better.* Use this to see which split sections a driver gained / lost time on.\n\n- __Speed (km/h) within each split__: the within split time divided by the distance between split points. *__Higher__ is better. Gives a sense of whether a particular section was fast or slow.*\n\n- __Pace (s/km) within each split__: the distance between split points divided by the within split time. *__Lower__ is better.* Comparison allows you to see how much time was gained / lost per km, compared to other driver.\n\n- __Accumulated time (s) across all splits__: view elapsed / accumulated stage time (in seconds) across each split. Use this to get a sense of how the stage times progressed across the stage.  *Lower* is better.*  If the split was the stage end, this would be the stage time. Use this to see how the "overall" stage time evolved across the splits.\n\n- __Rank position within split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* Treat the split as a "stage" in its own right. Use this to how the driver ranked ourely on the basis of this split section.\n\n- _Rank position of accumulated time at each split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* If the split was the stage end, this would be the stage position. Use this to see how the "overall" stage position evolved across the splits.\n\n"""
 
                     if input.progression_interpretation_switch():
-                        return ui.markdown(md)
+
+                        return ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
 
                     with ui.tooltip(id="splits_section_view_tt"):
                         ui.input_select(
