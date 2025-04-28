@@ -12,9 +12,10 @@ def df_color_gradient_styler(
     reverse_palette=False,
     pos_color=(255, 70, 70),
     neg_color=(40, 255, 40),
-    max_delta=60, # Accepts: None,
+    max_delta=30, # Accepts: None, 30 is 30s, so 1s/km pace diff on the longest stage
     use_linear_cmap=True,
-    cmap_colors=None
+    cmap_colors=None,
+    balancer=False
 ):
 
     ##-- via chatGPT
@@ -50,7 +51,7 @@ def df_color_gradient_styler(
     # --
 
     # Function to create color-coded background with rounded corners
-    def color_by_value(val, pos_max, neg_max):
+    def color_by_value(val, pos_max, neg_max,):
         # Define base styles for all cells
         base_style = "text-align: center; padding: 8px; border-radius: 8px; border: 2px solid white;"
 
@@ -149,11 +150,18 @@ def df_color_gradient_styler(
         #    lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
         # )
 
+        # Try to make the colours symmetrical -ish
+        if balancer:
+            multiplier_ = 5
+            if abs(col_neg_min)>col_pos_max and abs(col_neg_min)< multiplier_ * col_pos_max:
+                col_pos_max = abs(col_neg_min)
+            elif abs(col_neg_min)<col_pos_max and abs(col_neg_min) * multiplier_ > col_pos_max:
+                col_neg_min = -1 * col_pos_max
+
         if use_linear_cmap:
             color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value_with_cmap(
                 x, pos_max, neg_max
             )
-
         else:
             color_func = lambda x, pos_max=col_pos_max, neg_max=col_neg_min: color_by_value(
             x, pos_max, neg_max
