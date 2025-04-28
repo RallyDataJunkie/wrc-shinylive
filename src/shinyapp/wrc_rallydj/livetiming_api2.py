@@ -149,6 +149,9 @@ class APIClient:
         return seasons_df
 
     def _getSeasonDetail(self, seasonId, updateDB=False):
+        if not seasonId:
+            return DataFrame(), DataFrame(), DataFrame()
+         
         stub = f"season-detail.json?seasonId={seasonId}"
         json_data = self._WRC_RedBull_json(stub)
         if "championships" not in json_data:
