@@ -9,7 +9,8 @@ from datetime import datetime
 from icons import question_circle_fill
 from pandas import DataFrame, isna, to_numeric, to_datetime, NA
 from seaborn import heatmap
-from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+
 import re
 from rules_processor import (
     Nth,
@@ -37,6 +38,7 @@ from .app_heroes import (
 
 # Charts
 from .app_charts import (
+    empty_plot,
     chart_seaborn_linechart_stage_progress_positions,
     chart_seaborn_linechart_stage_progress_typ,
     chart_seaborn_barplot_stagetimes,
@@ -607,7 +609,7 @@ with ui.accordion(open=False):
                 def seaborn_linechart_stage_progress_positions():
                     overall_times_wide = get_overall_pos_wide()
                     if overall_times_wide.empty:
-                        return
+                        return empty_plot(title="No overall stage times...")
                     ax = chart_seaborn_linechart_stage_progress_positions(
                         wrc, overall_times_wide
                     )
@@ -775,9 +777,7 @@ with ui.accordion(open=False):
                     rebase_reverse_palette = (
                         input.rebase_rally_progression_reverse_palette()
                     )
-                    overall_typ_wide = (
-                        get_overall_typ_wide2_rebased()
-                    )  # get_overall_typ_wide() #XX
+                    overall_typ_wide = get_overall_typ_wide2_rebased()
                     if not progression_rebase_type or overall_typ_wide.empty:
                         return
 
@@ -837,14 +837,14 @@ with ui.accordion(open=False):
                     overall_typ_wide = get_overall_typ_wide3_rebased()
                     progression_type = "byrallytime"  # input.progression_rebase_type()
                     if overall_typ_wide.empty or not progression_type:
-                        return
+                        return empty_plot(title="Missing data / selection...")
                     typ = progression_report_types[progression_type]
                     overall_typ_wide = overall_typ_wide.copy()
                     # Replace values > 100 with NaN or clip them
-                    split_cols = wrc.getStageCols(overall_typ_wide)
+                    stage_cols = wrc.getStageCols(overall_typ_wide)
                     THRESHOLD = 100
-                    overall_typ_wide[split_cols] = overall_typ_wide[split_cols].where(
-                        overall_typ_wide[split_cols] <= THRESHOLD, NA
+                    overall_typ_wide[stage_cols] = overall_typ_wide[stage_cols].where(
+                        overall_typ_wide[stage_cols] <= THRESHOLD, NA
                     )
 
                     ax = chart_seaborn_linechart_stage_progress_typ(
@@ -1058,7 +1058,7 @@ with ui.accordion(open=False):
                         def plot_driver_stagewins():
                             stage_winners = getStageWinners()
                             if stage_winners.empty:
-                                return
+                                return empty_plot(title="No stage winners data...")
                             # TO DO - make use of commented out elements
                             # which limit counts  up to and including current stage
                             # stage_winners["_stagenum"] = stage_winners["stageNo"].str.replace("SS", "")
@@ -1453,7 +1453,7 @@ with ui.accordion(open=False):
                     def seaborn_barplot_stagetimes():
                         stage_times_df = get_rebased_data()
                         if stage_times_df is None:
-                            return
+                            return empty_plot(title="No stage times data...")
                         rebase_reverse_palette = input.rebase_reverse_palette()
                         ax = chart_seaborn_barplot_stagetimes(
                             stage_times_df, rebase_reverse_palette
@@ -1595,12 +1595,12 @@ with ui.accordion(open=False):
                     stageId = input.stage()
 
                     if not stageId:
-                        return
-                    
+                        return empty_plot(title="No stage selected...")
+
                     geostages = rally_geodata()
-                    
+
                     if geostages.empty:
-                        return
+                        return empty_plot(title="No geo data...")
 
                     ax2 = split_sections_map_core(wrc, stageId, geostages)
                     return ax2
@@ -1626,7 +1626,7 @@ with ui.accordion(open=False):
                 def seaborn_linechart_split_positions():
                     split_times_wide = get_split_times_wide()
                     if split_times_wide.empty:
-                        return
+                        return empty_plot(title="No split times data...")
                     split_times_wide = split_times_wide.copy()
                     split_cols = wrc.getSplitCols(split_times_wide)
 
@@ -1740,7 +1740,7 @@ with ui.accordion(open=False):
                         def plot_split_dists():
                             scaled_splits_wide = get_scaled_splits()
                             if scaled_splits_wide is None or scaled_splits_wide.empty:
-                                return
+                                return empty_plot(title="No splits data...")
                             splits_section_view = input.splits_section_view()
                             ax = chart_plot_split_dists(
                                 wrc, scaled_splits_wide, splits_section_view
@@ -1925,7 +1925,9 @@ with ui.accordion(open=False):
                                 def seaborn_heatmap_splits():
                                     rebase_driver = input.rebase_driver()
                                     if not rebase_driver:
-                                        return
+                                        return empty_plot(
+                                            title="No rebase driver selected..."
+                                        )
 
                                     rebase_driver = (
                                         int(rebase_driver)
@@ -1939,16 +1941,20 @@ with ui.accordion(open=False):
                                         split_times_wide is None
                                         or split_times_wide.empty
                                     ):
-                                        return
+                                        return empty_plot(
+                                            title="No split times data..."
+                                        )
                                     output_, split_cols = (
                                         wrc.rebase_splits_wide_with_ult(
-                                            split_times_wide, rebase_driver
+                                            split_times_wide,
+                                            rebase_driver,
+                                            use_split_durations=True,
                                         )
                                     )
                                     # TO DO - find a more flexible /informative way of setting
                                     # the index / driver identifier
                                     output_.set_index("carNo", inplace=True)
-                                    split_cols = wrc.getSplitCols(output_)
+                                    # split_cols = wrc.getSplitCols(output_)
                                     dropcols = [
                                         c
                                         for c in output_.columns
@@ -2056,7 +2062,9 @@ with ui.accordion(open=False):
                                     )
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
-                                        return
+                                        return empty_plot(
+                                            title="No rebase driver selected..."
+                                        )
 
                                     rebase_driver = (
                                         int(rebase_driver)
@@ -2070,7 +2078,9 @@ with ui.accordion(open=False):
                                         split_times_wide is None
                                         or split_times_wide.empty
                                     ):
-                                        return
+                                        return empty_plot(
+                                            title="No split times data..."
+                                        )
 
                                     ax = chart_seaborn_barplot_splits(
                                         wrc,
@@ -2128,12 +2138,14 @@ with ui.accordion(open=False):
                                 def seaborn_linechart_splits():
                                     stageId = input.stage()
                                     if not stageId:
-                                        return
+                                        return empty_plot(title="No stage selected...")
 
                                     rebase_driver = input.rebase_driver()
                                     # print(f"Rebasing on {rebase_driver}")
                                     if not rebase_driver:
-                                        return
+                                        return empty_plot(
+                                            title="No rebase driver selected..."
+                                        )
 
                                     rebase_driver = (
                                         int(rebase_driver)
@@ -2147,20 +2159,128 @@ with ui.accordion(open=False):
                                         split_times_wide is None
                                         or split_times_wide.empty
                                     ):
-                                        return
+                                        return empty_plot(
+                                            title="No split times data..."
+                                        )
 
                                     ax = chart_seaborn_linechart_splits(
                                         wrc, stageId, split_times_wide, rebase_driver
                                     )
 
                                     return ax
-                                
-                        with ui.accordion_panel("Split times stage section heatmaps"):
 
-                             @render.plot(alt="Route map split sections heatmap.")
-                             def route_sections_heatmap():
-                                 # XX TO DO 
-                                 return 
+                        with ui.accordion_panel("Split times stage section heatmaps"):
+                            with ui.tooltip(id="split_times_heatmap_driver_tt"):
+                                ui.input_select(
+                                    "splits_heatmap_driver",
+                                    "Splits heatmap driver:",
+                                    {},
+                                ),
+                                "Get the driver we want to plot the rebased times for on a split sections map."
+
+                            @render.plot(alt="Route map split sections heatmap.")
+                            @reactive.event(
+                                input.stage,
+                                input.rebase_driver,
+                                input.splits_heatmap_driver,
+                            )
+                            def route_sections_heatmap():
+
+                                # TO DO - this code is duplicated in previous function  - refactor it
+                                stageId = input.stage()
+                                if not stageId:
+                                    return empty_plot(title="No stage selected...")
+
+                                rebase_driver = input.rebase_driver()
+                                heatmap_driver = input.splits_heatmap_driver()
+
+                                # print(f"Rebasing on {rebase_driver}")
+                                if not rebase_driver or not heatmap_driver:
+                                    return empty_plot(title="Some or all data missing.")
+
+                                if rebase_driver == heatmap_driver:
+                                    return empty_plot(
+                                        title="You need to select different\n"
+                                        "rebase and splits heatmap drivers...."
+                                    )
+
+                                rebase_driver = int(rebase_driver)
+                                heatmap_driver = int(heatmap_driver)
+
+                                # We don't want to modify the cached split times df
+                                split_times_wide = get_split_times_wide()
+                                if split_times_wide is None or split_times_wide.empty:
+                                    return empty_plot(
+                                        title="No split times data available."
+                                    )
+
+                                output_, split_cols = wrc.rebase_splits_wide_with_ult(
+                                    split_times_wide,
+                                    rebase_driver,
+                                    use_split_durations=True,
+                                )
+                                # TO DO end refactor reuse here
+
+                                def _get_heatmap_colors(df, cols):
+                                    vmax = df[cols].values.max()
+                                    vmax = vmax if vmax > 0 else 1
+                                    vmin = df[cols].values.min()
+                                    vmin = vmin if vmin < 0 else -1
+                                    colors = ["green", "white", "red"]
+
+                                    cmap = LinearSegmentedColormap.from_list(
+                                        "custom_cmap", colors
+                                    )
+                                    colors = []
+                                    for c in cols:
+                                        val = df[c].iloc[0]
+
+                                        if isna(val):
+                                            colors.append(
+                                                "#d9d9d9"
+                                            )  # Light gray for NaN
+                                        elif val == 0:
+                                            colors.append("#f0f0f0")
+                                        else:
+                                            normed = TwoSlopeNorm(
+                                                vmin=vmin, vcenter=0, vmax=vmax
+                                            )
+                                            colormap = cmap(
+                                                normed(val)
+                                            )  # norm maps val to 0-1, cmap maps 0-1 to color
+                                            colormap = cmap(
+                                                normed(val)
+                                            )  # norm maps val to)
+                                            r, g, b, a = [
+                                                int(255 * c) for c in colormap
+                                            ]
+                                            # color = f"rgba({r},{g},{b},{a})"
+                                            color = "#{:02x}{:02x}{:02x}".format(
+                                                r, g, b
+                                            )
+
+                                        colors.append(color)
+                                    return colors
+
+                                selected_rebased_time_wide = output_[
+                                    output_["carNo"] == heatmap_driver
+                                ]
+
+                                # Generate heat colours for section
+                                # We need len(split_cols)+1 colours
+                                heat_colours = _get_heatmap_colors(
+                                    selected_rebased_time_wide, split_cols
+                                )
+
+                                geostages = rally_geodata()
+                                ax = split_sections_map_core(
+                                    wrc, stageId, geostages, heat_colours=heat_colours
+                                )
+                                ax.set_title(
+                                    f"Within split section time deltas\nfor car {heatmap_driver}\ncompared to car {rebase_driver}."
+                                )
+                                return ax
+
 
 # @render.ui
 # @reactive.event(input.year, input.season_round, input.category)
@@ -2631,6 +2751,8 @@ def update_stages_driver_rebase_select():
 
     ui.update_select("rally_progression_rebase_driver", choices=rebase_drivers)
 
+    ui.update_select("splits_heatmap_driver", choices=rebase_drivers)
+
     rebase_drivers["ult"] = "ULTIMATE"
     ui.update_select("rebase_driver", choices=rebase_drivers)
 
@@ -2657,32 +2779,32 @@ def update_championships_select():
     ui.update_select("championships", choices=championships)
     ui.update_select("event_championships", choices=championships)
 
+
 ## Other core functions
 
-def split_sections_map_core(wrc, stageId, geostages):
+
+def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
     stages_info = wrc.getStageInfo(raw=False)
     splits = wrc.getStageSplitPoints(stageId=int(stageId))
     if splits.empty or stages_info.empty:
         return
 
-    stage_info = stages_info[
-        stages_info["stageId"] == int(stageId)
-    ].iloc[0]
-    colors = ["lightgrey", "blue"]
-    colors = [colors[i % len(colors)] for i in range(len(splits) + 1)]
+    stage_info = stages_info[stages_info["stageId"] == int(stageId)].iloc[0]
+
+    if not heat_colours:
+        colors = ["lightgrey", "blue"]
+        colors = [colors[i % len(colors)] for i in range(len(splits) + 1)]
+    else:
+        colors = heat_colours
 
     fig2, ax2 = plt.subplots()
     dists = (splits["distance"] * 1000).tolist()
 
-    geostage = geostages[
-        geostages["stages"].apply(lambda x: stage_info["code"] in x)
-    ]
+    geostage = geostages[geostages["stages"].apply(lambda x: stage_info["code"] in x)]
     if geostage.empty:
         return
     line = geostage["geometry"].iloc[0]
-    gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(
-        line, dists, toend=True
-    )
+    gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(line, dists, toend=True)
     gdf_segments2.plot(ax=ax2, lw=3, color=colors)
     ax2.set_axis_off()
 
@@ -2696,6 +2818,7 @@ def split_sections_map_core(wrc, stageId, geostages):
     ax2.scatter(last_x, last_y, color="red", s=10, zorder=5)
 
     return ax2
+
 
 ## Reactive calcs
 

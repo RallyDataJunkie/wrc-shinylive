@@ -5,6 +5,14 @@ from seaborn import barplot, boxplot, lineplot
 from adjustText import adjust_text
 
 
+def empty_plot(title=""):
+    fig = plt.figure(figsize=(0.01, 0.01), dpi=100)
+    ax = fig.add_subplot(111)
+    if title:
+        ax.set_title(title)
+    ax.axis("off")
+    return ax
+
 def chart_seaborn_linechart_split_positions(wrc, split_times_wide, split_cols):
     split_times_wide[split_cols] = split_times_wide[split_cols].apply(
         lambda col: col.rank(method="min", ascending=True)
