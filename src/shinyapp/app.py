@@ -1835,70 +1835,77 @@ with ui.accordion(open=False):
                         ),
                         "Reverse the rebase palette to show deltas relative to the rebased driver's perspective."
 
-                    ui.input_switch(
-                        "rebased_splits_type_switch",
-                        "Within section time delta (default is accumulated stage time delta)",
-                        False,
-                    )
-
-                    @render.ui
-                    def rebased_splits_type_value():
-                        typ = (
-                            "Within section"
-                            if input.rebased_splits_type_switch()
-                            else "Accumulated stage"
-                        )
-                        return ui.markdown(
-                            f"\n__{typ} time delta across split points.__\n\n"
-                        )
-
-                    ui.markdown("TO DO - option to sort by start order, stage position")
-
-                    @render.ui
-                    @reactive.event(
-                        input.splits_review_accordion,
-                        input.category,
-                        input.stage,
-                        input.rebase_driver,
-                        input.rebase_reverse_palette,
-                        input.splits_refresh,
-                        input.rebased_splits_type_switch,
-                        input.split_prog_rebase_incols,
-                    )
-                    def split_times_heat():
-                        split_times_wide = get_split_times_wide()
-                        rebase_driver = input.rebase_driver()
-                        rebase_reverse_palette = input.rebase_reverse_palette()
-                        if split_times_wide.empty or not rebase_driver:
-                            return
-                        split_cols = wrc.getSplitCols(split_times_wide)
-                        rebase_driver = (
-                            int(rebase_driver)
-                            if rebase_driver and rebase_driver != "ult"
-                            else rebase_driver
-                        )
-                        split_times_wide, split_cols = wrc.rebase_splits_wide_with_ult(
-                            split_times_wide,
-                            rebase_driver,
-                            use_split_durations=input.rebased_splits_type_switch(),
-                        )
-                        html = (
-                            df_color_gradient_styler(
-                                split_times_wide,
-                                cols=split_cols,
-                                within_cols_gradient=input.split_prog_rebase_incols(),
-                                reverse_palette=rebase_reverse_palette,
-                                # TO DO - consider pace bsed thresholds
-                                # Pass in sector/stage distances and set a nominal pace threshold (s/km)
-                                # Then set colour based on on maxing the color at the pace threshold
-                                use_linear_cmap=True,
-                            )
-                            .hide()
-                            .to_html()
-                        )
-                        return ui.HTML(html)
-
                     with ui.accordion(open=False):
+                        with ui.accordion_panel(
+                            "Time gained/lost within and across each split"
+                        ):
+                            ui.input_switch(
+                                "rebased_splits_type_switch",
+                                "Within section time delta (default is accumulated stage time delta)",
+                                False,
+                            )
+
+                            @render.ui
+                            def rebased_splits_type_value():
+                                typ = (
+                                    "Within section"
+                                    if input.rebased_splits_type_switch()
+                                    else "Accumulated stage"
+                                )
+                                return ui.markdown(
+                                    f"\n__{typ} time delta across split points.__\n\n"
+                                )
+
+                            ui.markdown(
+                                "TO DO - option to sort by start order, stage position"
+                            )
+
+                            @render.ui
+                            @reactive.event(
+                                input.splits_review_accordion,
+                                input.category,
+                                input.stage,
+                                input.rebase_driver,
+                                input.rebase_reverse_palette,
+                                input.splits_refresh,
+                                input.rebased_splits_type_switch,
+                                input.split_prog_rebase_incols,
+                            )
+                            def split_times_heat():
+                                split_times_wide = get_split_times_wide()
+                                rebase_driver = input.rebase_driver()
+                                rebase_reverse_palette = input.rebase_reverse_palette()
+                                if split_times_wide.empty or not rebase_driver:
+                                    return
+                                split_cols = wrc.getSplitCols(split_times_wide)
+                                rebase_driver = (
+                                    int(rebase_driver)
+                                    if rebase_driver and rebase_driver != "ult"
+                                    else rebase_driver
+                                )
+                                split_times_wide, split_cols = (
+                                    wrc.rebase_splits_wide_with_ult(
+                                        split_times_wide,
+                                        rebase_driver,
+                                        use_split_durations=input.rebased_splits_type_switch(),
+                                    )
+                                )
+                                html = (
+                                    df_color_gradient_styler(
+                                        split_times_wide,
+                                        cols=split_cols,
+                                        within_cols_gradient=input.split_prog_rebase_incols(),
+                                        reverse_palette=rebase_reverse_palette,
+                                        # TO DO - consider pace bsed thresholds
+                                        # Pass in sector/stage distances and set a nominal pace threshold (s/km)
+                                        # Then set colour based on on maxing the color at the pace threshold
+                                        use_linear_cmap=True,
+                                    )
+                                    .hide()
+                                    .to_html()
+                                )
+                                return ui.HTML(html)
+
                         with ui.accordion_panel("Time gained/lost within each split"):
 
                             with ui.tooltip(id="heatmap_outliers_tt"):
@@ -2002,7 +2009,6 @@ with ui.accordion(open=False):
                                         cbar=False,
                                     )
 
-
                         with ui.accordion_panel("Split times stage section heatmaps"):
                             with ui.tooltip(id="split_times_heatmap_driver_tt"):
                                 ui.input_select(
@@ -2024,17 +2030,23 @@ with ui.accordion(open=False):
                                 heatmap_driver = input.splits_heatmap_driver()
 
                                 # Use the common setup function
-                                split_times_wide, rebase_driver, error_msg = prepare_split_times_data(stageId, rebase_driver)
+                                split_times_wide, rebase_driver, error_msg = (
+                                    prepare_split_times_data(stageId, rebase_driver)
+                                )
 
                                 if error_msg:
                                     return empty_plot(title=error_msg)
 
                                 # Additional validation specific to this function
                                 if not heatmap_driver:
-                                    return empty_plot(title="No heatmap driver selected...")
+                                    return empty_plot(
+                                        title="No heatmap driver selected..."
+                                    )
 
                                 if rebase_driver == heatmap_driver:
-                                    return empty_plot(title="You need to select different\nrebase and splits heatmap drivers....")
+                                    return empty_plot(
+                                        title="You need to select different\nrebase and splits heatmap drivers...."
+                                    )
 
                                 heatmap_driver = int(heatmap_driver)
 
@@ -2052,22 +2064,36 @@ with ui.accordion(open=False):
                                     vmin = vmin if vmin < 0 else -1
                                     colors = ["green", "white", "red"]
 
-                                    cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+                                    cmap = LinearSegmentedColormap.from_list(
+                                        "custom_cmap", colors
+                                    )
                                     colors = []
                                     for c in cols:
                                         val = df[c].iloc[0]
 
                                         if isna(val):
-                                            colors.append("#d9d9d9")  # Light gray for NaN
+                                            colors.append(
+                                                "#d9d9d9"
+                                            )  # Light gray for NaN
                                         elif val == 0:
                                             colors.append("#f0f0f0")
                                         else:
-                                            normed = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-                                            colormap = cmap(normed(val))  # norm maps val to 0-1, cmap maps 0-1 to color
-                                            colormap = cmap(normed(val))  # norm maps val to)
-                                            r, g, b, a = [int(255 * c) for c in colormap]
+                                            normed = TwoSlopeNorm(
+                                                vmin=vmin, vcenter=0, vmax=vmax
+                                            )
+                                            colormap = cmap(
+                                                normed(val)
+                                            )  # norm maps val to 0-1, cmap maps 0-1 to color
+                                            colormap = cmap(
+                                                normed(val)
+                                            )  # norm maps val to)
+                                            r, g, b, a = [
+                                                int(255 * c) for c in colormap
+                                            ]
                                             # color = f"rgba({r},{g},{b},{a})"
-                                            color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+                                            color = "#{:02x}{:02x}{:02x}".format(
+                                                r, g, b
+                                            )
                                             colors.append(color)
                                     return colors
 
@@ -2082,16 +2108,20 @@ with ui.accordion(open=False):
                                 print(vmax, vmin)
                                 # Generate heat colours for section
                                 # We need len(split_cols)+1 colours
-                                heat_colours = _get_heatmap_colors(selected_rebased_time_wide, split_cols, vmax, vmin)
+                                heat_colours = _get_heatmap_colors(
+                                    selected_rebased_time_wide, split_cols, vmax, vmin
+                                )
 
                                 geostages = rally_geodata()
                                 ax = split_sections_map_core(
                                     wrc, stageId, geostages, heat_colours=heat_colours
                                 )
-                                ax.set_title(f"Within split section time deltas\nfor car {heatmap_driver}\ncompared to car {rebase_driver}.")
+                                ax.set_title(
+                                    f"Within split section time deltas:\ncar {heatmap_driver} compared to car {rebase_driver}."
+                                )
 
                                 return ax
-                            
+
                         with ui.accordion_panel("Split times group barplots"):
                             with ui.tooltip(id="splits_section_plot_type_tt"):
                                 ui.input_select(
@@ -2222,13 +2252,17 @@ with ui.accordion(open=False):
                                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                         )
 
-                                @render.plot(alt="Line chart of within split delta times.")
+                                @render.plot(
+                                    alt="Line chart of within split delta times."
+                                )
                                 def seaborn_linechart_splits():
                                     stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
 
                                     # Use the common setup function
-                                    split_times_wide, rebase_driver, error_msg = prepare_split_times_data(stageId, rebase_driver)
+                                    split_times_wide, rebase_driver, error_msg = (
+                                        prepare_split_times_data(stageId, rebase_driver)
+                                    )
 
                                     if error_msg:
                                         return empty_plot(title=error_msg)
@@ -2747,20 +2781,21 @@ def prepare_split_times_data(stageId, rebase_driver):
     # Validate stage selection
     if not stageId:
         return None, None, "No stage selected..."
-    
+
     # Validate rebase driver
     if not rebase_driver:
         return None, None, "No rebase driver selected..."
-    
+
     # Convert rebase_driver to proper format
     rebase_driver = int(rebase_driver) if rebase_driver != "ult" else rebase_driver
-    
+
     # Get split times data
     split_times_wide = get_split_times_wide().copy()
     if split_times_wide is None or split_times_wide.empty:
         return None, None, "No split times data..."
-        
+
     return split_times_wide, rebase_driver, None
+
 
 def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
     stages_info = wrc.getStageInfo(raw=False)
