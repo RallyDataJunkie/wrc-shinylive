@@ -1299,7 +1299,6 @@ with ui.accordion(open=False):
                         _, _, overall_df = getOverallStageResultsCore(
                             stageId, priority, stages_info
                         )
-                        print(overall_df)
 
                         stages_info["stageInDay"] = (
                             stages_info.groupby(["day"]).cumcount() + 1
@@ -1311,8 +1310,6 @@ with ui.accordion(open=False):
 
                         stage_code = stage_info["code"]
                         stage_name = stage_info["name"]
-
-                        print(stage_code, stage_name)
 
                         _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
                         md.append(_md)
@@ -1326,7 +1323,7 @@ with ui.accordion(open=False):
 
                         if times.empty or overall_df.empty:
                             return  # Anything else we could report here?
-                        print(overall_df["carNo"], times.iloc[0]["carNo"])
+                        
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "position"
                         ].iloc[0]
@@ -2129,7 +2126,6 @@ with ui.accordion(open=False):
                                 vmax = output_[split_cols].stack().max()
                                 vmin = output_[split_cols].stack().min()
 
-                                print(vmax, vmin)
                                 # Generate heat colours for section
                                 # We need len(split_cols)+1 colours
                                 heat_colours = _get_heatmap_colors(
