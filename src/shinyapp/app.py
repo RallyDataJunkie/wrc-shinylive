@@ -1860,6 +1860,26 @@ with ui.accordion(open=False):
                                 "TO DO - option to sort by start order, stage position"
                             )
 
+                            @render.express
+                            @reactive.event(input.interpretation_prompt_switch)
+                            def split_times_heat_interpretation_container():
+                                ui.input_switch(
+                                    "split_times_heat_interpretation_switch",
+                                    "Show interpretation prompts",
+                                    False,
+                                )
+
+                            @render.ui
+                            @reactive.event(
+                                input.split_times_heat_interpretation_switch
+                            )
+                            def split_times_heat_interpretation():
+                                if input.split_times_heat_interpretation_switch():
+                                    md = """The split times heatmap uses colour to indicate the magnitude of time deltas at each split point.\n\n*Positive* rebase time deltas (driver has *lost* time relative to rebase selected driver), are colourd *red*. Negative rebase time deltas (driver has gained time) are coloured *green*. *The palette can also be reversed to indicate time deltas "from the perspective of the rebase selected driver".*\n\nThe colour palette by default is generated on a *per column* basis, using the full colour range *within* a column. The palette can also be defined *across* the table as whole, using the maximum positive and minimum negative deltas across the whole stage to define the colour range.\n\nThe heatmap can be used to display two views: the (default) accumulated (elapsed) stage time delta*, and the *within section time delta*.\n\n  - __Accumulated (elapsed) stage time delta (s)__: the deltas give the delta on the accumulated (elapsed) stage time at each split point. *This is the time typically depicted on the WRC/Rally.tv graphics.*\n\n  - __Within section time delta__: this is the time taken to complete each split section, e.g. treating it as a "mini-stage" in its own right.\n\n__Things to look for__: the heatmap can be used to identify patterns or behaviour (full column, or full row) divergent colourings, as well as individual driver/split section features:\n\n  - __divergent *row* colouring__: if all the cells in a row (associated with a particular driver) are strongly coloured the same way, that shows the driver had a particularly *good* (by default, *green*) or particularly *bad* (by default, *red*) stage *at each split point*, compared to the selected rebase driver.\n\n  - __divergent *column* colouring__: if all the cells in a *column* are strongly coloured *green*, that shows the selected rebase driver has lost time on that section. If the rebase driver fixes a puncture in a split section, for example, we would expect that split section on the *within splits* view to show all the other cars fared better. If the selected rebase driver has a puncture but cominues, we might expect to see them losing time to all the other drivers at each split point across several splits to the end of the stage."""
+                                    return ui.markdown(
+                                        f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                                    )
+
                             @render.ui
                             @reactive.event(
                                 input.splits_review_accordion,
@@ -1898,8 +1918,9 @@ with ui.accordion(open=False):
                                         reverse_palette=rebase_reverse_palette,
                                         # TO DO - consider pace bsed thresholds
                                         # Pass in sector/stage distances and set a nominal pace threshold (s/km)
-                                        # Then set colour based on on maxing the color at the pace threshold
+                                        # Then set colour based on maxing the color at the pace threshold
                                         use_linear_cmap=True,
+                                        drop_last_quantile=False,
                                     )
                                     .hide()
                                     .to_html()

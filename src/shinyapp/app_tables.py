@@ -15,7 +15,8 @@ def df_color_gradient_styler(
     max_delta=30, # Accepts: None, 30 is 30s, so 1s/km pace diff on the longest stage
     use_linear_cmap=True,
     cmap_colors=None,
-    balancer=False
+    balancer=False,
+    drop_last_quantile=True
 ):
 
     ##-- via chatGPT
@@ -112,6 +113,7 @@ def df_color_gradient_styler(
     )
 
     # Calculate global max/min values if not using within-column gradients
+    # Across the table, we need to get the global max pos and min neg
     if not within_cols_gradient:
         # all_values = df[cols].values.flatten()
         # all_values = all_values[~isna(all_values)]  # Remove NaN values
@@ -120,16 +122,20 @@ def df_color_gradient_styler(
         pos_vals = all_values[all_values > 0]
         neg_vals = all_values[all_values < 0]
 
-        global_pos_max = (
-            pos_vals[pos_vals < pos_vals.quantile(0.9)].max()
-            if len(pos_vals) > 0
-            else 1
-        )
-        global_neg_min = (
-            neg_vals[neg_vals > neg_vals.quantile(0.1)].min()
-            if len(neg_vals) > 0
-            else -1
-        )
+        if drop_last_quantile:
+            global_pos_max = (
+                pos_vals[pos_vals < pos_vals.quantile(0.9)].max()
+                if len(pos_vals) > 0
+                else 1
+            )
+            global_neg_min = (
+                neg_vals[neg_vals > neg_vals.quantile(0.1)].min()
+                if len(neg_vals) > 0
+                else -1
+            )
+        else:
+            global_pos_max = pos_vals.max() if len(pos_vals) else 1
+            global_neg_min = neg_vals.min() if len(neg_vals) else -1
 
     # Process each column
     for col in cols:
