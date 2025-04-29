@@ -57,7 +57,11 @@ from .remarks import (
     season_background_remarks,
     season_overview_remarks,
     event_background_remarks,
+    stage_times_remarks,
 )
+
+# Interpretations
+from .interpretations import progression_interpretation_md
 
 # from itables.widget import ITable
 
@@ -377,8 +381,28 @@ with ui.accordion(open=False):
             )
             return so
 
-        with ui.accordion(open=False):
-            with ui.accordion_panel("Event Background"):
+        # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
+        # but we may have all the resultd in for the priority group
+        ui.input_checkbox(
+            "display_latest_overall",
+            "Display result at last completed stage",
+            True,
+        )
+
+        @render.ui
+        @reactive.event(input.stage, input.display_latest_overall, input.category)
+        def rally_overview_latest_hero():
+            # TO DO - for winner give overall stage distance, av speed, av pace
+            # TO DO for 2nd / 3rd, av speed, av pace delta
+            stageId, stagesInfo, overallResults = getOverallStageResultsData()
+            if not overallResults.empty:
+                return get_overall_result_hero(stageId, stagesInfo, overallResults)
+            else:
+                print("Missing stage results data?")
+
+        with ui.accordion(open=False, id="event_accordion"):
+
+            with ui.accordion_panel("Event background"):
 
                 @render.ui
                 @reactive.event(input.season_round)
@@ -387,17 +411,17 @@ with ui.accordion(open=False):
                     if not eventId:
                         return ui.markdown("\n\nNo event info...")
 
-                    md =  event_background_remarks(wrc, eventId)
+                    md = event_background_remarks(wrc, eventId)
 
                     # TO DO - add itinerary remarks if available
 
-                    return ui.markdown("\n\n".join(md))
+                    return ui.markdown(md)
 
-        # TO DO - overall report
-        # TO DO - day report
-        # TO DO - section/loop report
+            # TO DO - overall report
+            # TO DO - day report
+            # TO DO - section/loop report
 
-            with ui.accordion_panel("Event Stages Map"):
+            with ui.accordion_panel("Event stages map"):
 
                 @render_widget
                 @reactive.event(rally_geodata)
@@ -411,37 +435,15 @@ with ui.accordion(open=False):
                     )
                     return m
 
-        # TO DO - There is ambiguity here; a stage ,ay be running or cancelled etc
-        # but we may have all the resultd in for the priority group
-        ui.input_checkbox(
-            "display_latest_overall",
-            "Display result at last completed stage",
-            True,
-        )
-
-        with ui.accordion(open=False):
-            with ui.accordion_panel("Stage times"):
+            with ui.accordion_panel("Event stage times"):
 
                 @render.ui
-                def stage_remarks():
-                    md = []
-                    md.append(" TO DO ")
+                def app_stage_times_remarks():
+                    md = stage_times_remarks(wrc)
                     # also include status
-                    return ui.markdown("\n\n".join(md))
+                    return ui.markdown(md)
 
-        @render.ui
-        @reactive.event(input.stage, input.display_latest_overall, input.category)
-        def rally_overview_latest_hero():
-            # TO DO - for winner give overall stage distance, av speed, av pace
-            # TO DO for 2nd / 3rd, av speed, av pace delta
-            stageId, stagesInfo, overallResults = getOverallStageResultsData()
-            if not overallResults.empty:
-                return get_overall_result_hero(stageId, stagesInfo, overallResults)
-            else:
-                print("Missing stage results data?")
-
-        with ui.accordion(open=False, id="event_results_accordion"):
-            with ui.accordion_panel("Event Results"):
+            with ui.accordion_panel("Event results"):
 
                 @render.data_frame
                 @reactive.event(
@@ -572,7 +574,24 @@ with ui.accordion(open=False):
 
         with ui.accordion(open=False, id="rally_progression_accordion"):
             with ui.accordion_panel("Rally progression"):
-                ui.markdown("*Progress across stages.*")
+
+                @render.express
+                @reactive.event(input.interpretation_prompt_switch)
+                def progression_interpretation_container():
+                    ui.input_switch(
+                        "progression_interpretation_switch",
+                        "Show interpretation prompts",
+                        False,
+                    )
+
+                @render.ui
+                @reactive.event(input.progression_interpretation_switch)
+                def progression_interpretation():
+                    if input.progression_interpretation_switch():
+                        md = progression_interpretation_md
+                        return ui.markdown(
+                            f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                        )
 
                 # TO DO - tidy up  reactive.event
                 # Move get_overall_pos_wide declaration up the page and use it in decorator
@@ -619,16 +638,16 @@ with ui.accordion(open=False):
                 @reactive.event(input.interpretation_prompt_switch)
                 def progression_report_interpretation_container():
                     ui.input_switch(
-                        "progression_interpretation_switch",
+                        "progression_report_interpretation_switch",
                         "Show interpretation prompts",
                         False,
                     )
 
                 @render.ui
-                @reactive.event(input.progression_interpretation_switch)
+                @reactive.event(input.progression_report_interpretation_switch)
                 def progression_report_interpretation():
-                    if input.progression_interpretation_switch():
-                        md = """View options for the rally progression report include:\n\n- __Stage time (s)__: time, in seconds, taken to complete the stage.\n\n- __Stage position__: rank position on stage.\n\n- __Stage gap (s)__: the __gap__ is the *gap to leader* on the stage. Gives an indication how how off the stage winnner each driver was.\n\n- __Stage diff (s)__: the *diff* is the time difference to the car ahead on stage. Gives an indication of how far off a driver was from improving their position.\n\n- __Stage chase (s)__: the *chase* is the time difference to the car behind. Gives an indication how threatened a driver was from the car behind.\n\n- __Overall rally time (s)__: the elapsed rally time by the end of a particular stage.\n\n- __Overall rally position__: the overall rally poisition by the end of a stage. If the rally stopped at this point, this would be the driver's rally position.\n\n- __Overall rally class position__: the overall position in class (e.g. WRC, WRC2 etc).\n\n- __Overall rally gap (s)__: the gap to the rally leader based on elapsed rally time. Gives an indication of how far off the rally leader a driver is at the end of each stage.\n\n- __Overall rally diff (s)__: in terms of overall rally time, how far a driver is from the car in the position ahead. Gives an indication of how close they are to improving their overall rally position.\n\n- __Overall rally chase (s)__: in terms of overall rally time, how far a driver is from the car in the position behind. Gives an indication of how threatened a driver is by the car in the position behind."""
+                    if input.progression_report_interpretation_switch():
+                        md = """View options for the *rally progression report* include:\n\n- __Stage time (s)__: time, in seconds, taken to complete the stage.\n\n- __Stage position__: rank position on stage.\n\n- __Stage gap (s)__: the __gap__ is the *gap to leader* on the stage. Gives an indication how how off the stage winnner each driver was.\n\n- __Stage diff (s)__: the *diff* is the time difference to the car ahead on stage. Gives an indication of how far off a driver was from improving their position.\n\n- __Stage chase (s)__: the *chase* is the time difference to the car behind. Gives an indication how threatened a driver was from the car behind.\n\n- __Overall rally time (s)__: the elapsed rally time by the end of a particular stage.\n\n- __Overall rally position__: the overall rally poisition by the end of a stage. If the rally stopped at this point, this would be the driver's rally position.\n\n- __Overall rally class position__: the overall position in class (e.g. WRC, WRC2 etc).\n\n- __Overall rally gap (s)__: the gap to the rally leader based on elapsed rally time. Gives an indication of how far off the rally leader a driver is at the end of each stage.\n\n- __Overall rally diff (s)__: in terms of overall rally time, how far a driver is from the car in the position ahead. Gives an indication of how close they are to improving their overall rally position.\n\n- __Overall rally chase (s)__: in terms of overall rally time, how far a driver is from the car in the position behind. Gives an indication of how threatened a driver is by the car in the position behind."""
 
                         return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
@@ -1577,42 +1596,13 @@ with ui.accordion(open=False):
 
                     if not stageId:
                         return
-                    splits = wrc.getStageSplitPoints(stageId=int(stageId))
+                    
                     geostages = rally_geodata()
-                    stages_info = wrc.getStageInfo(raw=False)
-                    if splits.empty or geostages.empty or stages_info.empty:
+                    
+                    if geostages.empty:
                         return
 
-                    stage_info = stages_info[
-                        stages_info["stageId"] == int(stageId)
-                    ].iloc[0]
-                    colors = ["lightgrey", "blue"]
-                    colors = [colors[i % len(colors)] for i in range(len(splits) + 1)]
-
-                    fig2, ax2 = plt.subplots()
-                    dists = (splits["distance"] * 1000).tolist()
-
-                    geostage = geostages[
-                        geostages["stages"].apply(lambda x: stage_info["code"] in x)
-                    ]
-                    if geostage.empty:
-                        return
-                    line = geostage["geometry"].iloc[0]
-                    gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(
-                        line, dists, toend=True
-                    )
-                    gdf_segments2.plot(ax=ax2, lw=3, color=colors)
-                    ax2.set_axis_off()
-
-                    # Add a green dot at start and a red dot at endl s is the dot size
-                    # Get first point coordinates from first row
-                    first_x, first_y = gdf_segments2.iloc[0].geometry.coords[0]
-                    # Get last point coordinates from last row
-                    last_x, last_y = gdf_segments2.iloc[-1].geometry.coords[-1]
-                    # Plot the points directly with matplotlib
-                    ax2.scatter(first_x, first_y, color="green", s=10, zorder=5)
-                    ax2.scatter(last_x, last_y, color="red", s=10, zorder=5)
-
+                    ax2 = split_sections_map_core(wrc, stageId, geostages)
                     return ax2
 
         ui.markdown("\n\n")
@@ -1690,9 +1680,8 @@ with ui.accordion(open=False):
                 @render.ui
                 @reactive.event(input.stage_progression_interpretation_switch)
                 def stage_progression_report_interpretation():
-                    md = """View options for the stage progression report include:\n\n- __Time (s) within each split__: the time taken *within each split*, i.e. the time to get from one split point to the next. *__Lower__ is better.* Use this to see which split sections a driver gained / lost time on.\n\n- __Speed (km/h) within each split__: the within split time divided by the distance between split points. *__Higher__ is better. Gives a sense of whether a particular section was fast or slow.*\n\n- __Pace (s/km) within each split__: the distance between split points divided by the within split time. *__Lower__ is better.* Comparison allows you to see how much time was gained / lost per km, compared to other driver.\n\n- __Accumulated time (s) across all splits__: view elapsed / accumulated stage time (in seconds) across each split. Use this to get a sense of how the stage times progressed across the stage.  *Lower* is better.*  If the split was the stage end, this would be the stage time. Use this to see how the "overall" stage time evolved across the splits.\n\n- __Rank position within split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* Treat the split as a "stage" in its own right. Use this to how the driver ranked ourely on the basis of this split section.\n\n- __Rank position of accumulated time at each split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* If the split was the stage end, this would be the stage position. Use this to see how the "overall" stage position evolved across the splits.\n\n"""
-
                     if input.stage_progression_interpretation_switch():
+                        md = """View options for the stage progression report include:\n\n- __Time (s) within each split__: the time taken *within each split*, i.e. the time to get from one split point to the next. *__Lower__ is better.* Use this to see which split sections a driver gained / lost time on.\n\n- __Speed (km/h) within each split__: the within split time divided by the distance between split points. *__Higher__ is better. Gives a sense of whether a particular section was fast or slow.*\n\n- __Pace (s/km) within each split__: the distance between split points divided by the within split time. *__Lower__ is better.* Comparison allows you to see how much time was gained / lost per km, compared to other driver.\n\n- __Accumulated time (s) across all splits__: view elapsed / accumulated stage time (in seconds) across each split. Use this to get a sense of how the stage times progressed across the stage.  *Lower* is better.*  If the split was the stage end, this would be the stage time. Use this to see how the "overall" stage time evolved across the splits.\n\n- __Rank position within split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* Treat the split as a "stage" in its own right. Use this to how the driver ranked ourely on the basis of this split section.\n\n- __Rank position of accumulated time at each split__: view "elapsed" time rank at each split point. *__Lower__ is better ("higher" rank).* If the split was the stage end, this would be the stage position. Use this to see how the "overall" stage position evolved across the splits.\n\n"""
 
                         return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
@@ -2165,7 +2154,13 @@ with ui.accordion(open=False):
                                     )
 
                                     return ax
+                                
+                        with ui.accordion_panel("Split times stage section heatmaps"):
 
+                             @render.plot(alt="Route map split sections heatmap.")
+                             def route_sections_heatmap():
+                                 # XX TO DO 
+                                 return 
 
 # @render.ui
 # @reactive.event(input.year, input.season_round, input.category)
@@ -2662,6 +2657,45 @@ def update_championships_select():
     ui.update_select("championships", choices=championships)
     ui.update_select("event_championships", choices=championships)
 
+## Other core functions
+
+def split_sections_map_core(wrc, stageId, geostages):
+    stages_info = wrc.getStageInfo(raw=False)
+    splits = wrc.getStageSplitPoints(stageId=int(stageId))
+    if splits.empty or stages_info.empty:
+        return
+
+    stage_info = stages_info[
+        stages_info["stageId"] == int(stageId)
+    ].iloc[0]
+    colors = ["lightgrey", "blue"]
+    colors = [colors[i % len(colors)] for i in range(len(splits) + 1)]
+
+    fig2, ax2 = plt.subplots()
+    dists = (splits["distance"] * 1000).tolist()
+
+    geostage = geostages[
+        geostages["stages"].apply(lambda x: stage_info["code"] in x)
+    ]
+    if geostage.empty:
+        return
+    line = geostage["geometry"].iloc[0]
+    gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(
+        line, dists, toend=True
+    )
+    gdf_segments2.plot(ax=ax2, lw=3, color=colors)
+    ax2.set_axis_off()
+
+    # Add a green dot at start and a red dot at endl s is the dot size
+    # Get first point coordinates from first row
+    first_x, first_y = gdf_segments2.iloc[0].geometry.coords[0]
+    # Get last point coordinates from last row
+    last_x, last_y = gdf_segments2.iloc[-1].geometry.coords[-1]
+    # Plot the points directly with matplotlib
+    ax2.scatter(first_x, first_y, color="green", s=10, zorder=5)
+    ax2.scatter(last_x, last_y, color="red", s=10, zorder=5)
+
+    return ax2
 
 ## Reactive calcs
 

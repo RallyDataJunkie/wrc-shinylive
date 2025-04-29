@@ -186,4 +186,8 @@ def event_background_remarks(wrc, eventId):
     md_ = f"""Based in  {event["location"]} {event["timeZoneName"]}, the event {run_state_} {monthdates_}."""
     md.append(md_)
 
+    return "\n\n".join(md)
+
+def stage_times_remarks(wrc):
+    md = "TO DO"
     return md
