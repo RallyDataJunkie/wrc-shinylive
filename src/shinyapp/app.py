@@ -1285,6 +1285,7 @@ with ui.accordion(open=False):
                     @render.ui
                     @reactive.event(input.category, input.stage)
                     def stage_report_remarks():
+                        # TO DO - move this into stage_times_remarks() ?
                         priority = input.category()
                         stageId = input.stage()
                         if not priority or not stageId:
@@ -1327,7 +1328,7 @@ with ui.accordion(open=False):
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "position"
                         ].iloc[0]
-                        _md = f"""{times.iloc[0]["driverName"]} was in {Nth(1)} position on stage and {Nth(overall_pos)} overall.
+                        _md = f"""__{times.iloc[0]["driverName"]}__ was in __{Nth(1)}__ position on stage and __{Nth(overall_pos)} overall__.
                         """
                         md.append(_md)
 
@@ -1336,13 +1337,25 @@ with ui.accordion(open=False):
                             winner_row = stagewinners.loc[
                                 stagewinners["stageId"] == stageId
                             ]
-                            print(winner_row.to_dict())
 
-                            _md = f"""This was his {Nth(winner_row.iloc[0]["daily_wins"])} stage win of the day and his {Nth(winner_row.iloc[0]["wins_overall"])} stage win overall."""
+                            _md = f"""This was his *__{Nth(winner_row.iloc[0]["daily_wins"])}__ stage win of the day* and his *__{Nth(winner_row.iloc[0]["wins_overall"])}__ stage win overall*."""
 
                             md.append(_md)
 
                         # TO DO remark eg team made clean sweep of podium with X in second, M behind, and Y in third, a further Z back.
+
+                        # Teams remarks
+                        # Get teams in top 3
+                        for n in list(range(5,2,-1)):
+                            topNteamsOverall = times[times["position"]<=n]["entrantName"].to_list()
+                            if len(set(topNteamsOverall))==1:
+                                md_ = f"""__{topNteamsOverall[0]}__ dominated the stage, taking """
+                                if n!=3:
+                                    md_=f"""{md_} the top *{numToWords(n)}* positions."""
+                                else:
+                                    md_ = f"""{md_} all three podium positions."""
+                                md.append(md_)
+                                break
 
                         if times.iloc[0]["carNo"] != overall_df.iloc[0]["carNo"]:
                             leader_row = times.loc[
