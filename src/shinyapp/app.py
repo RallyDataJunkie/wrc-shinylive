@@ -1324,7 +1324,7 @@ with ui.accordion(open=False):
 
                         if times.empty or overall_df.empty:
                             return  # Anything else we could report here?
-                        
+
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "position"
                         ].iloc[0]
@@ -2146,13 +2146,15 @@ with ui.accordion(open=False):
                                 )
 
                                 geostages = rally_geodata()
+                                fig, ax = plt.subplots(facecolor="black")
                                 ax = split_sections_map_core(
-                                    wrc, stageId, geostages, heat_colours=heat_colours
+                                    wrc, stageId, geostages, ax=ax, heat_colours=heat_colours
                                 )
                                 ax.set_title(
                                     f"Within split section time deltas:\ncar {heatmap_driver} compared to car {rebase_driver}."
                                 )
-
+                                ax.title.set_color("white")
+                                
                                 return ax
 
                         with ui.accordion_panel("Split times group barplots"):
@@ -2830,7 +2832,7 @@ def prepare_split_times_data(stageId, rebase_driver):
     return split_times_wide, rebase_driver, None
 
 
-def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
+def split_sections_map_core(wrc, stageId, geostages, ax=None, heat_colours=None):
     stages_info = wrc.getStageInfo(raw=False)
     splits = wrc.getStageSplitPoints(stageId=int(stageId))
     if splits.empty or stages_info.empty:
@@ -2844,7 +2846,9 @@ def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
     else:
         colors = heat_colours
 
-    fig2, ax2 = plt.subplots()
+    if not ax:
+        fig2, ax = plt.subplots()
+
     dists = (splits["distance"] * 1000).tolist()
 
     geostage = geostages[geostages["stages"].apply(lambda x: stage_info["code"] in x)]
@@ -2852,8 +2856,8 @@ def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
         return
     line = geostage["geometry"].iloc[0]
     gdf_segments2 = wrcapi.GeoTools.route_N_segments_meters(line, dists, toend=True)
-    gdf_segments2.plot(ax=ax2, lw=3, color=colors)
-    ax2.set_axis_off()
+    gdf_segments2.plot(ax=ax, lw=3, color=colors)
+    ax.set_axis_off()
 
     # Add a green dot at start and a red dot at endl s is the dot size
     # Get first point coordinates from first row
@@ -2861,10 +2865,10 @@ def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
     # Get last point coordinates from last row
     last_x, last_y = gdf_segments2.iloc[-1].geometry.coords[-1]
     # Plot the points directly with matplotlib
-    ax2.scatter(first_x, first_y, color="green", s=10, zorder=5)
-    ax2.scatter(last_x, last_y, color="red", s=10, zorder=5)
+    ax.scatter(first_x, first_y, color="green", s=10, zorder=5)
+    ax.scatter(last_x, last_y, color="red", s=10, zorder=5)
 
-    return ax2
+    return ax
 
 
 ## Reactive calcs
