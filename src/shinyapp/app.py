@@ -2002,6 +2002,96 @@ with ui.accordion(open=False):
                                         cbar=False,
                                     )
 
+
+                        with ui.accordion_panel("Split times stage section heatmaps"):
+                            with ui.tooltip(id="split_times_heatmap_driver_tt"):
+                                ui.input_select(
+                                    "splits_heatmap_driver",
+                                    "Splits heatmap driver:",
+                                    {},
+                                ),
+                                "Get the driver we want to plot the rebased times for on a split sections map."
+
+                            @render.plot(alt="Route map split sections heatmap.")
+                            @reactive.event(
+                                input.stage,
+                                input.rebase_driver,
+                                input.splits_heatmap_driver,
+                            )
+                            def route_sections_heatmap():
+                                stageId = input.stage()
+                                rebase_driver = input.rebase_driver()
+                                heatmap_driver = input.splits_heatmap_driver()
+
+                                # Use the common setup function
+                                split_times_wide, rebase_driver, error_msg = prepare_split_times_data(stageId, rebase_driver)
+
+                                if error_msg:
+                                    return empty_plot(title=error_msg)
+
+                                # Additional validation specific to this function
+                                if not heatmap_driver:
+                                    return empty_plot(title="No heatmap driver selected...")
+
+                                if rebase_driver == heatmap_driver:
+                                    return empty_plot(title="You need to select different\nrebase and splits heatmap drivers....")
+
+                                heatmap_driver = int(heatmap_driver)
+
+                                # Original code from here on - no changes
+                                output_, split_cols = wrc.rebase_splits_wide_with_ult(
+                                    split_times_wide,
+                                    rebase_driver,
+                                    use_split_durations=True,
+                                )
+
+                                def _get_heatmap_colors(df, cols, vmax=None, vmin=None):
+                                    vmax = df[cols].values.max() if not vmax else vmax
+                                    vmax = vmax if vmax > 0 else 1
+                                    vmin = df[cols].values.min() if not vmin else vmin
+                                    vmin = vmin if vmin < 0 else -1
+                                    colors = ["green", "white", "red"]
+
+                                    cmap = LinearSegmentedColormap.from_list("custom_cmap", colors)
+                                    colors = []
+                                    for c in cols:
+                                        val = df[c].iloc[0]
+
+                                        if isna(val):
+                                            colors.append("#d9d9d9")  # Light gray for NaN
+                                        elif val == 0:
+                                            colors.append("#f0f0f0")
+                                        else:
+                                            normed = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
+                                            colormap = cmap(normed(val))  # norm maps val to 0-1, cmap maps 0-1 to color
+                                            colormap = cmap(normed(val))  # norm maps val to)
+                                            r, g, b, a = [int(255 * c) for c in colormap]
+                                            # color = f"rgba({r},{g},{b},{a})"
+                                            color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+                                            colors.append(color)
+                                    return colors
+
+                                selected_rebased_time_wide = output_[
+                                    output_["carNo"] == heatmap_driver
+                                ]
+                                # Get min.max across all the cols
+                                # so we can comapre across drivers
+                                vmax = output_[split_cols].stack().max()
+                                vmin = output_[split_cols].stack().min()
+
+                                print(vmax, vmin)
+                                # Generate heat colours for section
+                                # We need len(split_cols)+1 colours
+                                heat_colours = _get_heatmap_colors(selected_rebased_time_wide, split_cols, vmax, vmin)
+
+                                geostages = rally_geodata()
+                                ax = split_sections_map_core(
+                                    wrc, stageId, geostages, heat_colours=heat_colours
+                                )
+                                ax.set_title(f"Within split section time deltas\nfor car {heatmap_driver}\ncompared to car {rebase_driver}.")
+
+                                return ax
+                            
                         with ui.accordion_panel("Split times group barplots"):
                             with ui.tooltip(id="splits_section_plot_type_tt"):
                                 ui.input_select(
@@ -2132,154 +2222,23 @@ with ui.accordion(open=False):
                                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                         )
 
-                                @render.plot(
-                                    alt="Line chart of within split delta times."
-                                )
+                                @render.plot(alt="Line chart of within split delta times.")
                                 def seaborn_linechart_splits():
                                     stageId = input.stage()
-                                    if not stageId:
-                                        return empty_plot(title="No stage selected...")
-
                                     rebase_driver = input.rebase_driver()
-                                    # print(f"Rebasing on {rebase_driver}")
-                                    if not rebase_driver:
-                                        return empty_plot(
-                                            title="No rebase driver selected..."
-                                        )
 
-                                    rebase_driver = (
-                                        int(rebase_driver)
-                                        if rebase_driver != "ult"
-                                        else rebase_driver
-                                    )
+                                    # Use the common setup function
+                                    split_times_wide, rebase_driver, error_msg = prepare_split_times_data(stageId, rebase_driver)
 
-                                    # We don't want to modify the cached split times df
-                                    split_times_wide = get_split_times_wide().copy()
-                                    if (
-                                        split_times_wide is None
-                                        or split_times_wide.empty
-                                    ):
-                                        return empty_plot(
-                                            title="No split times data..."
-                                        )
+                                    if error_msg:
+                                        return empty_plot(title=error_msg)
 
+                                    # Use the original chart function with the prepared data
                                     ax = chart_seaborn_linechart_splits(
                                         wrc, stageId, split_times_wide, rebase_driver
                                     )
 
                                     return ax
-
-                        with ui.accordion_panel("Split times stage section heatmaps"):
-                            with ui.tooltip(id="split_times_heatmap_driver_tt"):
-                                ui.input_select(
-                                    "splits_heatmap_driver",
-                                    "Splits heatmap driver:",
-                                    {},
-                                ),
-                                "Get the driver we want to plot the rebased times for on a split sections map."
-
-                            @render.plot(alt="Route map split sections heatmap.")
-                            @reactive.event(
-                                input.stage,
-                                input.rebase_driver,
-                                input.splits_heatmap_driver,
-                            )
-                            def route_sections_heatmap():
-
-                                # TO DO - this code is duplicated in previous function  - refactor it
-                                stageId = input.stage()
-                                if not stageId:
-                                    return empty_plot(title="No stage selected...")
-
-                                rebase_driver = input.rebase_driver()
-                                heatmap_driver = input.splits_heatmap_driver()
-
-                                # print(f"Rebasing on {rebase_driver}")
-                                if not rebase_driver or not heatmap_driver:
-                                    return empty_plot(title="Some or all data missing.")
-
-                                if rebase_driver == heatmap_driver:
-                                    return empty_plot(
-                                        title="You need to select different\n"
-                                        "rebase and splits heatmap drivers...."
-                                    )
-
-                                rebase_driver = int(rebase_driver)
-                                heatmap_driver = int(heatmap_driver)
-
-                                # We don't want to modify the cached split times df
-                                split_times_wide = get_split_times_wide()
-                                if split_times_wide is None or split_times_wide.empty:
-                                    return empty_plot(
-                                        title="No split times data available."
-                                    )
-
-                                output_, split_cols = wrc.rebase_splits_wide_with_ult(
-                                    split_times_wide,
-                                    rebase_driver,
-                                    use_split_durations=True,
-                                )
-                                # TO DO end refactor reuse here
-
-                                def _get_heatmap_colors(df, cols):
-                                    vmax = df[cols].values.max()
-                                    vmax = vmax if vmax > 0 else 1
-                                    vmin = df[cols].values.min()
-                                    vmin = vmin if vmin < 0 else -1
-                                    colors = ["green", "white", "red"]
-
-                                    cmap = LinearSegmentedColormap.from_list(
-                                        "custom_cmap", colors
-                                    )
-                                    colors = []
-                                    for c in cols:
-                                        val = df[c].iloc[0]
-
-                                        if isna(val):
-                                            colors.append(
-                                                "#d9d9d9"
-                                            )  # Light gray for NaN
-                                        elif val == 0:
-                                            colors.append("#f0f0f0")
-                                        else:
-                                            normed = TwoSlopeNorm(
-                                                vmin=vmin, vcenter=0, vmax=vmax
-                                            )
-                                            colormap = cmap(
-                                                normed(val)
-                                            )  # norm maps val to 0-1, cmap maps 0-1 to color
-                                            colormap = cmap(
-                                                normed(val)
-                                            )  # norm maps val to)
-                                            r, g, b, a = [
-                                                int(255 * c) for c in colormap
-                                            ]
-                                            # color = f"rgba({r},{g},{b},{a})"
-                                            color = "#{:02x}{:02x}{:02x}".format(
-                                                r, g, b
-                                            )
-
-                                        colors.append(color)
-                                    return colors
-
-                                selected_rebased_time_wide = output_[
-                                    output_["carNo"] == heatmap_driver
-                                ]
-
-                                # Generate heat colours for section
-                                # We need len(split_cols)+1 colours
-                                heat_colours = _get_heatmap_colors(
-                                    selected_rebased_time_wide, split_cols
-                                )
-
-                                geostages = rally_geodata()
-                                ax = split_sections_map_core(
-                                    wrc, stageId, geostages, heat_colours=heat_colours
-                                )
-                                ax.set_title(
-                                    f"Within split section time deltas\nfor car {heatmap_driver}\ncompared to car {rebase_driver}."
-                                )
-                                return ax
 
 
 # @render.ui
@@ -2782,6 +2741,26 @@ def update_championships_select():
 
 ## Other core functions
 
+
+def prepare_split_times_data(stageId, rebase_driver):
+    """Common setup code for split times visualizations"""
+    # Validate stage selection
+    if not stageId:
+        return None, None, "No stage selected..."
+    
+    # Validate rebase driver
+    if not rebase_driver:
+        return None, None, "No rebase driver selected..."
+    
+    # Convert rebase_driver to proper format
+    rebase_driver = int(rebase_driver) if rebase_driver != "ult" else rebase_driver
+    
+    # Get split times data
+    split_times_wide = get_split_times_wide().copy()
+    if split_times_wide is None or split_times_wide.empty:
+        return None, None, "No split times data..."
+        
+    return split_times_wide, rebase_driver, None
 
 def split_sections_map_core(wrc, stageId, geostages, heat_colours=None):
     stages_info = wrc.getStageInfo(raw=False)
