@@ -52,6 +52,9 @@ from .app_tables import df_color_gradient_styler
 
 from shinywidgets import render_widget
 
+# Remarks
+from .remarks import season_background_remarks, season_overview_remarks
+
 # from itables.widget import ITable
 
 from wrc_rallydj.livetiming_api2 import WRCTimingResultsAPIClientV2
@@ -175,12 +178,12 @@ with ui.accordion(open=False):
         def season_headline():
             seasonId = input.rally_seasonId()
             if not seasonId:
-                return "No season available."
+                return "*No season available.*"
             seasonId = int(seasonId)
             season_rounds = wrc.getSeasonRounds(seasonId=seasonId)
 
             if season_rounds.empty:
-                return "No season information available."
+                return "*No season information available.*"
 
             seasons_info = seasonInfo()
             season_info = seasons_info[seasons_info["seasonId"] == seasonId].iloc[0]
@@ -201,106 +204,11 @@ with ui.accordion(open=False):
 
                 @render.ui
                 @reactive.event(input.rally_seasonId)
-                def season_background_remarks():
+                def app_season_background_remarks():
                     seasonId = input.rally_seasonId()
                     if not seasonId:
-                        return "No season available."
-                    seasonId = int(seasonId)
-                    season_rounds = wrc.getSeasonRounds(seasonId=seasonId)
-
-                    if season_rounds.empty:
-                        return "No season information available."
-
-                    seasons_info = seasonInfo()
-                    season_info = seasons_info[
-                        seasons_info["seasonId"] == seasonId
-                    ].iloc[0]
-                    banner_ = f"""{season_info["year"]} {season_info["name"]}"""
-
-                    first_date = to_datetime(season_rounds["startDate"].iloc[0])
-                    last_date = to_datetime(season_rounds["startDate"].iloc[-1])
-                    months_ = (last_date.year - first_date.year) * 12 + (
-                        last_date.month - first_date.month
-                    )
-                    if first_date.month == last_date.month:
-                        months2_ = f"(*{first_date.strftime('%B')}*)"
-                    else:
-                        months2_ = f"(*{first_date.strftime('%B')}* to *{last_date.strftime('%B')}*)"
-
-                    md = f"""The complete *__{banner_}__* season takes in *__{numToWords(len(season_rounds))}__ rounds* over *__{numToWords(months_)} months__* {months2_}"""
-
-                    # Surfaces - we need two strategies: all surfaces available, some surfaces available.
-                    surfaces_available = season_rounds[
-                        ~(season_rounds["surfaces"].isna())
-                        & ~(season_rounds["surfaces"] == "")
-                    ]
-                    surfaces_available_n = surfaces_available.shape[0]
-                    if surfaces_available_n == len(season_rounds):
-                        # All surfaces available
-                        surfaces_ = [
-                            f"*__{s}__*"
-                            for s in season_rounds["surfaces"].str.lower().unique()
-                        ]
-                        surfaces_ = andList(surfaces_)
-
-                        md = f"""{md} and *{numToWords(season_rounds["surfaces"].nunique())} surface types* ({surfaces_})."""
-                    elif surfaces_available_n:
-                        surfaces_ = [
-                            f"""*__{s.lower()}__*"""
-                            for s in season_rounds["surfaces"].unique()
-                            if s
-                        ]
-                        surfaces_ = ", ".join(surfaces_)
-                        md = f"""{md} and includes at least {numToWords(surfaces_available_n)} surface {p.plural("type", surfaces_available_n)} ({surfaces_})."""
-                    else:
-                        md = f"""{md}."""
-
-                    rallies_ = []
-                    for _, row in season_rounds.iterrows():
-                        startDate = to_datetime(row["startDate"])
-                        finishDate = to_datetime(row["finishDate"])
-
-                        if startDate.month == finishDate.month:
-                            month_ = startDate.strftime("%B")
-                        else:
-                            month_ = f"""{startDate.strftime('%B')}/{finishDate.strftime('%B')}"""
-                        rallies_.append(f"*{row['name']}* ({month_})")
-
-                    md = f"""{md}\n\nSpecifically, the *{banner_}* incorporates the following rallies: {andList(rallies_)}"""
-
-                    if surfaces_available_n == len(season_rounds):
-                        # Group by surface and collect the names
-                        surface_groups = (
-                            season_rounds.groupby("surfaces")["name"]
-                            .apply(list)
-                            .to_dict()
-                        )
-
-                        # Create parts of the sentence for each surface
-                        parts = []
-                        for i, (surface, names) in enumerate(surface_groups.items()):
-                            count = numToWords(len(names))
-                            names_str = ", ".join([f"*{n}*" for n in names])
-                            parts.append(
-                                f"*__{count} {surface.lower()}__* {p.plural("rally", len(names))} ({names_str})"
-                            )
-
-                        surface_rallies_ = (
-                            f"""There {p.plural("is", len(parts))} {andList(parts)}"""
-                        )
-
-                        md = f"""{md}\n\n{surface_rallies_}"""
-
-                    championships = wrc.getChampionships()
-                    if not championships.empty:
-                        championships_ = [f"""*{c}*""" for c in championships["name"]]
-                        championships_ = ", ".join(championships_)
-                        championship_types_ = [
-                            f"""*{c}*""" for c in championships["type"].unique()
-                        ]
-                        md = f"""{md}\n\n The season also incorporates *__{numToWords(len(championships))} championships__*, including championships for {andList(championship_types_)}.\n\nMore specifically, the championships are: {championships_}\n\n"""
-                    else:
-                        md = f"""{md}."""
+                        return "*No season available.*"
+                    md = season_background_remarks(wrc, int(seasonId))
 
                     return ui.markdown(f"""{md}\n\n""")
 
@@ -312,8 +220,11 @@ with ui.accordion(open=False):
             with ui.accordion_panel("Season Overview"):
 
                 @render.ui
-                def season_overview_remarks():
-                    md = """ TO DO """
+                def app_season_overview_remarks():
+                    seasonId = input.rally_seasonId()
+                    if not seasonId:
+                        return "*No season available.*"
+                    md = season_overview_remarks(wrc, seasonId)
                     return ui.markdown(f"""{md}\n\n""")
 
         with ui.accordion(open=False, id="season_elements_accordion"):
@@ -1889,7 +1800,6 @@ with ui.accordion(open=False):
 
                     """ TO DO: sort order dropdown (SP.., RoadPos, position); show: Top10, Top20, All"""
 
-
                     # Create driver rebase selector
                     with ui.tooltip(id="rebase_driver_tt"):
                         ui.input_select(
@@ -1920,7 +1830,7 @@ with ui.accordion(open=False):
                             return ui.markdown(
                                 f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                             )
-                        
+
                     @render.ui
                     @reactive.event(
                         input.stage, input.rebase_driver, input.splits_refresh
