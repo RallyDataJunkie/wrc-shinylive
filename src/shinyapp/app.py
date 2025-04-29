@@ -53,7 +53,11 @@ from .app_tables import df_color_gradient_styler
 from shinywidgets import render_widget
 
 # Remarks
-from .remarks import season_background_remarks, season_overview_remarks
+from .remarks import (
+    season_background_remarks,
+    season_overview_remarks,
+    event_background_remarks,
+)
 
 # from itables.widget import ITable
 
@@ -373,58 +377,27 @@ with ui.accordion(open=False):
             )
             return so
 
-        @render.ui
-        def event_remarks():
-            md = []
-            season = wrc.getSeasonRounds()
-            eventId = input.season_round()
-            if season.empty or not eventId:
-                return ui.markdown("\n\nNo event info...")
-            season["surfaceCount"] = season.groupby("surfaces").cumcount() + 1
-            event = season[season["eventId"] == int(eventId)]
-            if event.empty:
-                return ui.markdown("\n\nNo event info...")
+        with ui.accordion(open=False):
+            with ui.accordion_panel("Event Background"):
 
-            event = event.iloc[0]
+                @render.ui
+                @reactive.event(input.season_round)
+                def app_event_background_remarks():
+                    eventId = input.season_round()
+                    if not eventId:
+                        return ui.markdown("\n\nNo event info...")
 
-            last_event_ = (
-                f""", and the last event of the year"""
-                if event["order"] == season["order"].max()
-                else ""
-            )
-            _and = "and " if not last_event_ else ""
-            surface_ = f""" {_and}{Nth(event["surfaceCount"])} {event["surfaces"].lower()} rally"""
-            md_ = f"""*{event["name"]}* ({event["country.name"]}, {event["country.iso3"]}), the {Nth(event["order"])} event of the season, {surface_}{last_event_}."""
-            md.append(md_)
-            start_date = to_datetime(event["finishDate"])
-            finish_date = to_datetime(event["startDate"])
-            date_now = to_datetime(dateNow())
-            if start_date > date_now:
-                run_state_ = "runs from"
-            elif date_now <= finish_date:
-                run_state_ = "running from"
-            else:
-                run_state_ = "ran from"
-            start_month = to_datetime(start_date).strftime("%B")
-            finish_month = to_datetime(finish_date).strftime("%B")
-            same_month = start_month == finish_month
-            if same_month:
-                monthdates_ = f"""{nth(start_date.day)} to {nth(finish_date.day)} {start_month}, {start_date.year}"""
-            else:
-                monthdates_ = f"""{nth(start_date.day)} {start_month} to {th(finish_date.day)} {finish_month}, {finish_month.year}"""
-            md_ = f"""Based in  {event["location"]} {event["timeZoneName"]}, the event {run_state_} {monthdates_}."""
-            md.append(md_)
+                    md =  event_background_remarks(wrc, eventId)
 
-            # TO DO - add itinerary remarks if available
+                    # TO DO - add itinerary remarks if available
 
-            return ui.markdown("\n\n".join(md))
+                    return ui.markdown("\n\n".join(md))
 
         # TO DO - overall report
         # TO DO - day report
         # TO DO - section/loop report
 
-        with ui.accordion(open=False):
-            with ui.accordion_panel("Stages map"):
+            with ui.accordion_panel("Event Stages Map"):
 
                 @render_widget
                 @reactive.event(rally_geodata)
