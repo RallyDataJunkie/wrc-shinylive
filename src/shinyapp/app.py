@@ -63,7 +63,10 @@ from .remarks import (
 )
 
 # Interpretations
-from .interpretations import progression_interpretation_md
+from .interpretations import (
+    progression_interpretation_md,
+    progression_report_interpretation_md,
+)
 
 # from itables.widget import ITable
 
@@ -649,7 +652,7 @@ with ui.accordion(open=False):
                 @reactive.event(input.progression_report_interpretation_switch)
                 def progression_report_interpretation():
                     if input.progression_report_interpretation_switch():
-                        md = """View options for the *rally progression report* include:\n\n- __Stage time (s)__: time, in seconds, taken to complete the stage.\n\n- __Stage position__: rank position on stage.\n\n- __Stage gap (s)__: the __gap__ is the *gap to leader* on the stage. Gives an indication how how off the stage winnner each driver was.\n\n- __Stage diff (s)__: the *diff* is the time difference to the car ahead on stage. Gives an indication of how far off a driver was from improving their position.\n\n- __Stage chase (s)__: the *chase* is the time difference to the car behind. Gives an indication how threatened a driver was from the car behind.\n\n- __Overall rally time (s)__: the elapsed rally time by the end of a particular stage.\n\n- __Overall rally position__: the overall rally poisition by the end of a stage. If the rally stopped at this point, this would be the driver's rally position.\n\n- __Overall rally class position__: the overall position in class (e.g. WRC, WRC2 etc).\n\n- __Overall rally gap (s)__: the gap to the rally leader based on elapsed rally time. Gives an indication of how far off the rally leader a driver is at the end of each stage.\n\n- __Overall rally diff (s)__: in terms of overall rally time, how far a driver is from the car in the position ahead. Gives an indication of how close they are to improving their overall rally position.\n\n- __Overall rally chase (s)__: in terms of overall rally time, how far a driver is from the car in the position behind. Gives an indication of how threatened a driver is by the car in the position behind."""
+                        md = progression_report_interpretation_md
 
                         return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
