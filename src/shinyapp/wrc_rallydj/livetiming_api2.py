@@ -30,7 +30,7 @@ from pandas import (
     isna,
 )
 
-from numpy import nan
+from numpy import nan, where
 
 
 class DatabaseManager:
@@ -344,6 +344,16 @@ class APIClient:
         return eventData_df, eventRallies_df, eventClasses_df
 
     def _getEntries(self, eventId, rallyId, updateDB=False):
+        if not eventId:
+            return (
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+                DataFrame(),
+            )
         stub = f"events/{eventId}/rallies/{rallyId}/entries.json"
         json_data = self._WRC_RedBull_json(stub)
         entries_df = DataFrame(json_data)
@@ -400,7 +410,7 @@ class APIClient:
         )
 
     def _getStartLists(self, eventId, startListId=None, updateDB=False):
-        if isna(startListId) or not startListId:
+        if not eventId or isna(startListId) or not startListId:
             return DataFrame()
 
         stub = f"events/{eventId}/startLists/{startListId}.json"
@@ -419,6 +429,9 @@ class APIClient:
         return startlist_df
 
     def _getEventGroups(self, eventId, updateDB=False):
+        if not eventId:
+            return DataFrame()
+        
         stub = f"events/{eventId}/groups.json"
         json_data = self._WRC_RedBull_json(stub)
 
@@ -459,7 +472,8 @@ class APIClient:
             )
         else:
             self.lastreferenced["itinerary_json"]["t"] = timeNow(typ="s")
-
+        if not eventId or not itineraryId:
+            return DataFrame(), DataFrame(), DataFrame(), DataFrame()
         stub = f"events/{eventId}/itineraries/{itineraryId}.json"
         json_data = self._WRC_RedBull_json(stub)
         if "itineraryLegs" not in json_data:
@@ -531,6 +545,8 @@ class APIClient:
         )
 
     def _getControlTimes(self, eventId, controlId, updateDB=False):
+        if not eventId or not controlId:
+            return DataFrame()
         stub = f"events/{eventId}/controls/{controlId}/controlTimes.json"
         json_data = self._WRC_RedBull_json(stub)
         controlTimes_df = DataFrame(json_data)
@@ -572,6 +588,9 @@ class APIClient:
         else:
             self.lastreferenced["stages_json"]["t"] = timeNow(typ="s")
 
+        if not eventId:
+            return DataFrame(), DataFrame(), DataFrame()
+        
         stub = f"events/{eventId}/stages.json"
         json_data = self._WRC_RedBull_json(stub)
         stages_df = DataFrame(json_data)
@@ -607,7 +626,10 @@ class APIClient:
         return stages_df, stage_split_points_df, stage_controls_df
 
     def _getStageTimes(self, eventId, rallyId, stageId=None, updateDB=False):
-        stub = f"events/{eventId}/stages/{stageId}/stagetimes.json?rallyId={rallyId}"
+        if not eventId or not stageId or not rallyId:
+            return DataFrame()
+        
+        stub = f"events/{eventId}/stages/{stageId}/stagetimes.json?rallyId={rallyId}"     
         json_data = self._WRC_RedBull_json(stub)
         stagetimes_df = DataFrame(json_data)
         if stagetimes_df.empty:
@@ -623,6 +645,9 @@ class APIClient:
 
     def _getSplitTimes(self, eventId, rallyId, stageId=None, updateDB=False):
         stageId = stageId if stageId else self.stageId
+        if not eventId or not stageId or not rallyId:
+            return DataFrame()
+        
         stub = f"events/{eventId}/stages/{stageId}/splittimes.json?rallyId={rallyId}"
         json_data = self._WRC_RedBull_json(stub)
         splitTimes_df = DataFrame(json_data)
@@ -653,6 +678,9 @@ class APIClient:
         # The rallyId is optional? Or does it filter somehow?
         # We have no self.stageId here
         # stageId = stageId if stageId else self.stageId
+        if not eventId or not stageId or not rallyId:
+            return DataFrame()
+        
         stub = f"events/{eventId}/stages/{stageId}/results.json?rallyId={rallyId}"
         if by_championship and championshipId:
             stub = stub + f"&championshipId={championshipId}"
@@ -920,7 +948,7 @@ class WRCTimingResultsAPIClientV2:
             self._getSeasons(updateDB=updateDB)
         # TO DO need to filter with championship
         _on_year = f"AND year={year}" if year is not None else ""
-        q = f"""SELECT * FROM seasons WHERE 1=1 {_on_year};"""
+        q = f"""SELECT s.* FROM seasons AS s WHERE 1=1 {_on_year};"""
         seasons_df = self.db_manager.read_sql(q)
 
         return self._getSeasonsSubQuery(seasons_df, championship, year)
@@ -949,7 +977,7 @@ class WRCTimingResultsAPIClientV2:
             seasonId = seasonId if seasonId else self.seasonId
         seasonId_ = f"""AND seasonId={seasonId}""" if seasonId else ""
 
-        q = f"""SELECT * FROM season_rounds WHERE 1=1 {seasonId_};"""
+        q = f"""SELECT sr.* FROM season_rounds AS sr WHERE 1=1 {seasonId_};"""
         seasonRounds_df = self.db_manager.read_sql(q)
         if seasonRounds_df.empty:
             self._getSeasonDetail(updateDB=True)
@@ -1001,7 +1029,7 @@ class WRCTimingResultsAPIClientV2:
         else:
             latest_ = ""
         if raw:
-            q = f"""SELECT * FROM championship_overall AS co WHERE 1=1 {championship_} {event_} {latest_};"""
+            q = f"""SELECT co.* FROM championship_overall AS co WHERE 1=1 {championship_} {event_} {latest_};"""
         else:
             _championship_results_join = f"INNER JOIN championship_results AS cr ON cr.championshipEntryId=co.championshipEntryId AND cr.eventId=co.eventId"
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON co.championshipEntryId=ce.championshipEntryId"
@@ -1057,7 +1085,7 @@ class WRCTimingResultsAPIClientV2:
             event_ = ""
         on_season_ = f"""AND seasonId={self.seasonId}""" if on_season else ""
         if raw:
-            q = f"""SELECT * FROM championship_results AS cr WHERE 1=1 {championship_} {event_} {on_season_};"""
+            q = f"""SELECT cr.* FROM championship_results AS cr WHERE 1=1 {championship_} {event_} {on_season_};"""
 
         else:
             _championship_entry_join = f"INNER JOIN championship_entries AS ce ON cr.championshipEntryId=ce.championshipEntryId"
@@ -1099,7 +1127,7 @@ class WRCTimingResultsAPIClientV2:
 
         year_ = f"""AND cd.year={year}""" if year else ""
         if raw:
-            q = f"""SELECT * FROM championship_rounds_detail AS cd WHERE 1=1 {year_};"""
+            q = f"""SELECT cd.* FROM championship_rounds_detail AS cd WHERE 1=1 {year_};"""
 
         championshipRounds_df = self.db_manager.read_sql(q)
 
@@ -1117,7 +1145,7 @@ class WRCTimingResultsAPIClientV2:
         else:
             championship_ = ""
         if raw:
-            q = f"""SELECT * FROM championship_entries AS ce WHERE 1=1 {championship_};"""
+            q = f"""SELECT ce.* FROM championship_entries AS ce WHERE 1=1 {championship_};"""
         championshipEntries_df = self.db_manager.read_sql(q)
 
         return championshipEntries_df
@@ -1127,7 +1155,7 @@ class WRCTimingResultsAPIClientV2:
             self._getChampionshipDetail()
 
         if raw:
-            q = "SELECT * FROM championship_countries;"
+            q = "SELECT cc.* FROM championship_countries AS cc;"
         championships_df = self.db_manager.read_sql(q)
 
         return championships_df
@@ -1159,7 +1187,7 @@ class WRCTimingResultsAPIClientV2:
             self._getEventItineraries(updateDB=updateDB)
 
         eventId_ = f"AND eventId={int(eventId)}" if eventId else ""
-        q = f"""SELECT * FROM itinerary_legs WHERE 1=1 {eventId_};"""
+        q = f"""SELECT il.* FROM itinerary_legs AS il WHERE 1=1 {eventId_};"""
 
         itineraryLegs_df = self.db_manager.read_sql(q)
 
@@ -1242,7 +1270,7 @@ class WRCTimingResultsAPIClientV2:
         eventId = eventId if eventId else self.eventId
         _on_event = f"AND sl.eventId={eventId}" if eventId else ""
         if raw:
-            q = f"SELECT * FROM startlists AS sl WHERE 1=1 {_on_event}"
+            q = f"SELECT sl.* FROM startlists AS sl WHERE 1=1 {_on_event}"
             if startListId:
                 q = f"{q} AND startListId={startListId}"
             q = f"{q};"
@@ -1281,7 +1309,7 @@ class WRCTimingResultsAPIClientV2:
             if on_event and self.eventId and self.rallyId
             else ""
         )
-        q = f"SELECT * FROM entries AS e WHERE 1=1 {_on_event};"
+        q = f"SELECT e.* FROM entries AS e WHERE 1=1 {_on_event};"
         entries_df = self.db_manager.read_sql(q)
 
         return entries_df
@@ -1390,7 +1418,7 @@ class WRCTimingResultsAPIClientV2:
         eventId_ = f"""AND sh.eventId={self.eventId}""" if eventId else ""
 
         if raw:
-            sql = f"SELECT * FROM shakedown_times AS sh WHERE 1=1 {eventId_};"
+            sql = f"SELECT sh.* FROM shakedown_times AS sh WHERE 1=1 {eventId_};"
         else:
             _entry_join = f"INNER JOIN entries AS e ON sh.entryId=e.entryId"
             _driver_join = f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
@@ -1452,9 +1480,10 @@ class WRCTimingResultsAPIClientV2:
         stages_df, stage_split_points_df, stage_controls_df = (
             self.api_client._getStages(*args, **kwargs)
         )
-        # Check the stages table as it currently stands
-        # stages_info = self.getStageInfo(legacyCheck=True)["status"].str.lower().unique()
-        stages_info = stages_df["status"].str.lower().unique()
+        if not stages_df.empty:
+            # Check the stages table as it currently stands
+            # stages_info = self.getStageInfo(legacyCheck=True)["status"].str.lower().unique()
+            stages_info = stages_df["status"].str.lower().unique()
         if "torun" not in stages_info and "running" not in stages_info:
             self._updateCompletedEventTableStatus(
                 eventId, ["stage_info", "split_points", "stage_controls"]
@@ -1490,6 +1519,7 @@ class WRCTimingResultsAPIClientV2:
         stage_name=None,
         completed=False,
         running=False,
+        last=False,
         raw=True,
         updateDB=False,
         noLiveCheck=False,
@@ -1530,16 +1560,21 @@ class WRCTimingResultsAPIClientV2:
             if completed
             else ""
         )
+        last_ = (
+            f"""AND si.number = (SELECT MAX(number) FROM stage_info WHERE 1=1 {on_event_} {on_stage_})"""
+            if last
+            else ""
+        )
 
         if raw:
-            q = f"SELECT * FROM stage_info AS si WHERE 1=1 {on_event_} {on_stage_} {completed_};"
+            q = f"SELECT * FROM stage_info AS si WHERE 1=1 {on_event_} {on_stage_} {completed_} {last_};"
         else:
             _itinerary_stages_join = (
                 f"INNER JOIN itinerary_stages AS it_st ON it_st.stageId=si.stageId"
             )
             _itinerary_sections_join = f"INNER JOIN itinerary_sections AS it_se ON it_se.itinerarySectionId=it_st.itinerarySectionId"
             _itinerary_legs_join = f"INNER JOIN itinerary_legs AS it_l ON it_l.itineraryLegId=it_st.itineraryLegId"
-            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {on_event_} {on_leg_} {on_section_} {on_stage_} {on_stage_name_} {completed_};"
+            q = f"SELECT it_se.name AS sectionName, it_l.name AS day, si.* FROM stage_info AS si {_itinerary_stages_join} {_itinerary_sections_join} {_itinerary_legs_join} WHERE 1=1 {on_event_} {on_leg_} {on_section_} {on_stage_} {on_stage_name_} {completed_} {last_};"
 
         stages_df = self.db_manager.read_sql(q)
 
@@ -1605,7 +1640,7 @@ class WRCTimingResultsAPIClientV2:
             self._getStages(updateDB=updateDB)
 
         if raw:
-            q = "SELECT * FROM stage_controls;"
+            q = "SELECT sc.* FROM stage_controls AS sc;"
         # TO DO a query that gives a "pretty" result
 
         stage_controls_df = self.db_manager.read_sql(q)
@@ -1789,14 +1824,13 @@ class WRCTimingResultsAPIClientV2:
 
     def isRallyInDate(self):
         """A quicker test than .isRallyLive(), just checks by date."""
-        today = dateNow()
         season = self.getSeasonRounds()
-        running = season[
-            (season["eventId"] == self.eventId)
-            & (season["startDate"] <= today)
-            & (season["finishDate"] >= today)
-        ]
-        return not running.empty
+        event = season[season["eventId"] == self.eventId]
+        if not event.empty:
+            event = event.iloc[0].to_dict()
+            is_date_in_range(datetime.now(), event)
+            return is_date_in_range(datetime.now(), event)
+        return False
 
     def isRallyLive(self):
         """Flag to show that rally is live."""
@@ -1805,7 +1839,7 @@ class WRCTimingResultsAPIClientV2:
         if not event_.empty:
             event = event_.iloc[0].to_dict()
 
-            if is_date_in_range(event):
+            if is_date_in_range(datetime.now(), event):
                 # TO DO - various itinerary controls report status
                 # itinerarySections: status: ToRun, Running
                 # itineraryControls: status: ToRun
@@ -1836,12 +1870,15 @@ class WRCTimingResultsAPIClientV2:
         omitDNS=True,
         priority=None,
         rebaseToCategory=True,
+        on_event=True,
         raw=True,
         updateDB=False,
     ):
         # The assumption below is for on_event
         stageIds = (
-            self.getCompletedStages(stageId=stageId, running=running, completed=completed)
+            self.getCompletedStages(
+                stageId=stageId, running=running, completed=completed, on_event=on_event
+            )
             if completed
             else {}  # TO DO map for the default stageId
         )
@@ -2316,11 +2353,12 @@ class WRCTimingResultsAPIClientV2:
 
         return self.api_client._getStageOverallResults(*args, **kwargs)
 
-    # TO DO  - improve this; have a function that gets stages by status (Running, To run, completed, cancelled, posotponed etc)
-    def getCompletedStages(self, stageId=None, completed=True, running=False, stageMode="uptoincl", on_event=True):
-        # stageId is the up to an including stageId, else all TO DO still
+    # TO DO  - improve this; have a function that gets stages by status (Running, To run, completed, cancelled, postponed etc)
+    def getCompletedStages(self, stageId=None, completed=True, running=False, last=False, stageMode="uptoincl", on_event=True):
+        # stageId is the up to and including stageId, else all TO DO still
+
         completed_stages = (
-            self.getStageInfo(raw=False, on_event=on_event, completed=completed, running=running)
+            self.getStageInfo(raw=False, on_event=on_event, completed=completed, running=running, last=last)
             .sort_values("number")
             .reset_index(drop=True)
         )
@@ -2355,7 +2393,7 @@ class WRCTimingResultsAPIClientV2:
 
     def checkCompletedStageTableStatus(self, stageId, table):
         """Return a True flag if we have stored this table."""
-        sql = f"""SELECT * FROM meta_completed_stage_tables WHERE stageId={stageId} AND tableType="{table}";"""
+        sql = f"""SELECT meta.* FROM meta_completed_stage_tables AS meta WHERE stageId={stageId} AND tableType="{table}";"""
         _result = self.query(sql=sql)
         status = not _result.empty
         return status
@@ -2393,14 +2431,17 @@ class WRCTimingResultsAPIClientV2:
         return False
 
     def getStageOverallResults(
-        self, stageId=None, priority=None, completed=False, running=False, raw=True, updateDB=False
+        self, stageId=None, priority=None, completed=False, running=False, last=False, on_event=True, raw=True, updateDB=False
     ):
         # The assumption below is for on_event
-        stageIds = (
-            self.getCompletedStages(stageId=stageId, completed=completed, running=running)
-            if completed or running
-            else {}  # TO DO map for the default stageId
-        )
+        if completed or running or last:
+            stageIds = self.getCompletedStages(
+                stageId=stageId, completed=completed, running=running, last=last, on_event=on_event)
+        elif stageId:
+            stageIds = [stageId]
+        else:
+            stageIds = []  # TO DO map for the default stageId
+        #print("stageIds - ", stageIds)
         if updateDB or self.liveCatchup:
             logger.debug(
                 f"getStageOverallResults: completed: {completed} running: {running} updateDB:{updateDB} liveCatchup: {self.liveCatchup} isStageLive: {self.isStageLive(stageId=stageId)}"
@@ -2423,22 +2464,25 @@ class WRCTimingResultsAPIClientV2:
                     if not self.handleStageCompleted(stageId):
                         self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
             else:
-                updateDB = updateDB or self.isStageLive(stageId=stageId)
-                self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
+                for stageId in stageIds:
+                    updateDB = updateDB or self.isStageLive(stageId=stageId)
+                    self._getStageOverallResults(stageId=stageId, updateDB=updateDB)
 
-        stageId = stageId if stageId else self.stageId
+        stageIds = stageIds if stageIds else [self.stageId]
         # TO DO if stageId and completed treat that as up to?
-        if self.eventId and self.rallyId and (stageId or completed or running):
+        if self.eventId and self.rallyId and stageIds: #(stageId or completed or running):
             priority = None if priority == "P0" else priority
             _entry_join = f"INNER JOIN entries AS e ON o.entryId=e.entryId"
             _stage_info_join = f"INNER JOIN stage_info AS si ON si.stageId=o.stageId"
 
             on_event_ = f"AND o.eventId={self.eventId} AND o.rallyId={self.rallyId}"
-            if completed and stageIds:
-                stage_ids_str = ",".join(str(sid) for sid in stageIds)
-                on_stage_ = f"AND o.stageId IN ({stage_ids_str})"
-            else:
-                on_stage_ = f"AND o.stageId={stageId}" if stageId else ""
+            stage_ids_str = ",".join(str(sid) for sid in stageIds)
+            on_stage_ = f"AND o.stageId IN ({stage_ids_str})"
+            # if completed and stageIds:
+            #    stage_ids_str = ",".join(str(sid) for sid in stageIds)
+            #    on_stage_ = f"AND o.stageId IN ({stage_ids_str})"
+            # else:
+            #    on_stage_ = f"AND o.stageId={stageId}" if stageId else ""
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
 
             # completed_ = """AND si.status="Completed" """ if completed else ""
@@ -2450,7 +2494,7 @@ class WRCTimingResultsAPIClientV2:
             )
 
             if raw:
-                sql = f"""SELECT * FROM stage_overall AS o {_entry_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_};"""
+                sql = f"""SELECT o.* FROM stage_overall AS o {_entry_join} {_stage_info_join} WHERE 1=1 {on_event_} {on_stage_} {priority_} {completed_};"""
             else:
                 _driver_join = (
                     f"INNER JOIN entries_drivers AS d ON e.driverId=d.personId"
@@ -2465,14 +2509,10 @@ class WRCTimingResultsAPIClientV2:
             r = self.db_manager.read_sql(sql)
 
             # Hack to poll API if empty
-            if r.empty or (
+            if r.empty or (not r.empty and
                 completed and len(r["stageCode"].unique().tolist()) < len(stageIds)
             ):
-                print(
-                    "This is an emptyy dataframe polled update:",
-                    len(r["stageCode"].unique().tolist()),
-                    len(stageIds),
-                )
+
                 if completed:
                     for stageId in stageIds:
                         self._getStageOverallResults(stageId=stageId, updateDB=True)
@@ -2488,16 +2528,14 @@ class WRCTimingResultsAPIClientV2:
         if r.empty:
             return r
 
-        from numpy import where
-
         overall_df = r
         overall_df["roadPos"] = range(1, len(overall_df) + 1)
 
         sort_keys_ = ["stageOrder", "position"] if "stageOrder" in overall_df.columns else ["position"]
         overall_df.sort_values(sort_keys_, inplace=True)
         # overall_df["categoryPosition"] = range(1, len(overall_df) + 1)
-        overall_df["categoryPosition"] = overall_df.groupby("stageCode").cumcount() + 1
-        #overall_df.sort_values(sort_keys_, inplace=True)
+        overall_df["categoryPosition"] = overall_df.groupby(["stageId"]).cumcount() + 1
+        # overall_df.sort_values(sort_keys_, inplace=True)
 
         # if we were working wihtin groups, eg for class position
         # overall_df["Diff"] = overall_df.groupby("stageCode")["diffPrevMs"].apply(
@@ -2506,13 +2544,13 @@ class WRCTimingResultsAPIClientV2:
         #     )
         # )
         if "diffFirstMs" in overall_df:
-            overall_df["Gap"] = overall_df.groupby("stageCode")[
+            overall_df["Gap"] = overall_df.groupby("stageId")[
                 "diffFirstMs"
             ].transform(
                 lambda group: where(notnull(group), group.div(1000).round(1), nan)
             )
         if "diffPrevMs" in overall_df:
-            overall_df["Diff"] = overall_df.groupby("stageCode")[
+            overall_df["Diff"] = overall_df.groupby("stageId")[
                 "diffPrevMs"
             ].transform(
                 lambda group: where(notnull(group), group.div(1000).round(1), nan)
@@ -2603,7 +2641,7 @@ class WRCTimingResultsAPIClientV2:
             _on_event = ""
 
         if raw:
-            sql = f"""SELECT * FROM stagewinners AS w WHERE 1=1 {_on_event};"""
+            sql = f"""SELECT w.* FROM stagewinners AS w WHERE 1=1 {_on_event};"""
         else:
             _entry_join = f"INNER JOIN entries AS e ON w.entryId=e.entryId"
             _stages_join = f"INNER JOIN stage_info AS st ON st.stageId=w.stageId"
@@ -2638,7 +2676,7 @@ class WRCTimingResultsAPIClientV2:
         _on_event = f"AND r.eventId={self.eventId}" if on_event and self.eventId else ""
 
         if raw:
-            sql = f"""SELECT * FROM retirements r WHERE 1=1 {_on_event};"""
+            sql = f"""SELECT r.* FROM retirements r WHERE 1=1 {_on_event};"""
         else:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON r.entryId=e.entryId"
@@ -2670,7 +2708,7 @@ class WRCTimingResultsAPIClientV2:
         _on_event = f"AND p.eventId={self.eventId}" if on_event and self.eventId else ""
 
         if raw:
-            sql = f"""SELECT * FROM penalties AS p WHERE 1=1 {_on_event};"""
+            sql = f"""SELECT p.* FROM penalties AS p WHERE 1=1 {_on_event};"""
         else:
             # Need to merge entryId and controlId
             _entry_join = f"INNER JOIN entries AS e ON p.entryId=e.entryId"
