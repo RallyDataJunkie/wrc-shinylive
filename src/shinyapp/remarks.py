@@ -167,8 +167,8 @@ def event_background_remarks(wrc, eventId):
     )
     md_ = f"""*{event["name"]}* ({event["country.name"]}, {event["country.iso3"]}), the {Nth(event["order"])} event of the season, {surface_}{last_event_}."""
     md.append(md_)
-    start_date = to_datetime(event["finishDate"])
-    finish_date = to_datetime(event["startDate"])
+    start_date = to_datetime(event["startDate"])
+    finish_date = to_datetime(event["finishDate"])
     date_now = to_datetime(dateNow())
     if start_date > date_now:
         run_state_ = "runs from"
@@ -183,7 +183,7 @@ def event_background_remarks(wrc, eventId):
         monthdates_ = f"""{nth(start_date.day)} to {nth(finish_date.day)} {start_month}, {start_date.year}"""
     else:
         monthdates_ = f"""{nth(start_date.day)} {start_month} to {nth(finish_date.day)} {finish_month}, {finish_month.year}"""
-    md_ = f"""Based in  {event["location"]} {event["timeZoneName"]}, the event {run_state_} {monthdates_}."""
+    md_ = f"""Based in  {event["location"]}, the event {run_state_} {monthdates_}."""
     md.append(md_)
 
     return "\n\n".join(md)
