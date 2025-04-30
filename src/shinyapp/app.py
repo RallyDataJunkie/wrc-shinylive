@@ -1467,9 +1467,9 @@ with ui.accordion(open=False):
                             if len(set(topNteamsOverall)) == 1:
                                 md_ = f"""__{topNteamsOverall[0]}__ dominated the stage, taking """
                                 if n != 3:
-                                    md_ = f"""{md_} the top *{numToWords(n)}* positions."""
+                                    md_ = f"""{md_} __the top *{numToWords(n)}* positions__."""
                                 else:
-                                    md_ = f"""{md_} all three podium positions."""
+                                    md_ = f"""{md_} __all three podium positions__."""
                                 md.append(md_)
                                 break
 
