@@ -434,6 +434,116 @@ with ui.accordion(open=False):
             # TO DO - overall report
             # TO DO - day report
             # TO DO - section/loop report
+            with ui.accordion_panel("Event review"):
+
+                @render.ui
+                @reactive.event(input.season_round, input.stage)
+                def app_event_review_remarks():
+                    eventId = input.season_round()
+                    if not eventId:
+                        return ui.markdown("*No event info...*")
+
+                    # BROKEN - sometimes fails and returns blank?
+
+                    season_rounds = wrc.getSeasonRounds(on_season=True)
+
+                    if season_rounds.empty:
+                        return ui.markdown("*No season information.*")
+
+                    md = []
+
+                    event_df = season_rounds[
+                            season_rounds["eventId"] == int(eventId)
+                        ]
+
+                    event = event_df.iloc[0]
+
+                    # md.append(f"""eventId {eventId}: {event_df.to_dict()}""")
+
+                    # Event status: -1 has run, 0 running, +1 to run
+                    in_range = is_date_in_range(datetime.now(), event.to_dict(), tristate=True)
+                    base_md = f""" TO DO {eventId} """
+                    # md.append(base_md)
+
+                    if in_range<=0:
+                        if not input.stage():
+                            return ui.markdown("*Awaiting stage detail...*")
+                        setStageData()
+                        stagesInfo = wrc.getStageInfo(on_event=True)
+
+                        if not stagesInfo.empty:
+                            stagesInfo = stagesInfo.sort_values(
+                                by="number", ascending=True
+                            )
+
+                        overallResults = wrc.getStageOverallResults(raw=False, last=True)
+                        if not overallResults.empty:
+                            # HACK TO DO TO REMOVE
+                            print(overallResults.iloc[-1].to_dict())
+
+                    if wrc.isRallyInDate():
+                        event_status_ = "*__This event is currently running.__*"
+                        md.append(event_status_)
+
+                        stagesInfo["code_name"] = stagesInfo.apply(
+                            lambda row: f"{row['code']} {row['name']}", axis=1
+                        )
+                        completed_stages = stagesInfo[
+                            ~stagesInfo["status"]
+                            .str.lower()
+                            .isin(["to run", "running"])
+                        ]
+
+                        if not completed_stages.empty:
+                            completed_stages_ = f"""{numToWords(completed_stages.shape[0]).capitalize()} stages have run so far: {andList(completed_stages["code_name"].to_list())} """
+                            md.append(completed_stages_)
+
+                        currently_running = stagesInfo[
+                            stagesInfo["status"].str.lower().isin(["running"])
+                        ]
+                        if not currently_running.empty:
+                            currently_running_ = f"""{numToWords(currently_running.shape[0]).capitalize()} {p.plural("stage", currently_running.shape[0])} currently running ({andList(currently_running["code_name"].to_list())})"""
+                            md.append(currently_running_)
+
+                        to_run = stagesInfo[
+                            stagesInfo["status"].str.lower().isin(["to run"])
+                        ]
+                        if not to_run.empty:
+                            if to_run.shape[0] == 1:
+                                to_run_ = f"""There is just one stage left to run: {to_run["code_name"].iloc[0]}."""
+                            else:
+                                to_run_ = f"""{numToWords(to_run.shape[0]).capitalize()} {p.plural("stage", to_run.shape[0])} still to run"""
+                            md.append(to_run_)
+
+                    elif in_range==-1:
+                        event_status_ = "*This event is now over.*"
+                        superspecials = stagesInfo[stagesInfo["stageType"]=="SuperSpecialStage"]
+                        if not superspecials.empty:
+                            superspecial_ = f""", including __{numToWords(superspecials.shape[0])} superspecial {p.plural("stage",superspecials.shape[0])}__,"""
+                        else:
+                            superspecial_ = ""
+                        # TO DO  if in priority need to use class position
+                        
+                        finalStageOverallWinner = overallResults[overallResults["position"]==1].iloc[-1]
+                        previous_stages_ = f"""Comprising __{numToWords(stagesInfo["code"].shape[0])} competitive {p.plural("stage", stagesInfo["code"].shape[0])}__{superspecial_} over a total competitive rally distance of __{stagesInfo["distance"].sum().round(1)} km__, *{event["name"]}* was won by __{finalStageOverallWinner["driverName"]}__ and co-driver __{finalStageOverallWinner["codriverName"]}__ in a __{finalStageOverallWinner["entrantName"]} *{finalStageOverallWinner["vehicleModel"]}*__ with an overall rally time of {finalStageOverallWinner["stageTime"]} ({finalStageOverallWinner["penaltyTime"]} penalties)."""
+                        # Possible comment about team dominance. In terms of team standings, tool all three podium positions, top four etx
+                        md.append(previous_stages_)
+
+                    elif in_range==1:
+                        event_status_ = "*This event has not yet started.*"
+                    else:
+                        event_status_ = ""
+
+                    md.append(event_status_)
+
+                    # Tidy out any empty strings
+                    md = [md_ for md_ in md if md_]
+
+                    md = "\n\n".join(md)
+                    # TO DO Start to explore md cleaning, just in case
+                    md = md.replace(" ,", ",")
+
+                    return ui.markdown(md)
 
             with ui.accordion_panel("Event stages map"):
 
@@ -625,6 +735,7 @@ with ui.accordion(open=False):
                     ax = chart_seaborn_linechart_stage_progress_positions(
                         wrc, overall_times_wide
                     )
+                    ax.tick_params(axis="x", labelrotation=45)
                     return ax
 
                 with ui.tooltip(id="progression_report_type_tt"):
@@ -1349,12 +1460,14 @@ with ui.accordion(open=False):
 
                         # Teams remarks
                         # Get teams in top 3
-                        for n in list(range(5,2,-1)):
-                            topNteamsOverall = times[times["position"]<=n]["entrantName"].to_list()
-                            if len(set(topNteamsOverall))==1:
+                        for n in list(range(5, 2, -1)):
+                            topNteamsOverall = times[times["position"] <= n][
+                                "entrantName"
+                            ].to_list()
+                            if len(set(topNteamsOverall)) == 1:
                                 md_ = f"""__{topNteamsOverall[0]}__ dominated the stage, taking """
-                                if n!=3:
-                                    md_=f"""{md_} the top *{numToWords(n)}* positions."""
+                                if n != 3:
+                                    md_ = f"""{md_} the top *{numToWords(n)}* positions."""
                                 else:
                                     md_ = f"""{md_} all three podium positions."""
                                 md.append(md_)
@@ -1934,9 +2047,9 @@ with ui.accordion(open=False):
                                         cols=split_cols,
                                         within_cols_gradient=input.split_prog_rebase_incols(),
                                         reverse_palette=rebase_reverse_palette,
-                                        # TO DO - consider pace bsed thresholds
+                                        # TO DO - consider pace based thresholds
                                         # Pass in sector/stage distances and set a nominal pace threshold (s/km)
-                                        # Then set colour based on maxing the color at the pace threshold
+                                        # Then set colour based on max-ing the color at the pace threshold
                                         use_linear_cmap=True,
                                         drop_last_quantile=False,
                                     )
@@ -2017,7 +2130,7 @@ with ui.accordion(open=False):
                                             output_ - output_.mean()
                                         ) / output_.std()
                                         output_ = z_scores
-                                        # A boolen throws an inconsistent type error
+                                        # A boolean throws an inconsistent type error
                                         # output_.loc[:, split_cols] = (
                                         #    abs(z_scores) > 3
                                         # ).any(axis=1)
@@ -2153,7 +2266,11 @@ with ui.accordion(open=False):
                                 geostages = rally_geodata()
                                 fig, ax = plt.subplots(facecolor="black")
                                 ax = split_sections_map_core(
-                                    wrc, stageId, geostages, ax=ax, heat_colours=heat_colours
+                                    wrc,
+                                    stageId,
+                                    geostages,
+                                    ax=ax,
+                                    heat_colours=heat_colours,
                                 )
                                 ax.set_title(
                                     f"Within split section time deltas:\ncar {heatmap_driver} compared to car {rebase_driver}."
@@ -2469,12 +2586,18 @@ def setStageData():
         return
     stageId = int(stageId)
     wrc.setStageById(stageId=stageId)
+    return int(stageId)
 
 
 @reactive.calc
 @reactive.event(input.stage, input.display_latest_overall, input.category)
 def getOverallStageResultsData():
+    """Get the overall stage results at the end of a specified stage, or the last comleted stage."""
+    stageId = input.stage()
     priority = input.category()
+    if not stageId or not priority:
+        return DataFrame(), DataFrame(), DataFrame()
+
     setStageData()
 
     stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
