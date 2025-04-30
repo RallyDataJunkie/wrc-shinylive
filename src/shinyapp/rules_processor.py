@@ -214,13 +214,13 @@ def rule_lost_first(row):
 def rule_move_into_second(row):
     remark = ""
     if row.get("overallPos") == 2 and row.get("overallPosChange"):
-        remark = f"""{row["driverName"]} gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}, moving into second overall, {row.get("overallGap")}s behind the leader. """
+        remark = f"""__{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
     return (remark, 0.8)
 
 def rule_drop_from_second(row):
     remark = ""
     if row.get("prevOverallPos")==2 and row.get("overallPosDelta", 0) <0:
-        remark = f"""{row["driverName"]} moved down {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))} to {numToWords(p.ordinal(row.get("overallPos")))}, {row.get("overallGap")}s off the lead, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
+        remark = f"""{__row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
     return (remark, 0.79)
 
 def rule_up_into_third(row):
@@ -230,7 +230,7 @@ def rule_up_into_third(row):
         and row.get("prevOverallPos", 3) < 3
         and row.get("overallPosDelta", 0)>0
     ):
-        remark = f"""{row["driverName"]} moved into third overall, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and {row.get("overallDiff")}s off the lead."""
+        remark = f"""__{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
     return (remark, 0.73)
 
 # TO DO - need a natural time for timeInS
