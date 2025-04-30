@@ -251,7 +251,7 @@ def rule_leader_retained_lead(row):
                 delta_change_ = "*__decreasing__ the gap*"
             delta_change_ = f"""{delta_change_} by {-row["overallChaseDelta"]}s to"""
 
-        remark = f"""Overall, {row["driverName"]} __retained the lead__, {delta_change_} {row["overallChase"]}s."""
+        remark = f"""Overall, *{row["driverName"]}* __retained the lead__, {delta_change_} {row["overallChase"]}s."""
 
     return (remark, 0.6)
 
