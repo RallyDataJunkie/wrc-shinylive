@@ -1,5 +1,7 @@
 from parse import parse
 from datetime import timedelta, datetime, date
+import pytz
+
 
 # import pandas as pd
 from pandas import to_datetime, date_range, DataFrame, concat, merge, isna
@@ -11,23 +13,68 @@ def dateNow(weekend=False):
 
     return current_date.strftime("%Y-%m-%d")
 
-def is_date_in_range(date_dict):
-    # Parse the start and end dates from the dictionary
-    if "startDate" not in date_dict or "finishDate" not in date_dict:
-        return False
 
-    # Convert ISO format string to datetime (not just date)
-    start_date = datetime.fromisoformat(date_dict["startDate"])
-    end_date = datetime.fromisoformat(date_dict["finishDate"])
+def is_date_in_range(date_input, date_dict, tristate=False):
+    # Check if date_input is a datetime object or a string
+    if isinstance(date_input, datetime):
+        current_date = date_input
+    else:
+        # Convert current date string to datetime (assuming 'YYYY-MM-DD' format)
+        current_date = datetime.strptime(date_input, "%Y-%m-%d")
 
-    # Add leeway of 12 hours on both sides
-    start_with_leeway = start_date - timedelta(hours=12)
-    end_with_leeway = end_date + timedelta(hours=18)
+    # Determine the timezone to use
+    # If timeZoneId is in the date_dict, use that timezone
+    if "timeZoneId" in date_dict:
+        # tiumeZoneId may be broken
+        try:
+            event_timezone = pytz.timezone(date_dict["timeZoneId"])
+        except:
+            event_timezone = pytz.timezone("UTC")
+    else:
+        # Fallback to UTC if no timeZoneId is provided
+        event_timezone = pytz.timezone("UTC")
 
-    # Get current date and time
-    now = datetime.now()
-    # Check if now is within the range (inclusive)
-    return start_with_leeway <= now <= end_with_leeway
+    # Initialize variables for startDate and finishDate
+    localized_start_date = None
+    localized_finish_date = None
+
+    # If startDate exists, convert and localize it
+    if "startDate" in date_dict:
+        start_date = datetime.strptime(date_dict["startDate"], "%Y-%m-%d")
+        localized_start_date = event_timezone.localize(start_date)
+
+    # If finishDate exists, convert and localize it
+    if "finishDate" in date_dict:
+        finish_date = datetime.strptime(date_dict["finishDate"], "%Y-%m-%d")
+        localized_finish_date = event_timezone.localize(finish_date)
+
+    # Localize current date
+    localized_current_date = event_timezone.localize(current_date)
+
+    # If both startDate and finishDate are missing, we can just check the current date
+    if localized_start_date is None and localized_finish_date is None:
+        return False  # No bounds, so current date is considered "out of range"
+
+    # Compare current date to startDate and finishDate if they exist
+    if not tristate:
+        if localized_start_date and localized_finish_date:
+            # Check if current date is within the range of startDate and finishDate
+            return localized_start_date <= localized_current_date <= localized_finish_date
+        elif localized_start_date:
+            # Only startDate exists, check if current date is after startDate
+            return localized_start_date <= localized_current_date
+        elif localized_finish_date:
+            # Only finishDate exists, check if current date is before finishDate
+            return localized_current_date <= localized_finish_date
+    else:
+        if localized_current_date < localized_start_date:
+            # Event is in future
+            return 1
+        elif localized_current_date > localized_finish_date:
+            # Event is in past
+            return -1
+        else:
+            return 0
 
 
 def format_timedelta(t, units="ms", addplus=False):

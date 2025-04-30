@@ -1,7 +1,7 @@
 from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
-from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, dateNow
+from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, dateNow, is_date_in_range
 
 from wrcapi_rallydj.data_api import WRCDataAPIClient
 
