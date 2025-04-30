@@ -1484,10 +1484,10 @@ class WRCTimingResultsAPIClientV2:
             # Check the stages table as it currently stands
             # stages_info = self.getStageInfo(legacyCheck=True)["status"].str.lower().unique()
             stages_info = stages_df["status"].str.lower().unique()
-        if "torun" not in stages_info and "running" not in stages_info:
-            self._updateCompletedEventTableStatus(
-                eventId, ["stage_info", "split_points", "stage_controls"]
-            )
+            if "torun" not in stages_info and "running" not in stages_info:
+                self._updateCompletedEventTableStatus(
+                    eventId, ["stage_info", "split_points", "stage_controls"]
+                )
         return stages_df, stage_split_points_df, stage_controls_df
 
     def getRepeatedStages(self, on_event=True, eventId=None):
