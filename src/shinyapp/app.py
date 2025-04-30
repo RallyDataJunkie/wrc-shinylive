@@ -412,7 +412,7 @@ with ui.accordion(open=False):
             if not overallResults.empty:
                 return get_overall_result_hero(stageId, stagesInfo, overallResults)
             else:
-                print("Missing stage results data?")
+                return ui.markdown("No results yet available for this event.")
 
         with ui.accordion(open=False, id="event_accordion"):
 
