@@ -150,7 +150,7 @@ def event_background_remarks(wrc, eventId):
     season["surfaceCount"] = season.groupby("surfaces").cumcount() + 1
     event = season[season["eventId"] == int(eventId)]
     if event.empty:
-        return "&No event information.*"
+        return "*No event information.*"
 
     md = []
     event = event.iloc[0]
