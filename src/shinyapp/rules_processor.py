@@ -68,7 +68,12 @@ def core_stage(
     wrc,
     stage_details,
     stageId,
+    priority=None,
+    rerank=False
 ):
+
+    # TO DO - do we need to handle colnames better if priority is set?
+
     retcols_stage = ["carNo", "driverName", "position", "Gap", "Diff", "Chase"]
     retcols_overall = [
         "carNo",
@@ -84,12 +89,23 @@ def core_stage(
     # Stages are ordered; if we are index 0 stage is first stage, SS1
     prevStageId = None if not curr_idx else stage_details.loc[curr_idx - 1, "stageId"]
     # print(prevStageNo, stageNo)
-    _df_stage_curr = wrc.getStageTimes(stageId=stageId, raw=False)
+    _df_stage_curr = wrc.getStageTimes(stageId=stageId, priority=priority, raw=False)
     _df_stage_curr = _df_stage_curr[retcols_stage].copy()
 
-    _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, raw=False)[
+    _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, priority=priority, raw=False)[
         retcols_overall
     ].copy()
+
+    if priority!="P0" and rerank:
+        _df_stage_curr["position"] = (
+            _df_stage_curr["position"].rank(method="dense", ascending=True).astype(int)
+        )
+        _df_overall_curr["position"] = (
+            _df_overall_curr["position"]
+            .rank(method="dense", ascending=True)
+            .astype(int)
+        )
+
     _df_overall_curr.rename(columns={"position": "overallPos"}, inplace=True)
     if prevStageId:
         _df_overall_prev = wrc.getStageOverallResults(stageId=prevStageId, raw=False)[

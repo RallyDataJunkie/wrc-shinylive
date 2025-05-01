@@ -523,7 +523,7 @@ with ui.accordion(open=False):
                         else:
                             superspecial_ = ""
                         # TO DO  if in priority need to use class position
-                        
+
                         finalStageOverallWinner = overallResults[overallResults["position"]==1].iloc[-1]
                         previous_stages_ = f"""Comprising __{numToWords(stagesInfo["code"].shape[0])} competitive {p.plural("stage", stagesInfo["code"].shape[0])}__{superspecial_} over a total competitive rally distance of __{stagesInfo["distance"].sum().round(1)} km__, *{event["name"]}* was won by __{finalStageOverallWinner["driverName"]}__ and co-driver __{finalStageOverallWinner["codriverName"]}__ in a __{finalStageOverallWinner["entrantName"]} *{finalStageOverallWinner["vehicleModel"]}*__ with an overall rally time of {finalStageOverallWinner["stageTime"]} ({finalStageOverallWinner["penaltyTime"]} penalties)."""
                         # Possible comment about team dominance. In terms of team standings, tool all three podium positions, top four etx
@@ -1396,8 +1396,19 @@ with ui.accordion(open=False):
 
                 with ui.accordion_panel("Stage remarks"):
 
+                    ui.input_checkbox(
+                            "stage_remarks_category_rank",
+                            "Use category rankings",
+                            True,
+                        )
+
                     @render.ui
-                    @reactive.event(input.category, input.stage)
+                    @reactive.event(
+                        input.category,
+                        input.stage,
+                        input.category,
+                        input.stage_remarks_category_rank,
+                    )
                     def stage_report_remarks():
                         # TO DO - move this into stage_times_remarks() ?
                         priority = input.category()
@@ -1428,6 +1439,8 @@ with ui.accordion(open=False):
 
                         _md = f"""*{stage_code} {stage_name} ({stage_info["distance"]}km)*"""
                         md.append(_md)
+
+                        _md = f"""Category results ({priority})"""
 
                         times = wrc.getStageTimes(
                             stageId=stageId, priority=priority, raw=False
@@ -1510,11 +1523,13 @@ with ui.accordion(open=False):
                             md.append(_md)  # Properly append the string
 
                         # External rules test
-                        # TO DO this is currently broken
+                        rerank = input.stage_remarks_category_rank()
                         _overall_diff = core_stage(
                             wrc,
                             stages_info,
                             stageId,  # stage_code,
+                            priority=priority,
+                            rerank = rerank
                         )
                         remarks = process_rally_overall_rules(_overall_diff)
                         for remark in remarks:
