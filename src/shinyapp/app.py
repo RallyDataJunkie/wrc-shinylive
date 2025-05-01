@@ -1496,7 +1496,7 @@ with ui.accordion(open=False):
                                     leader_text = ""
                                 _md = (
                                     _md
-                                    + f""", {leader_text}{r["driverName"]} was just {r["Gap"]}s behind ({round(r["pace diff (s/km)"], 2)} s/km off the stage winner)"""
+                                    + f""", __{leader_text}{r["driverName"]}__ was just {r["Gap"]}s behind ({round(r["pace diff (s/km)"], 2)} s/km off the stage winner)"""
                                 )
                             md.append(_md + ".")
 

@@ -85,7 +85,6 @@ def core_stage(
     prevStageId = None if not curr_idx else stage_details.loc[curr_idx - 1, "stageId"]
     # print(prevStageNo, stageNo)
     _df_stage_curr = wrc.getStageTimes(stageId=stageId, raw=False)
-    print("stagecols", _df_stage_curr.columns, retcols_stage)
     _df_stage_curr = _df_stage_curr[retcols_stage].copy()
 
     _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, raw=False)[
@@ -120,6 +119,8 @@ def core_stage(
             },
             inplace=True,
         )
+        for k in ["overallChaseDelta", "overallGapDelta", "overallDiffDelta" ]:
+            _df_overall_diff[k] = _df_overall_diff[k].round(1)
 
         _df_overall_curr["currPodium"] = _df_overall_curr["overallPos"] <= 3
         _df_overall = merge(
@@ -180,14 +181,6 @@ def core_stage(
 
 ##---
 
-
-def rule_onto_podium(row):
-    remark = ""
-    if row.get("onto_podium"):
-        remark = f"""{row["driverName"]} moved into a podium position"""
-    return (remark, 0.9)
-
-
 def rule_into_first(row):
     remark = ""
     if row.get("newLeader"):
@@ -211,39 +204,11 @@ def rule_lost_first(row):
 
     return (remark, 0.9)
 
-def rule_move_into_second(row):
-    remark = ""
-    if row.get("overallPos") == 2 and row.get("overallPosChange"):
-        remark = f"""__{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
-    return (remark, 0.8)
-
-def rule_drop_from_second(row):
-    remark = ""
-    if row.get("prevOverallPos")==2 and row.get("overallPosDelta", 0) <0:
-        remark = f"""{__row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
-    return (remark, 0.79)
-
-def rule_up_into_third(row):
-    remark = ""
-    if (
-        row.get("overallPos") == 3
-        and row.get("prevOverallPos", 3) < 3
-        and row.get("overallPosDelta", 0)>0
-    ):
-        remark = f"""__{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
-    return (remark, 0.73)
-
-# TO DO - need a natural time for timeInS
-
-
 def rule_leader_retained_lead(row):
     remark = ""
-    if (
-        row.get("currLeader")
-        and not row.get("newLeader")
-    ):
+    if row.get("currLeader") and not row.get("newLeader"):
         if row.get("overallChaseDelta", 1) == 0:
-            delta_change_= "keeping the gap at"
+            delta_change_ = "keeping the gap at"
         else:
             if row.get("overallChaseDelta", 1) < 0:
                 delta_change_ = "*__increasing__ the gap*"
@@ -253,26 +218,62 @@ def rule_leader_retained_lead(row):
 
         remark = f"""Overall, *{row["driverName"]}* __retained the lead__, {delta_change_} {row["overallChase"]}s."""
 
-    return (remark, 0.6)
+    return (remark, 0.85)
+
+def rule_move_into_second(row):
+    remark = ""
+
+    if row.get("overallPos") == 2:
+        if row.get("overallPosChange"):
+            remark = f"""__{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
+        elif row.get("prevOverallPos") is None:
+            f"""__{row["driverName"]}__ took __second__, *{row.get("overallGap")}s* behind the leader. """
+    return (remark, 0.8)
+
+def rule_drop_from_second(row):
+    remark = ""
+    if row.get("prevOverallPos")==2 and row.get("overallPosDelta", 0) <0:
+        remark = f"""__{row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
+    return (remark, 0.79)
+
+def rule_retained_second(row):
+    remark = ""
+    if row.get("overallPos")==2 and row.get("overallPosDelta")==0:
+        remark = f"""__{row["driverName"]}__ retained __second place__ overall, *{row.get("overallGap")}s* off the lead."""
+    return (remark, 0.77)
+
+def rule_up_into_third(row):
+    remark = ""
+    if row.get("overallPos") == 3:
+        if row.get("prevOverallPos", 3) > 3 and row.get("overallPosDelta", 0) > 0:
+            remark = f"""__{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
+        elif row.get("prevOverallPos") is None:
+            f"""__{row["driverName"]}__ went into __third__, *{row.get("overallDiff")}s* behind second and *{row.get("overallDiff")}s* off the pace."""
+        return (remark, 0.73)
 
 
-def rule_onto_podium(row):
-    if row.get("onto_podium"):
-        remark = ""
+def rule_retained_third(row):
+    remark = ""
+    if row.get("overallPos")==3 and row.get("overallPosDelta")==0:
+        remark = f"""__{row["driverName"]}__ held position in __third__, *{row.get("overallGap")}s off the leader and *{row.get("overallDiff")}s* behind second."""
+    return (remark, 0.72)
+
+
+# TO DO - need a natural time for timeInS
 
 
 def process_rally_overall_rules(df):
     # Apply each rule to create new columns
     remarks_df = DataFrame(
         {
-            "podium_remarks": df.apply(rule_onto_podium, axis=1),
             "into_first_remarks": df.apply(rule_into_first, axis=1),
             "lost_first_remarks": df.apply(rule_lost_first, axis=1),
             "retained_lead_remarks": df.apply(rule_leader_retained_lead, axis=1),
-            "move_into_podium_remarks": df.apply(rule_onto_podium, axis=1),
-            "move_into_second": df.apply(rule_move_into_second, axis=1),
-            "drop_from_second": df.apply(rule_drop_from_second, axis=1),
-            "move_up_into_third": df.apply(rule_up_into_third, axis=1),
+            "move_into_second_remarks": df.apply(rule_move_into_second, axis=1),
+            "drop_from_second_remarks": df.apply(rule_drop_from_second, axis=1),
+            "move_up_into_third_remarks": df.apply(rule_up_into_third, axis=1),
+            "retained_second_remarks": df.apply(rule_retained_second, axis=1),
+            "retained_third_remarks": df.apply(rule_retained_third, axis=1),
         }
     )
 
@@ -283,4 +284,5 @@ def process_rally_overall_rules(df):
         if remark[0] != ""
     ]
     filtered_remarks = [f for f in filtered_remarks if f]
+    filtered_remarks = sorted(filtered_remarks, key=lambda x: x[1], reverse=True)
     return filtered_remarks
