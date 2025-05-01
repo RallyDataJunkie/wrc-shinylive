@@ -280,10 +280,10 @@ def process_rally_overall_rules(df):
 
     # Stack all remarks into a single series and filter out empty strings
     filtered_remarks = [
-        (remark[0].replace("  ", " "), remark[1])
+        (remark[0].replace("  ", " ").replace(",,", ",").replace(" ,", ","), remark[1])
         for remark in remarks_df.stack()
         if remark[0] != ""
     ]
-    filtered_remarks = [f for f in filtered_remarks if f]
+    
     filtered_remarks = sorted(filtered_remarks, key=lambda x: x[1], reverse=True)
     return filtered_remarks
