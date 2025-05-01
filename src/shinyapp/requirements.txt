@@ -14,3 +14,4 @@ adjustText
 #itables
 kml2geojson
 geopandas
+osmnx
