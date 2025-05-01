@@ -234,7 +234,7 @@ def rule_move_into_second(row):
 def rule_drop_from_second(row):
     remark = ""
     if row.get("prevOverallPos")==2 and row.get("overallPosDelta", 0) <0:
-        remark = f"""After taking __{numToWords(p.ordinal(row["position"]))} on stage__,, __{row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
+        remark = f"""After taking __{numToWords(p.ordinal(row["position"]))} on stage__, __{row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
     return (remark, 0.79)
 
 def rule_retained_second(row):
