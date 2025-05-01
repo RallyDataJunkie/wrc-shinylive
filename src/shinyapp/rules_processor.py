@@ -247,7 +247,7 @@ def rule_up_into_third(row):
     remark = ""
     if row.get("overallPos") == 3:
         if row.get("prevOverallPos", 3) > 3 and row.get("overallPosDelta", 0) > 0:
-            remark = f"""__{numToWords(p.ordinal(row["position"]))} on stage__ __{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
+            remark = f"""__{numToWords(p.ordinal(row["position"])).capitalize()} on stage__ __{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
         elif row.get("prevOverallPos") is None:
             remark = f"""__{row["driverName"]}__ went into __third__, *{row.get("Diff")}s* behind second and *{row.get("Gap")}s* off the pace."""
         return (remark, 0.73)
