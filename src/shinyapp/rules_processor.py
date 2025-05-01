@@ -225,37 +225,38 @@ def rule_move_into_second(row):
 
     if row.get("overallPos") == 2:
         if row.get("overallPosChange"):
-            remark = f"""__{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
+            remark = f"""With __{numToWords(p.ordinal(row["position"]))} on stage__, __{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
         elif row.get("prevOverallPos") is None:
-            f"""__{row["driverName"]}__ took __second__, *{row.get("overallGap")}s* behind the leader. """
+            print("2nd",row)
+            remark = f"""__{row["driverName"]}__ took __second__, *{row.get("Gap")}s* behind the leader. """
     return (remark, 0.8)
 
 def rule_drop_from_second(row):
     remark = ""
     if row.get("prevOverallPos")==2 and row.get("overallPosDelta", 0) <0:
-        remark = f"""__{row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
+        remark = f"""After taking __{numToWords(p.ordinal(row["position"]))} on stage__,, __{row["driverName"]}__ *dropped {numToWords(-row.get("overallPosDelta"))} {p.plural("position", -row.get("overallPosDelta"))}* to {numToWords(p.ordinal(row.get("overallPos")))}, *{row.get("overallGap")}s off the lead*, and {row.get("overallDiff")}s off {numToWords(p.ordinal(row.get("overallPos")-1))}."""
     return (remark, 0.79)
 
 def rule_retained_second(row):
     remark = ""
     if row.get("overallPos")==2 and row.get("overallPosDelta")==0:
-        remark = f"""__{row["driverName"]}__ retained __second place__ overall, *{row.get("overallGap")}s* off the lead."""
+        remark = f"""With a __{numToWords(row["position"])} position on stage__, __{row["driverName"]}__ retained __second place__ overall, *{row.get("overallGap")}s* off the lead."""
     return (remark, 0.77)
 
 def rule_up_into_third(row):
     remark = ""
     if row.get("overallPos") == 3:
         if row.get("prevOverallPos", 3) > 3 and row.get("overallPosDelta", 0) > 0:
-            remark = f"""__{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
+            remark = f"""__{numToWords(p.ordinal(row["position"]))} on stage__ __{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
         elif row.get("prevOverallPos") is None:
-            f"""__{row["driverName"]}__ went into __third__, *{row.get("overallDiff")}s* behind second and *{row.get("overallDiff")}s* off the pace."""
+            remark = f"""__{row["driverName"]}__ went into __third__, *{row.get("Diff")}s* behind second and *{row.get("Gap")}s* off the pace."""
         return (remark, 0.73)
 
 
 def rule_retained_third(row):
     remark = ""
     if row.get("overallPos")==3 and row.get("overallPosDelta")==0:
-        remark = f"""__{row["driverName"]}__ held position in __third__, *{row.get("overallGap")}s off the leader and *{row.get("overallDiff")}s* behind second."""
+        remark = f"""Taking __{numToWords(p.ordinal(row["position"]))} on stage__, __{row["driverName"]}__ held position in __third__, *{row.get("overallGap")}s off the leader and *{row.get("overallDiff")}s* behind second."""
     return (remark, 0.72)
 
 
