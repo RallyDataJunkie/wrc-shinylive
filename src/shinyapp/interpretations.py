@@ -207,3 +207,10 @@ __Things to look for__: the heatmap can be used to identify patterns or behaviou
 - __divergent *column* colouring__: if all the cells in a *column* are strongly coloured *green*, that shows the selected rebase driver has lost time on that section. If the rebase driver fixes a puncture in a split section, for example, we would expect that split section on the *within splits* view to show all the other cars fared better. If the selected rebase driver has a puncture but cominues, we might expect to see them losing time to all the other drivers at each split point across several splits to the end of the stage.
 
 """
+
+live_map_interpretation_md = """
+
+The map uses a live data feed sampled every 5s or so to display car positions on a map, indicated by car number. The colour of the label identifies whether or not the car is moving (*blue*) or stationary (orange).
+
+"""
+

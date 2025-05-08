@@ -75,6 +75,7 @@ from .interpretations import (
     stage_progression_linechart_interpretation_md,
     stage_progression_barchart_interpretation_md,
     split_times_heat_interpretation_md,
+    live_map_interpretation_md,
 )
 
 # from itables.widget import ITable
@@ -2493,6 +2494,28 @@ with ui.accordion(open=False, id="live_map_accordion"):
 
     with ui.accordion_panel("Live Map"):
 
+
+        @render.express
+        @reactive.event(input.interpretation_prompt_switch)
+        def livemap_interpretation_container():
+            ui.input_switch(
+                "live_map_interpretation_switch",
+                "Show interpretation prompts",
+                False,
+            )
+
+        @render.ui
+        @reactive.event(
+            input.live_map_interpretation_switch
+        )
+        def live_map_interpretation():
+            if input.live_map_interpretation_switch():
+                md = live_map_interpretation_md
+
+                ui.markdown(
+                    f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                )
+
         # ui.input_checkbox(
         #    "pause_live_map",
         #    "Pause live map updates",
@@ -2505,7 +2528,8 @@ with ui.accordion(open=False, id="live_map_accordion"):
         def show_map():
             def add_marker(row, m):
                 # Create marker
-                # TO DO use a red bg color if the car is stopped?
+                # TO DO color the moving indication by speed?
+                # Use different colour label to show car has stopped (speed 0)
                 speed_color = (
                     "rgba(51, 136, 255, 0.7)"
                     if row["speed"] > 0
@@ -2551,6 +2575,9 @@ with ui.accordion(open=False, id="live_map_accordion"):
             # Get the latest data
             #    df = car_getdata()
             df = car_getdata()
+            if df.empty or not "name" in df.columns:
+                return
+
             df["carNo"] = to_numeric(df["name"], errors="coerce").astype("Int64")
             df = df[df["carNo"].isin(carNos)]
             if df.empty:
