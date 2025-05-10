@@ -156,13 +156,15 @@ class RallyGeoTools:
 
         if labelcoords:
             for label, coords in labelcoords:
-                icon_text = f'<div style="background-color:rgba(50, 50, 50, 0.7); display:inline-block; padding:4px 8px; color:white; font-weight:bold; border-radius:3px;">{label}</div>'
-                icon = DivIcon(
-                    html=icon_text,
-                    icon_anchor=[0, 0],
-                )
-                marker = Marker(location=(coords[1], coords[0]), icon=icon)
-                m.add_layer(marker)
+                if coords:
+                    icon_text = f'<div style="background-color:rgba(50, 50, 50, 0.7); display:inline-block; padding:4px 8px; color:white; font-weight:bold; border-radius:3px;">{label}</div>'
+                    icon = DivIcon(
+                        html=icon_text,
+                        icon_anchor=[0, 0],
+                    )
+                    
+                    marker = Marker(location=(coords[1], coords[0]), icon=icon)
+                    m.add_layer(marker)
 
         if poi_gdf is not None:
             # desription (sic)
