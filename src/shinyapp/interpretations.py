@@ -214,3 +214,17 @@ The map uses a live data feed sampled every 5s or so to display car positions on
 
 """
 
+
+micro_splits_base_interpretation_md = """
+
+Car location and speed, sampled every 5s or so, is available via the live data feed. For some cars, this data is made available a short while after the conclusion of the stage.
+
+The *micro-splits* report uses this data, along with the same time stamp and (from elsewhere) the stage start time to create a set of mici-split pits along the stage, using the car location data  to calculate the distance into stage.
+
+As the sample points are irregular in terms of where on the stage they are collected, and the time basis is also slightly irregular, a simple linear interpolation is then used to allow an estimate of the differences in (interpolated) micro-split times  of each car.
+
+TO DO collect the data directly from the live feed.
+
+TO DO build a better esitmator based on stage profile and, potentially, speed sample points. *For the latter, use data from all drivers, and create stage of microsegments using the speed of each driver at each microsplit point. Use this estimation speed route for the interpolation.*
+
+"""
