@@ -1,7 +1,12 @@
 from shiny import render, reactive
 from shiny.express import ui, input
 from shiny import ui as uis
-from wrc_rallydj.utils import enrich_stage_winners, format_timedelta, dateNow, is_date_in_range
+from wrc_rallydj.utils import (
+    enrich_stage_winners,
+    format_timedelta,
+    dateNow,
+    is_date_in_range,
+)
 
 from wrcapi_rallydj.data_api import WRCDataAPIClient
 
@@ -10,6 +15,8 @@ from icons import question_circle_fill
 from pandas import DataFrame, isna, to_numeric, to_datetime, NA
 from seaborn import heatmap
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+
+import math
 
 import re
 from rules_processor import (
@@ -76,6 +83,7 @@ from .interpretations import (
     stage_progression_barchart_interpretation_md,
     split_times_heat_interpretation_md,
     live_map_interpretation_md,
+    micro_splits_base_interpretation_md,
 )
 
 # from itables.widget import ITable
@@ -453,20 +461,20 @@ with ui.accordion(open=False):
 
                     md = []
 
-                    event_df = season_rounds[
-                            season_rounds["eventId"] == int(eventId)
-                        ]
+                    event_df = season_rounds[season_rounds["eventId"] == int(eventId)]
 
                     event = event_df.iloc[0]
 
                     # md.append(f"""eventId {eventId}: {event_df.to_dict()}""")
 
                     # Event status: -1 has run, 0 running, +1 to run
-                    in_range = is_date_in_range(datetime.now(), event.to_dict(), tristate=True)
+                    in_range = is_date_in_range(
+                        datetime.now(), event.to_dict(), tristate=True
+                    )
                     base_md = f""" TO DO {eventId} """
                     # md.append(base_md)
 
-                    if in_range<=0:
+                    if in_range <= 0:
                         if not input.stage():
                             return ui.markdown("*Awaiting stage detail...*")
                         setStageData()
@@ -477,7 +485,9 @@ with ui.accordion(open=False):
                                 by="number", ascending=True
                             )
 
-                        overallResults = wrc.getStageOverallResults(raw=False, last=True)
+                        overallResults = wrc.getStageOverallResults(
+                            raw=False, last=True
+                        )
                         if not overallResults.empty:
                             # HACK TO DO TO REMOVE
                             print(overallResults.iloc[-1].to_dict())
@@ -516,21 +526,25 @@ with ui.accordion(open=False):
                                 to_run_ = f"""{numToWords(to_run.shape[0]).capitalize()} {p.plural("stage", to_run.shape[0])} still to run"""
                             md.append(to_run_)
 
-                    elif in_range==-1:
+                    elif in_range == -1:
                         event_status_ = "*This event is now over.*"
-                        superspecials = stagesInfo[stagesInfo["stageType"]=="SuperSpecialStage"]
+                        superspecials = stagesInfo[
+                            stagesInfo["stageType"] == "SuperSpecialStage"
+                        ]
                         if not superspecials.empty:
                             superspecial_ = f""", including __{numToWords(superspecials.shape[0])} superspecial {p.plural("stage",superspecials.shape[0])}__,"""
                         else:
                             superspecial_ = ""
                         # TO DO  if in priority need to use class position
 
-                        finalStageOverallWinner = overallResults[overallResults["position"]==1].iloc[-1]
+                        finalStageOverallWinner = overallResults[
+                            overallResults["position"] == 1
+                        ].iloc[-1]
                         previous_stages_ = f"""Comprising __{numToWords(stagesInfo["code"].shape[0])} competitive {p.plural("stage", stagesInfo["code"].shape[0])}__{superspecial_} over a total competitive rally distance of __{stagesInfo["distance"].sum().round(1)} km__, *{event["name"]}* was won by __{finalStageOverallWinner["driverName"]}__ and co-driver __{finalStageOverallWinner["codriverName"]}__ in a __{finalStageOverallWinner["entrantName"]} *{finalStageOverallWinner["vehicleModel"]}*__ with an overall rally time of {finalStageOverallWinner["stageTime"]} ({finalStageOverallWinner["penaltyTime"]} penalties)."""
                         # Possible comment about team dominance. In terms of team standings, tool all three podium positions, top four etx
                         md.append(previous_stages_)
 
-                    elif in_range==1:
+                    elif in_range == 1:
                         event_status_ = "*This event has not yet started.*"
                     else:
                         event_status_ = ""
@@ -1398,10 +1412,10 @@ with ui.accordion(open=False):
                 with ui.accordion_panel("Stage remarks"):
 
                     ui.input_checkbox(
-                            "stage_remarks_category_rank",
-                            "Use category rankings",
-                            True,
-                        )
+                        "stage_remarks_category_rank",
+                        "Use category rankings",
+                        True,
+                    )
 
                     @render.ui
                     @reactive.event(
@@ -1530,7 +1544,7 @@ with ui.accordion(open=False):
                             stages_info,
                             stageId,  # stage_code,
                             priority=priority,
-                            rerank = rerank
+                            rerank=rerank,
                         )
                         remarks = process_rally_overall_rules(_overall_diff)
                         for remark in remarks:
@@ -2006,6 +2020,22 @@ with ui.accordion(open=False):
                                 "TO DO - option to sort by start order, stage position"
                             )
 
+                            ui.input_slider(
+                                "rebased_splits_palette_upper_limit",
+                                "Rebase palette saturation upper limit",
+                                min=0,
+                                max=60,
+                                value=60,
+                            )
+
+                            ui.input_slider(
+                                "rebased_splits_palette_lower_limit",
+                                "Rebase palette saturation lower limit",
+                                min=-60,
+                                max=0,
+                                value=-60,
+                            )
+
                             @render.express
                             @reactive.event(input.interpretation_prompt_switch)
                             def split_times_heat_interpretation_container():
@@ -2027,23 +2057,24 @@ with ui.accordion(open=False):
                                         f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                     )
 
-                            @render.ui
+                            @reactive.calc
                             @reactive.event(
                                 input.splits_review_accordion,
                                 input.category,
                                 input.stage,
                                 input.rebase_driver,
-                                input.rebase_reverse_palette,
                                 input.splits_refresh,
                                 input.rebased_splits_type_switch,
                                 input.split_prog_rebase_incols,
+                                input.rebased_splits_palette_upper_limit,
+                                input.rebased_splits_palette_lower_limit,
                             )
-                            def split_times_heat():
+                            def split_times_heat_vals():
                                 split_times_wide = get_split_times_wide()
                                 rebase_driver = input.rebase_driver()
-                                rebase_reverse_palette = input.rebase_reverse_palette()
+
                                 if split_times_wide.empty or not rebase_driver:
-                                    return
+                                    return DataFrame(), []
                                 split_cols = wrc.getSplitCols(split_times_wide)
                                 rebase_driver = (
                                     int(rebase_driver)
@@ -2057,6 +2088,21 @@ with ui.accordion(open=False):
                                         use_split_durations=input.rebased_splits_type_switch(),
                                     )
                                 )
+
+                                return split_times_wide, split_cols
+
+                            @render.ui
+                            @reactive.event(
+                                split_times_heat_vals,
+                                input.rebase_reverse_palette,
+                                input.rebased_splits_palette_upper_limit,
+                                input.rebased_splits_palette_lower_limit,
+                            )
+                            def split_times_heat():
+                                rebase_reverse_palette = input.rebase_reverse_palette()
+                                split_times_wide, split_cols = split_times_heat_vals()
+                                if split_times_wide.empty:
+                                    return
                                 html = (
                                     df_color_gradient_styler(
                                         split_times_wide,
@@ -2068,11 +2114,44 @@ with ui.accordion(open=False):
                                         # Then set colour based on max-ing the color at the pace threshold
                                         use_linear_cmap=True,
                                         drop_last_quantile=False,
+                                        upper_limit=max(
+                                            0.01,
+                                            input.rebased_splits_palette_upper_limit(),
+                                        ),
+                                        lower_limit=min(
+                                            -0.01,
+                                            input.rebased_splits_palette_lower_limit(),
+                                        ),
                                     )
                                     .hide()
                                     .to_html()
                                 )
                                 return ui.HTML(html)
+
+                            @reactive.effect
+                            @reactive.event(
+                                input.split_times_heat_interpretation_switch,
+                                input.stage,
+                                input.rebase_driver,
+                                input.splits_heatmap_driver,
+                            )
+                            def update_rebased_splits_palette_limits():
+                                split_times_wide, split_cols = split_times_heat_vals()
+                                max_ = split_times_wide[split_cols].max().max()
+                                min_ = split_times_wide[split_cols].min().min()
+                                # XX
+                                ui.update_slider(
+                                    id="rebased_splits_palette_upper_limit",
+                                    min=0,
+                                    max=math.ceil(max_),
+                                    value=max_,
+                                )
+                                ui.update_slider(
+                                    id="rebased_splits_palette_lower_limit",
+                                    min=math.ceil(min_ - 1),
+                                    max=0,
+                                    value=min_,
+                                )
 
                         with ui.accordion_panel("Time gained/lost within each split"):
 
@@ -2186,11 +2265,20 @@ with ui.accordion(open=False):
                                 ),
                                 "Get the driver we want to plot the rebased times for on a split sections map."
 
+                            ui.input_checkbox(
+                                "heat_splitmap_use_limits",
+                                "Use palette limit sliders",
+                                False,
+                            )
+
                             @render.plot(alt="Route map split sections heatmap.")
                             @reactive.event(
                                 input.stage,
                                 input.rebase_driver,
                                 input.splits_heatmap_driver,
+                                input.rebased_splits_palette_upper_limit,
+                                input.rebased_splits_palette_lower_limit,
+                                input.heat_splitmap_use_limits
                             )
                             def route_sections_heatmap():
                                 stageId = input.stage()
@@ -2269,9 +2357,19 @@ with ui.accordion(open=False):
                                     output_["carNo"] == heatmap_driver
                                 ]
                                 # Get min.max across all the cols
-                                # so we can comapre across drivers
+                                # so we can compare across drivers
                                 vmax = output_[split_cols].stack().max()
                                 vmin = output_[split_cols].stack().min()
+
+                                if input.heat_splitmap_use_limits():
+                                    # use the controls for the palette saturation limit
+                                    vmax = max(
+                                        0.01,
+                                    )
+                                    vmin = min(
+                                        -0.01,
+                                        input.rebased_splits_palette_lower_limit(),
+                                    )
 
                                 # Generate heat colours for section
                                 # We need len(split_cols)+1 colours
@@ -2494,7 +2592,6 @@ with ui.accordion(open=False, id="live_map_accordion"):
 
     with ui.accordion_panel("Live Map"):
 
-
         @render.express
         @reactive.event(input.interpretation_prompt_switch)
         def livemap_interpretation_container():
@@ -2505,9 +2602,7 @@ with ui.accordion(open=False, id="live_map_accordion"):
             )
 
         @render.ui
-        @reactive.event(
-            input.live_map_interpretation_switch
-        )
+        @reactive.event(input.live_map_interpretation_switch)
         def live_map_interpretation():
             if input.live_map_interpretation_switch():
                 md = live_map_interpretation_md
@@ -2645,7 +2740,7 @@ def getOverallStageResultsData():
     stagesInfo = wrc.getStageInfo(on_event=True).sort_values(
         by="number", ascending=True
     )
-    
+
     stageId = None
     if input.display_latest_overall() and "status" in stagesInfo:
         # TO DO  - this is ambiguous; stage may be running /cancelled but the priority group may be complete?

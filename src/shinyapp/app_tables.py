@@ -2,6 +2,7 @@ from pandas import DataFrame, isna
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from seaborn.utils import relative_luminance
 
+
 def df_color_gradient_styler(
     df,
     cols=None,
@@ -12,11 +13,13 @@ def df_color_gradient_styler(
     reverse_palette=False,
     pos_color=(255, 70, 70),
     neg_color=(40, 255, 40),
-    max_delta=30, # Accepts: None, 30 is 30s, so 1s/km pace diff on the longest stage
+    max_delta=30,  # Accepts: None, 30 is 30s, so 1s/km pace diff on the longest stage
     use_linear_cmap=True,
     cmap_colors=None,
     balancer=False,
-    drop_last_quantile=True
+    drop_last_quantile=True,
+    upper_limit=None,
+    lower_limit=None,
 ):
 
     ##-- via chatGPT
@@ -156,6 +159,12 @@ def df_color_gradient_styler(
         #    lambda x: color_by_value(x, col_pos_max, col_neg_min), subset=[col]
         # )
 
+        # Override with user-provided limits if specified
+        if upper_limit is not None:
+            col_pos_max = upper_limit
+        if lower_limit is not None:
+            col_neg_min = lower_limit
+            
         # Try to make the colours symmetrical -ish
         if balancer:
             multiplier_ = 5
