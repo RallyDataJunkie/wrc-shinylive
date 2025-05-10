@@ -2365,6 +2365,7 @@ with ui.accordion(open=False):
                                     # use the controls for the palette saturation limit
                                     vmax = max(
                                         0.01,
+                                        input.rebased_splits_palette_upper_limit(),
                                     )
                                     vmin = min(
                                         -0.01,
