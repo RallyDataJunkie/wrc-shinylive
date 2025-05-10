@@ -2133,7 +2133,6 @@ with ui.accordion(open=False):
                                 input.split_times_heat_interpretation_switch,
                                 input.stage,
                                 input.rebase_driver,
-                                input.splits_heatmap_driver,
                             )
                             def update_rebased_splits_palette_limits():
                                 split_times_wide, split_cols = split_times_heat_vals()
