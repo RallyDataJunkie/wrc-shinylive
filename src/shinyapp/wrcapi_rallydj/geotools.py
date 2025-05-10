@@ -36,7 +36,15 @@ class RallyGeoTools:
         def fix_encoding(text):
             if isinstance(text, str):
                 try:
+                    # First attempt: handle UTF-8 encoded as latin1
                     return text.encode("latin1").decode("utf-8")
+                except UnicodeEncodeError:
+                    # This handles characters that can't be encoded in latin1
+                    try:
+                        # Try a different approach - maybe text is already correct UTF-8
+                        return text
+                    except Exception:
+                        return text  # Return as-is if all fails
                 except UnicodeDecodeError:
                     return text  # Return as-is if decoding fails
             return text
@@ -466,11 +474,12 @@ class RallyGeoTools:
                 route_gdf = gpd.GeoDataFrame(geometry=[route_line], crs="EPSG:4326")
 
                 # Get the center point of the route to determine appropriate UTM zone
-                center_point = route_line.centroid
-                center_gdf = gpd.GeoDataFrame(geometry=[center_point], crs="EPSG:4326")
+                # center_point = route_line.centroid
+                # center_gdf = gpd.GeoDataFrame(geometry=[center_point], crs="EPSG:4326")
 
                 # Estimate appropriate UTM CRS based on the center of the route
-                utm_crs = center_gdf.estimate_utm_crs()
+                # utm_crs = center_gdf.estimate_utm_crs()
+                utm_crs = route_gdf.estimate_utm_crs()
 
                 # Project route to UTM for accurate measurements in meters
                 projected_route_gdf = route_gdf.to_crs(utm_crs)
