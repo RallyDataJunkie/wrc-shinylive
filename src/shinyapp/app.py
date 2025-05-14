@@ -566,6 +566,9 @@ with ui.accordion(open=False):
                 @reactive.event(rally_geodata)
                 def allstages_map():
                     geostages = rally_geodata()
+                    if geostages.empty:
+                        return
+                    
                     # eventgeodata = getWRCAPI2event()
                     # poi_df = wrcapi.get_poilist_data(eventgeodata["poilistid"])
                     labelcoords = list(zip(geostages["name"], geostages["start"]))
@@ -892,7 +895,7 @@ with ui.accordion(open=False):
 
                         md = rally_progression_heatmap_interpretation_md
 
-                        ui.markdown(
+                        return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                         )
 
@@ -947,7 +950,7 @@ with ui.accordion(open=False):
                     if input.rally_progression_linechart_interpretation_switch():
                         md = rally_progression_linechart_interpretation_md
 
-                        ui.markdown(
+                        return ui.markdown(
                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                         )
 
@@ -2139,18 +2142,19 @@ with ui.accordion(open=False):
                                 max_ = split_times_wide[split_cols].max().max()
                                 min_ = split_times_wide[split_cols].min().min()
                                 # XX
-                                ui.update_slider(
-                                    id="rebased_splits_palette_upper_limit",
-                                    min=0,
-                                    max=math.ceil(max_),
-                                    value=max_,
-                                )
-                                ui.update_slider(
-                                    id="rebased_splits_palette_lower_limit",
-                                    min=math.ceil(min_ - 1),
-                                    max=0,
-                                    value=min_,
-                                )
+                                if max_ and min_:
+                                    ui.update_slider(
+                                        id="rebased_splits_palette_upper_limit",
+                                        min=0,
+                                        max=math.ceil(max_),
+                                        value=max_,
+                                    )
+                                    ui.update_slider(
+                                        id="rebased_splits_palette_lower_limit",
+                                        min=math.ceil(min_ - 1),
+                                        max=0,
+                                        value=min_,
+                                    )
 
                         with ui.accordion_panel("Time gained/lost within each split"):
 
@@ -2355,6 +2359,9 @@ with ui.accordion(open=False):
                                 selected_rebased_time_wide = output_[
                                     output_["carNo"] == heatmap_driver
                                 ]
+                                if selected_rebased_time_wide.empty:
+                                    return empty_plot()
+
                                 # Get min.max across all the cols
                                 # so we can compare across drivers
                                 vmax = output_[split_cols].stack().max()
@@ -2378,6 +2385,9 @@ with ui.accordion(open=False):
                                 )
 
                                 geostages = rally_geodata()
+                                if geostages.empty:
+                                    return empty_plot()
+                                
                                 fig, ax = plt.subplots(facecolor="black")
                                 ax = split_sections_map_core(
                                     wrc,
@@ -2426,7 +2436,7 @@ with ui.accordion(open=False):
                                 ):
                                     md = stage_progression_barchart_interpretation_md
 
-                                    ui.markdown(
+                                    return ui.markdown(
                                         f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                     )
 
@@ -2515,7 +2525,6 @@ with ui.accordion(open=False):
                                     ):
                                         md = stage_progression_linechart_interpretation_md
 
-                                        ui.markdown(
                                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                         )
 
@@ -2607,7 +2616,7 @@ with ui.accordion(open=False, id="live_map_accordion"):
             if input.live_map_interpretation_switch():
                 md = live_map_interpretation_md
 
-                ui.markdown(
+                return ui.markdown(
                     f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                 )
 
