@@ -186,6 +186,14 @@ __Driver groups__: if all the bars point in the same direction within a driver g
 
 """
 
+split_times_map_heat_interpretation_md = """
+
+The split times stage section heatmaps show the "within split" delta times (that is, the time taken to traverse that split section) between the selected driver and the selected rebase driver on each split section of the stage.
+
+The `use palette sliders` option allows you to using the setting in the *Time gained/lost within and across each split* to set the colour palette saturation limit (i.e. the time data for the fully saturated ("solid") green or red colour).
+
+"""
+
 split_times_heat_interpretation_md = """
 
 The split times heatmap uses colour to indicate the magnitude of time deltas at each split point.
@@ -194,7 +202,9 @@ The split times heatmap uses colour to indicate the magnitude of time deltas at 
 
 The colour palette by default is generated on a *per column* basis, using the full colour range *within* a column. The palette can also be defined *across* the table as whole, using the maximum positive and minimum negative deltas across the whole stage to define the colour range.
 
-The heatmap can be used to display two views: the (default) accumulated (elapsed) stage time delta*, and the *within section time delta*.
+The *Rebase palette saturation limit* sliders allow you to set upper and lower threshold values at which the fully saturated ("solid") green or red colour is displayed for a section time delta. Setting the limits at zero gives a binary gre/red indication of time gained / lost.
+
+The heatmap can be used to display two views: the (default) *accumulated (elapsed) stage time delta*, and the *within section time delta*.
 
 - __Accumulated (elapsed) stage time delta (s)__: the deltas give the delta on the accumulated (elapsed) stage time at each split point. *This is the time typically depicted on the WRC/Rally.tv graphics.*
 

@@ -82,6 +82,7 @@ from .interpretations import (
     stage_progression_linechart_interpretation_md,
     stage_progression_barchart_interpretation_md,
     split_times_heat_interpretation_md,
+    split_times_map_heat_interpretation_md,
     live_map_interpretation_md,
     micro_splits_base_interpretation_md,
 )
@@ -2268,6 +2269,27 @@ with ui.accordion(open=False):
                                 ),
                                 "Get the driver we want to plot the rebased times for on a split sections map."
 
+                            @render.express
+                            @reactive.event(input.interpretation_prompt_switch)
+                            def split_times_map_heat_interpretation_container():
+                                ui.input_switch(
+                                    "split_times_map_heat_interpretation_switch",
+                                    "Show interpretation prompts",
+                                    False,
+                                )
+
+                            @render.ui
+                            @reactive.event(
+                                input.split_times_map_heat_interpretation_switch
+                            )
+                            def split_times_heat_interpretation():
+                                if input.split_times_map_heat_interpretation_switch():
+                                    md = split_times_map_heat_interpretation_md
+
+                                    return ui.markdown(
+                                        f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                                    )
+
                             ui.input_checkbox(
                                 "heat_splitmap_use_limits",
                                 "Use palette limit sliders",
@@ -2525,6 +2547,7 @@ with ui.accordion(open=False):
                                     ):
                                         md = stage_progression_linechart_interpretation_md
 
+                                        return ui.markdown(
                                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                         )
 
