@@ -503,7 +503,7 @@ with ui.accordion(open=False):
                         completed_stages = stagesInfo[
                             ~stagesInfo["status"]
                             .str.lower()
-                            .isin(["to run", "running"])
+                            .isin(["torun", "running"])
                         ]
 
                         if not completed_stages.empty:
@@ -518,7 +518,7 @@ with ui.accordion(open=False):
                             md.append(currently_running_)
 
                         to_run = stagesInfo[
-                            stagesInfo["status"].str.lower().isin(["to run"])
+                            stagesInfo["status"].str.lower().isin(["torun"])
                         ]
                         if not to_run.empty:
                             if to_run.shape[0] == 1:
