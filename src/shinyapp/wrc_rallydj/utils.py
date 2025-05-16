@@ -87,11 +87,12 @@ def format_timedelta(t, units="ms", addplus=False):
     Returns:
     str: Formatted time string in hh:mm:ss.tenth format
     """
-    # Create timedelta
-    t = round(t/1000, 1) if units.lower() in ["ms", "milliseconds"] else t
     if isna(t):
         return "No time?"
-    
+
+    # Create timedelta
+    t = round(t/1000, 1) if units.lower() in ["ms", "milliseconds"] else t
+
     td = timedelta(seconds=t)
 
     # Extract total seconds with high precision
