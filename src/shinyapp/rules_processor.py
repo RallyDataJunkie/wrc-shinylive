@@ -63,6 +63,11 @@ def pickfirst_prob(l, p=0.5):
 
 # ---
 
+# TO DO - the class reports are all wrong;
+# TO DO - need a proper way of capturing class positions
+# I think the web app handles this locally / in browser
+# So how does it identify category, group etc?
+# WHen getting results we need to rerank by category etc
 
 def core_stage(
     wrc,
@@ -97,8 +102,9 @@ def core_stage(
     ].copy()
 
     if priority!="P0" and rerank:
+
         _df_stage_curr["position"] = (
-            _df_stage_curr["position"].rank(method="dense", ascending=True).astype(int)
+            _df_stage_curr["position"].dropna().rank(method="dense", ascending=True).astype("int64")
         )
         _df_overall_curr["position"] = (
             _df_overall_curr["position"]
@@ -108,10 +114,16 @@ def core_stage(
 
     _df_overall_curr.rename(columns={"position": "overallPos"}, inplace=True)
     if prevStageId:
-        _df_overall_prev = wrc.getStageOverallResults(stageId=prevStageId, raw=False)[
+        _df_overall_prev = wrc.getStageOverallResults(stageId=prevStageId, priority=priority, raw=False)[
             retcols_overall
         ].copy()
-        _df_overall_prev.rename(columns={"position": "overallPos"}, inplace=True)
+        if priority!="P0" and rerank:
+            _df_overall_prev["position"] = (
+                _df_overall_prev["position"]
+                .rank(method="dense", ascending=True)
+                .astype(int)
+            )
+            _df_overall_prev.rename(columns={"position": "overallPos"}, inplace=True)
     else:
         _df_overall_prev = DataFrame()
 
@@ -228,8 +240,10 @@ def rule_leader_retained_lead(row):
         else:
             if row.get("overallChaseDelta", 1) < 0:
                 delta_change_ = "*__increasing__ the gap*"
-            elif row.get("overallChaseDelta", 1) < 0:
+            elif row.get("overallChaseDelta", -1) > 0:
                 delta_change_ = "*__decreasing__ the gap*"
+            else:
+                delta_change_ = "*__holding__ the gap*"
             delta_change_ = f"""{delta_change_} by {-row["overallChaseDelta"]}s to"""
 
         remark = f"""Overall, *{row["driverName"]}* __retained the lead__, {delta_change_} {row["overallChase"]}s."""
@@ -243,7 +257,7 @@ def rule_move_into_second(row):
         if row.get("overallPosChange"):
             remark = f"""With __{numToWords(p.ordinal(row["position"]))} on stage__, __{row["driverName"]}__ *gained {numToWords(row["overallPosDelta"])} {p.plural("place", row.get("overallPosDelta"))}*, moving into __second overall__, *{row.get("overallGap")}s* behind the leader. """
         elif row.get("prevOverallPos") is None:
-            print("2nd",row)
+            #print("2nd",row)
             remark = f"""__{row["driverName"]}__ took __second__, *{row.get("Gap")}s* behind the leader. """
     return (remark, 0.8)
 
@@ -281,6 +295,7 @@ def rule_retained_third(row):
 
 def process_rally_overall_rules(df):
     # Apply each rule to create new columns
+    df["position"] = df["position"].astype("int64")
     remarks_df = DataFrame(
         {
             "into_first_remarks": df.apply(rule_into_first, axis=1),
@@ -300,6 +315,6 @@ def process_rally_overall_rules(df):
         for remark in remarks_df.stack()
         if remark[0] != ""
     ]
-    
+
     filtered_remarks = sorted(filtered_remarks, key=lambda x: x[1], reverse=True)
     return filtered_remarks

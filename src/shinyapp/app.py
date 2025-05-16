@@ -1470,23 +1470,31 @@ with ui.accordion(open=False):
 
                         if times.empty or overall_df.empty:
                             return  # Anything else we could report here?
-
+                        driverName = times.iloc[0]["driverName"]
                         overall_pos = overall_df.loc[
                             overall_df["carNo"] == times.iloc[0]["carNo"], "position"
                         ].iloc[0]
-                        _md = f"""__{times.iloc[0]["driverName"]}__ was in __{Nth(1)}__ position on stage and __{Nth(overall_pos)} overall__.
+                        _md = f"""__{driverName}__ was in __{Nth(1)}__ position on stage and __{Nth(overall_pos)} overall__.
                         """
                         md.append(_md)
+
+                        rerank = input.stage_remarks_category_rank()
 
                         stagewinners = getStageWinners()
                         if not stagewinners.empty:
                             winner_row = stagewinners.loc[
-                                stagewinners["stageId"] == stageId
+                                (stagewinners["stageId"] == stageId)
+                                & stagewinners["driverName"]
+                                == driverName
                             ]
+                            if not winner_row.empty and not rerank:
+                                _md = f"""This was his *__{Nth(winner_row.iloc[0]["daily_wins"])}__ overall rally stage win of the day* and his *__{Nth(winner_row.iloc[0]["wins_overall"])}__ overall stage win overall*."""
 
-                            _md = f"""This was his *__{Nth(winner_row.iloc[0]["daily_wins"])}__ stage win of the day* and his *__{Nth(winner_row.iloc[0]["wins_overall"])}__ stage win overall*."""
-
-                            md.append(_md)
+                                md.append(_md)
+                            elif rerank:
+                                # We'd need to calculate our own ranks from all the stage results data
+                                pass
+                             
 
                         # TO DO remark eg team made clean sweep of podium with X in second, M behind, and Y in third, a further Z back.
 
@@ -1537,12 +1545,12 @@ with ui.accordion(open=False):
                         ):  # Check if leader exists in times
                             leaderPos = leader_row.iloc[0]["position"]
                             leaderDiff = leader_row.iloc[0]["Gap"]
+
                             # TO DO - the following is badly duped if we get a new leader
                             _md = f"""Rally leader {overall_df.iloc[0]["driverName"]} was {leaderDiff} seconds off the stage winner in {Nth(leaderPos)} position."""
                             md.append(_md)  # Properly append the string
 
                         # External rules test
-                        rerank = input.stage_remarks_category_rank()
                         _overall_diff = core_stage(
                             wrc,
                             stages_info,
