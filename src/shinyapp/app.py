@@ -2290,7 +2290,7 @@ with ui.accordion(open=False):
                             @reactive.event(
                                 input.split_times_map_heat_interpretation_switch
                             )
-                            def split_times_heat_interpretation():
+                            def split_times_map_heat_interpretation():
                                 if input.split_times_map_heat_interpretation_switch():
                                     md = split_times_map_heat_interpretation_md
 
