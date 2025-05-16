@@ -79,14 +79,14 @@ def core_stage(
 
     # TO DO - do we need to handle colnames better if priority is set?
 
-    retcols_stage = ["carNo", "driverName", "position", "Gap", "Diff", "Chase"]
+    retcols_stage = ["carNo", "driverName", "position", "Gap", "Diff", "Chase", "timeInS"]
     retcols_overall = [
         "carNo",
         "driverName",
         "position",
         "Gap",
         "Diff",
-        "Chase",
+        "Chase", "timeInS"
     ]
     stage_details.reset_index(drop=True, inplace=True)
 
@@ -97,12 +97,10 @@ def core_stage(
     _df_stage_curr = wrc.getStageTimes(stageId=stageId, priority=priority, raw=False)
     _df_stage_curr = _df_stage_curr[retcols_stage].copy()
 
-    _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, priority=priority, raw=False)[
-        retcols_overall
-    ].copy()
+    _df_overall_curr = wrc.getStageOverallResults(stageId=stageId, priority=priority, raw=False)
+    _df_overall_curr = _df_overall_curr[retcols_overall].copy()
 
     if priority!="P0" and rerank:
-
         _df_stage_curr["position"] = (
             _df_stage_curr["position"].dropna().rank(method="dense", ascending=True).astype("int64")
         )
@@ -111,6 +109,16 @@ def core_stage(
             .rank(method="dense", ascending=True)
             .astype(int)
         )
+        _df_overall_curr["Gap"] = (
+            _df_overall_curr["timeInS"] - _df_overall_curr["timeInS"].iloc[0]
+        ).round(1)
+        _df_overall_curr["Diff"] = _df_overall_curr["timeInS"].diff(1).round(1).fillna(0)
+        _df_overall_curr["Chase"] = _df_overall_curr["timeInS"].diff(-1).round(1)
+        _df_stage_curr["Gap"] = (
+            _df_stage_curr["timeInS"] - _df_stage_curr["timeInS"].iloc[0]
+        ).round(1)
+        _df_stage_curr["Diff"] = _df_stage_curr["timeInS"].diff(1).round(1).fillna(0)
+        _df_stage_curr["Chase"]= _df_stage_curr["timeInS"].diff(-1).round(1)
 
     _df_overall_curr.rename(columns={"position": "overallPos"}, inplace=True)
     if prevStageId:
@@ -123,6 +131,13 @@ def core_stage(
                 .rank(method="dense", ascending=True)
                 .astype(int)
             )
+            _df_overall_prev["Gap"] = (
+                _df_overall_prev["timeInS"] - _df_overall_prev["timeInS"].iloc[0]
+            ).round(1)
+            _df_overall_prev["Diff"] = (
+                _df_overall_prev["timeInS"].diff(1).round(1).fillna(0)
+            )
+            _df_overall_prev["Chase"] = _df_overall_prev["timeInS"].diff(-1).round(1)
             _df_overall_prev.rename(columns={"position": "overallPos"}, inplace=True)
     else:
         _df_overall_prev = DataFrame()
