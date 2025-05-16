@@ -2151,7 +2151,7 @@ with ui.accordion(open=False):
                                 max_ = split_times_wide[split_cols].max().max()
                                 min_ = split_times_wide[split_cols].min().min()
                                 # XX
-                                if max_ and min_:
+                                if max_ and not isna(max_) and min_ and not isna(min_):
                                     ui.update_slider(
                                         id="rebased_splits_palette_upper_limit",
                                         min=0,
