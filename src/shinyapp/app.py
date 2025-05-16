@@ -2666,8 +2666,9 @@ with ui.accordion(open=False, id="live_map_accordion"):
 
         # Map rendering function using ipyleaflet
         @render_widget
-        @reactive.event(rally_geodata, car_getdata)  # input.pause_live_map,
-        def show_map():
+        #@reactive.event(rally_geodata, car_getdata)  # input.pause_live_map,
+        @reactive.event(input.year, input.season_round, input.category)
+        def render_live_map():
             def add_marker(row, m):
                 # Create marker
                 # TO DO color the moving indication by speed?
