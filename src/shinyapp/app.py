@@ -2314,7 +2314,6 @@ with ui.accordion(open=False):
                                 split_times_wide, rebase_driver, error_msg = (
                                     prepare_split_times_data(stageId, rebase_driver)
                                 )
-
                                 if error_msg:
                                     return empty_plot(title=error_msg)
 
@@ -2409,7 +2408,7 @@ with ui.accordion(open=False):
                                 geostages = rally_geodata()
                                 if geostages.empty:
                                     return empty_plot()
-                                
+
                                 fig, ax = plt.subplots(facecolor="black")
                                 ax = split_sections_map_core(
                                     wrc,
@@ -2526,7 +2525,7 @@ with ui.accordion(open=False):
                                             "Accumulated time gained / lost across sections in seconds relative to rebase driver (line chart) ",
                                             question_circle_fill,
                                         )
-                                        "Accumuluated time deltas across each split section. Times are relative to rebased driver's time. Lines above x=0 are cars ahead, lines below are times behind."
+                                        "Accumulated time deltas across each split section. Times are relative to rebased driver's time. Lines above x=0 are cars ahead, lines below are times behind."
 
                                 @render.express
                                 @reactive.event(input.interpretation_prompt_switch)
@@ -2551,9 +2550,18 @@ with ui.accordion(open=False):
                                             f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
                                         )
 
+                                ui.input_slider(
+                                    "rebased_splits_line_max_delta",
+                                    "Max delta",
+                                    min=0,
+                                    max=60,
+                                    value=60,
+                                )
+
                                 @render.plot(
                                     alt="Line chart of within split delta times."
                                 )
+                                @reactive.event(input.stage, input.rebased_splits_line_max_delta)
                                 def seaborn_linechart_splits():
                                     stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
@@ -2562,13 +2570,12 @@ with ui.accordion(open=False):
                                     split_times_wide, rebase_driver, error_msg = (
                                         prepare_split_times_data(stageId, rebase_driver)
                                     )
-
                                     if error_msg:
                                         return empty_plot(title=error_msg)
 
                                     # Use the original chart function with the prepared data
                                     ax = chart_seaborn_linechart_splits(
-                                        wrc, stageId, split_times_wide, rebase_driver
+                                        wrc, stageId, split_times_wide, rebase_driver, max_delta = input.rebased_splits_line_max_delta()
                                     )
 
                                     return ax

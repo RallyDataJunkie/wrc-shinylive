@@ -120,7 +120,7 @@ def chart_seaborn_barplot_splits(
     return ax
 
 
-def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver):
+def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver, max_delta=None):
     insert_point = f"{wrc.SPLIT_PREFIX}1"
     insert_loc = None
     if insert_point in split_times_wide.columns:
@@ -153,6 +153,7 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
     )
 
     split_dists_ = wrc.getStageSplitPoints(stageId=stageId, extended=True)
+
     split_dists = split_dists_.set_index("name")["distance"].to_dict()
 
     # Add start point
@@ -180,6 +181,9 @@ def chart_seaborn_linechart_splits(wrc, stageId, split_times_wide, rebase_driver
 
     if rebase_driver and rebase_driver != "ult":
         ax.set_ylim(ax.get_ylim()[::-1])
+
+    if max_delta is not None:
+        ax.set_ylim(bottom=min(max_delta, split_times_long["time"].max() ))
 
     texts = []
     for line, label in zip(
