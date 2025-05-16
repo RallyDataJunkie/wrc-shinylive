@@ -1606,7 +1606,7 @@ class WRCTimingResultsAPIClientV2:
         # Optionally add in the final stage distance
         final_ = len(stage_split_points_df) + 1
         if extended:
-            stage_info_ = self.getStageInfo(stage_code=stageId)
+            stage_info_ = self.getStageInfo(stageId=stageId)
             if not stage_info_.empty:
                 final_distance = stage_info_["distance"].iloc[0]
                 final_row = DataFrame(
