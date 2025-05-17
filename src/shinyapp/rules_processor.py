@@ -253,9 +253,9 @@ def rule_leader_retained_lead(row):
         if row.get("overallChaseDelta", 1) == 0:
             delta_change_ = "keeping the gap at"
         else:
-            if row.get("overallChaseDelta", 1) < 0:
+            if row.get("overallChaseDelta", 1) > 0:
                 delta_change_ = "*__increasing__ the gap*"
-            elif row.get("overallChaseDelta", -1) > 0:
+            elif row.get("overallChaseDelta", -1) < 0:
                 delta_change_ = "*__decreasing__ the gap*"
             else:
                 delta_change_ = "*__holding__ the gap*"
