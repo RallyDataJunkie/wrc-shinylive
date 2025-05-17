@@ -50,7 +50,7 @@ def split_position_related_remarks(row):
     match = re.fullmatch(r"^(a+)$", s)
     if len(s) and match:
         print("Lead at every split")
-        return f"__{row['driverName']__ *led at every split point* and *took the stage win*."
+        return f"__{row['driverName']}__ *led at every split point* and *took the stage win*."
 
     # 
     # Lost position
