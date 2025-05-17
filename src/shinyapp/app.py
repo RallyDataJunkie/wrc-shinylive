@@ -9,6 +9,7 @@ from wrc_rallydj.utils import (
 )
 
 from wrcapi_rallydj.data_api import WRCDataAPIClient
+from .symbolic_analysis import encode_position_symbols, split_position_related_remarks
 
 from datetime import datetime
 from icons import question_circle_fill
@@ -178,19 +179,25 @@ def getWRCAPI2event():
     # TO DO year, sas-eventid is round, typ is .upper() on championship
     # Could we get a race here from wrc.championship?
     r = wrcapi.get_rallies_data(int(input.year()), typ=wrc.championship.upper())
+
     r = r[r["sas-eventid"].astype(str) == str(input.season_round())]
     retval = r.to_dict(orient="records")[0] if not r.empty else {}
+
     return retval
 
 
 @reactive.calc
-@reactive.event(getWRCAPI2event)
+@reactive.event(getWRCAPI2event, input.year, input.season_round, input.category)
 def rally_geodata():
     geodata = getWRCAPI2event()
+    if not geodata:
+        return DataFrame()
+
     if "kmlfile" in geodata:
         kmlstub = geodata["kmlfile"]
         geostages = wrcapi.read_kmlfile(kmlstub)
         return geostages
+
     return DataFrame()
 
 
@@ -490,6 +497,7 @@ with ui.accordion(open=False):
                             raw=False, last=True
                         )
                         if not overallResults.empty:
+                            pass
                             # HACK TO DO TO REMOVE
                             print(overallResults.iloc[-1].to_dict())
 
@@ -501,9 +509,7 @@ with ui.accordion(open=False):
                             lambda row: f"{row['code']} {row['name']}", axis=1
                         )
                         completed_stages = stagesInfo[
-                            ~stagesInfo["status"]
-                            .str.lower()
-                            .isin(["torun", "running"])
+                            ~stagesInfo["status"].str.lower().isin(["torun", "running"])
                         ]
 
                         if not completed_stages.empty:
@@ -1494,7 +1500,6 @@ with ui.accordion(open=False):
                             elif rerank:
                                 # We'd need to calculate our own ranks from all the stage results data
                                 pass
-                             
 
                         # TO DO remark eg team made clean sweep of podium with X in second, M behind, and Y in third, a further Z back.
 
@@ -1750,7 +1755,7 @@ with ui.accordion(open=False):
 
     with ui.accordion_panel(title="Splits Analysis"):
 
-        with ui.accordion(open=False, id="splits_geo1_accordion"):
+        with ui.accordion(open=False, id="splits_overview_accordion"):
 
             with ui.accordion_panel("Split route sections map"):
 
@@ -1776,6 +1781,38 @@ with ui.accordion(open=False):
                     ax2 = split_sections_map_core(wrc, stageId, geostages)
                     return ax2
 
+            with ui.accordion_panel("Split sections remarks"):
+
+                @render.ui
+                @reactive.event(
+                    input.category,
+                    input.stage,
+                    input.category,
+                    input.priority,
+                    input.stage_remarks_category_rank,
+                )
+                def splits_report_remarks():
+                    # TO DO report for other priorites
+                    if input.priority() not in ["P0","P1"]:
+                        return ui.markdown("*No report available.*")
+                     
+                    split_times_wide = get_split_times_wide()
+                    split_cols = wrc.getSplitCols(split_times_wide)
+                    split_pos_wide = split_times_wide.copy()
+                    split_pos_wide[split_cols] = split_times_wide[split_cols].apply(
+                        lambda col: col.rank(method="dense", ascending=True).astype(
+                            "Int64"
+                        )
+                    )
+                    splits_pos_symbolised = encode_position_symbols(
+                        split_pos_wide, split_cols
+                    )
+                    print(splits_pos_symbolised)
+                    splits_pos_symbolised["remark"] = splits_pos_symbolised.apply(
+                        split_position_related_remarks, axis=1
+                    )
+                    print(splits_pos_symbolised)
+                    return ui.markdown(" ".join(splits_pos_symbolised[splits_pos_symbolised["remark"]!=""].sort_values(wrc.SPLIT_FINAL)["remark"].to_list()))
         ui.markdown("\n\n")
 
         ui.input_action_button("splits_refresh", "Refresh split times")
@@ -2311,7 +2348,7 @@ with ui.accordion(open=False):
                                 input.splits_heatmap_driver,
                                 input.rebased_splits_palette_upper_limit,
                                 input.rebased_splits_palette_lower_limit,
-                                input.heat_splitmap_use_limits
+                                input.heat_splitmap_use_limits,
                             )
                             def route_sections_heatmap():
                                 stageId = input.stage()
@@ -2569,7 +2606,9 @@ with ui.accordion(open=False):
                                 @render.plot(
                                     alt="Line chart of within split delta times."
                                 )
-                                @reactive.event(input.stage, input.rebased_splits_line_max_delta)
+                                @reactive.event(
+                                    input.stage, input.rebased_splits_line_max_delta
+                                )
                                 def seaborn_linechart_splits():
                                     stageId = input.stage()
                                     rebase_driver = input.rebase_driver()
@@ -2583,7 +2622,11 @@ with ui.accordion(open=False):
 
                                     # Use the original chart function with the prepared data
                                     ax = chart_seaborn_linechart_splits(
-                                        wrc, stageId, split_times_wide, rebase_driver, max_delta = input.rebased_splits_line_max_delta()
+                                        wrc,
+                                        stageId,
+                                        split_times_wide,
+                                        rebase_driver,
+                                        max_delta=input.rebased_splits_line_max_delta(),
                                     )
 
                                     return ax
@@ -2666,7 +2709,7 @@ with ui.accordion(open=False, id="live_map_accordion"):
 
         # Map rendering function using ipyleaflet
         @render_widget
-        #@reactive.event(rally_geodata, car_getdata)  # input.pause_live_map,
+        # @reactive.event(rally_geodata, car_getdata)  # input.pause_live_map,
         @reactive.event(input.year, input.season_round, input.category)
         def render_live_map():
             def add_marker(row, m):
