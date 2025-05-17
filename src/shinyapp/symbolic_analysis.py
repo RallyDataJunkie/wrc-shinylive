@@ -50,7 +50,7 @@ def split_position_related_remarks(row):
     match = re.fullmatch(r"^(a+)$", s)
     if len(s) and match:
         print("Lead at every split")
-        return f"{row['driverName']} led at every split point and took the stage win."
+        return f"__{row['driverName']__ *led at every split point* and *took the stage win*."
 
     # 
     # Lost position
@@ -58,19 +58,19 @@ def split_position_related_remarks(row):
     if match:
         print("Lost position")
         lead_len = len(match.group(1))
-        return f"{row['driverName']} started the stage well, but fell back at split {lead_len+1} and finally finished in {Nth(position_decode_map[s[-1]])}."
+        return f"__{row['driverName']}__ *started the stage well*, but fell back at split {lead_len+1} and finally *finished in {Nth(position_decode_map[s[-1]])}*."
     
     # Started well, fell back, retook lead
     match = re.fullmatch(r"^([a]+)([^a]+)(a+)$", s)
     if match:
         print("Started well, fell back, retook lead")
-        return f"{row['driverName']} started strongly, slipped back during the stage, then improved position to take the stage win."
+        return f"__{row['driverName']}__ *started strongly*, *slipped back* during the stage, then *improved position to take the stage win*."
     
     # Started poorly, finished well
     match = re.fullmatch(r"^([^abc]+)([abc]+)$", s)
     if match:
         print("Started poorly, finished well", s)
-        return f"{row['driverName']} started poorly ({Nth(position_decode_map[s[0]])} at the first split) but improved position to finish in {Nth(position_decode_map[s[-1]])}."
+        return f"__{row['driverName']}__ *started poorly* (*{Nth(position_decode_map[s[0]])} at the first split*) but *improved position* to *finish in {Nth(position_decode_map[s[-1]])}*."
     
     # Led first half-ish
     match = re.fullmatch(r"^([a]+)([^a]+)$", s)
@@ -88,14 +88,14 @@ def split_position_related_remarks(row):
     # Lost podium
     match = re.fullmatch(r"^([abc]+)([^abc]+)$", s)
     if match:
-        return f"{row['driverName']} was in a podium position for the first {p.number_to_words(len(match.group(1)))} splits, but then fell back to {Nth(position_decode_map[s[-1]])} by stage end."
+        return f"__{row['driverName']}__ *was in a podium position* for the first {p.number_to_words(len(match.group(1)))} splits, but then *fell back to {Nth(position_decode_map[s[-1]])} by stage end*."
 
     # Trailed then took lead
     match = re.fullmatch(r"^([^a]+)(a+)$", s)
     if match:
         print("Trailed then took lead")
-        until_ = "the last split section, taking the stage lead, and the stage win, right at the end of the stage" if len(match.group(2))==1 else f"the {Nth(match.group(1)+1)}, but then continued in first position at each split as well as the stage win."
-        return f"{row['driverName']} trailed in the splits until {until_}."
+        until_ = "the last split section, *taking the stage lead, and the stage win, right at the end of the stage*" if len(match.group(2))==1 else f"the {Nth(match.group(1)+1)} split, but then continued in first position at each split and *took the stage win*."
+        return f"__{row['driverName']}__ *trailed in the splits* until {until_}."
 
     print("no match",s )
     return ""
