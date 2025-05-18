@@ -1194,7 +1194,7 @@ class WRCTimingResultsAPIClientV2:
         return itineraryLegs_df
 
     def getItineraryStages(
-        self, eventId=None, itineraryLegId=None, itinerarySectionId=None, updateDB=False
+        self, eventId=None, itineraryLegId=None, itinerarySectionId=None, latest=True, updateDB=False
     ):
         if updateDB or self.liveCatchup:
             updateDB = updateDB or self.isRallyLive()
@@ -1209,9 +1209,13 @@ class WRCTimingResultsAPIClientV2:
         elif eventId:
             q = f"SELECT * FROM itinerary_stages WHERE eventId={int(eventId)};"
 
-        itinerarySections_df = self.db_manager.read_sql(q)
+        itineraryStages_df = self.db_manager.read_sql(q)
+        if latest:
+            # Get latest itinerary
+            itineraryStages_df.drop_duplicates(subset=["code"], keep="last", inplace=True)
+            itineraryStages_df.reset_index(drop=True, inplace=True)
 
-        return itinerarySections_df
+        return itineraryStages_df
 
     def getItinerarySections(self, eventId=None, itineraryLegId=None, updateDB=False):
         if updateDB or self.liveCatchup:
@@ -1838,7 +1842,6 @@ class WRCTimingResultsAPIClientV2:
         event_ = season[season["eventId"] == self.eventId]
         if not event_.empty:
             event = event_.iloc[0].to_dict()
-
             if is_date_in_range(datetime.now(), event):
                 # TO DO - various itinerary controls report status
                 # itinerarySections: status: ToRun, Running
@@ -1857,6 +1860,7 @@ class WRCTimingResultsAPIClientV2:
                     return False
 
                 itinerary_stages["status"] = itinerary_stages["status"].str.lower()
+
                 # TO DO also put date bounds on this
                 return "running" in itinerary_stages["status"].tolist()
 
@@ -2441,7 +2445,7 @@ class WRCTimingResultsAPIClientV2:
             stageIds = [stageId]
         else:
             stageIds = []  # TO DO map for the default stageId
-        #print("stageIds - ", stageIds)
+        # print("stageIds - ", stageIds)
         if updateDB or self.liveCatchup:
             logger.debug(
                 f"getStageOverallResults: completed: {completed} running: {running} updateDB:{updateDB} liveCatchup: {self.liveCatchup} isStageLive: {self.isStageLive(stageId=stageId)}"
