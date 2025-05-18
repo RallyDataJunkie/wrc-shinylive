@@ -15,17 +15,36 @@ def dateNow(weekend=False):
 
 
 def is_date_in_range(date_input, date_dict, tristate=False):
+    """
+    Check if a date is within the range of start and finish dates from an event dictionary.
+
+    Args:
+        date_input: Current date as datetime object or string (YYYY-MM-DD)
+        date_dict: Dictionary containing event information with startDate and/or finishDate
+        tristate: If True, returns:
+                  1 if event is in future
+                  0 if event is current/live
+                  -1 if event is in past
+
+    Returns:
+        Boolean (if tristate=False) or int [-1, 0, 1] (if tristate=True)
+    """
+    from datetime import datetime
+    import pytz
+
     # Check if date_input is a datetime object or a string
     if isinstance(date_input, datetime):
-        current_date = date_input
+        # Make sure current_date doesn't already have timezone info
+        if date_input.tzinfo is not None:
+            current_date = date_input.replace(tzinfo=None)
+        else:
+            current_date = date_input
     else:
         # Convert current date string to datetime (assuming 'YYYY-MM-DD' format)
         current_date = datetime.strptime(date_input, "%Y-%m-%d")
 
     # Determine the timezone to use
-    # If timeZoneId is in the date_dict, use that timezone
     if "timeZoneId" in date_dict:
-        # tiumeZoneId may be broken
         try:
             event_timezone = pytz.timezone(date_dict["timeZoneId"])
         except:
@@ -38,18 +57,25 @@ def is_date_in_range(date_input, date_dict, tristate=False):
     localized_start_date = None
     localized_finish_date = None
 
-    # If startDate exists, convert and localize it
-    if "startDate" in date_dict:
+    # If startDate exists, convert and localize it to midnight (00:00:00) of that day
+    if "startDate" in date_dict and date_dict["startDate"]:
         start_date = datetime.strptime(date_dict["startDate"], "%Y-%m-%d")
+        # Set time to start of day (00:00:00)
+        start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         localized_start_date = event_timezone.localize(start_date)
 
-    # If finishDate exists, convert and localize it
-    if "finishDate" in date_dict:
+    # If finishDate exists, convert and localize it to end of day (23:59:59)
+    if "finishDate" in date_dict and date_dict["finishDate"]:
         finish_date = datetime.strptime(date_dict["finishDate"], "%Y-%m-%d")
+        # Set time to end of day (23:59:59)
+        finish_date = finish_date.replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
         localized_finish_date = event_timezone.localize(finish_date)
 
-    # Localize current date
-    localized_current_date = event_timezone.localize(current_date)
+    # Add hour/minute/second to current_date if not already there, then localize it
+    current_date_with_time = current_date
+    localized_current_date = event_timezone.localize(current_date_with_time)
 
     # If both startDate and finishDate are missing, we can just check the current date
     if localized_start_date is None and localized_finish_date is None:
@@ -59,7 +85,9 @@ def is_date_in_range(date_input, date_dict, tristate=False):
     if not tristate:
         if localized_start_date and localized_finish_date:
             # Check if current date is within the range of startDate and finishDate
-            return localized_start_date <= localized_current_date <= localized_finish_date
+            return (
+                localized_start_date <= localized_current_date <= localized_finish_date
+            )
         elif localized_start_date:
             # Only startDate exists, check if current date is after startDate
             return localized_start_date <= localized_current_date
@@ -67,13 +95,15 @@ def is_date_in_range(date_input, date_dict, tristate=False):
             # Only finishDate exists, check if current date is before finishDate
             return localized_current_date <= localized_finish_date
     else:
-        if localized_current_date < localized_start_date:
+        # Tristate mode
+        if localized_start_date and localized_current_date < localized_start_date:
             # Event is in future
             return 1
-        elif localized_current_date > localized_finish_date:
+        elif localized_finish_date and localized_current_date > localized_finish_date:
             # Event is in past
             return -1
         else:
+            # Event is current/live
             return 0
 
 
