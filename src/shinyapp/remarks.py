@@ -189,5 +189,5 @@ def event_background_remarks(wrc, eventId):
     return "\n\n".join(md)
 
 def stage_times_remarks(wrc):
-    md = "TO DO"
+    md = "*Additional remarks TO DO*"
     return md
