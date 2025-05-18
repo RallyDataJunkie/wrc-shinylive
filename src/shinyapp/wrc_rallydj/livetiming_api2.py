@@ -130,6 +130,9 @@ class APIClient:
             print("Error trying to load data.")
             return {}
         # r = requests.get(url)
+        if r.status_code!=200:
+            return()
+        
         rj = r.json()
         if "status" in rj and rj["status"] == "Not Found":
             return {}
