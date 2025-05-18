@@ -586,6 +586,22 @@ with ui.accordion(open=False):
 
             with ui.accordion_panel("Event stage times"):
 
+                @render.data_frame
+                def event_stage_times_frame():
+                    itinerary = getItinerary()
+                    if itinerary.empty:
+                        return
+
+                    retcols = [
+                        "name",
+                        "code",
+                        "location",
+                        "distance",
+                        "firstCarDueDateTime",
+                        "status",
+                    ]
+                    return render.DataGrid(itinerary[itinerary["type"]=="StageStart"][retcols])
+                
                 @render.ui
                 def app_stage_times_remarks():
                     md = stage_times_remarks(wrc)
