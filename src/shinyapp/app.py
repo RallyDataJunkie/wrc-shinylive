@@ -2765,8 +2765,11 @@ with ui.accordion(open=False, id="live_map_accordion"):
                 m.add_layer(marker)
 
             setStageData()
+            # TO DO  - find a better way of getting car numbers by category
             _, _, overallResults = getOverallStageResultsData()
-            carNos = overallResults["carNo"].tolist()
+            carNos = []
+            if not overallResults.empty:
+                carNos = overallResults["carNo"].tolist()
 
             # Get the latest data
             # df = car_getdata()
