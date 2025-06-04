@@ -569,9 +569,12 @@ with ui.accordion(open=False):
 
             with ui.accordion_panel("Event stages map"):
 
+                # TO DO this is broken and does not always render the leaflet map?
                 @render_widget
                 @reactive.event(rally_geodata)
                 def allstages_map():
+                    if not input.event_accordion():
+                        return
                     geostages = rally_geodata()
                     if geostages.empty:
                         return
