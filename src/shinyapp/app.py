@@ -3152,10 +3152,14 @@ def update_stage_select():
     stages = stages.set_index("stageId")["label"].to_dict()
     if wrc.isRallyLive():
         live_stages = wrc.getLiveStages()
+
         if not live_stages.empty:
             live_stage = live_stages["stageId"].iloc[-1]
+
             if live_stage in stages:
                 ui.update_select("stage", choices=stages, selected=str(live_stage))
+                return
+            ui.update_select("stage", choices=stages)
     else:
         ui.update_select("stage", choices=stages)
 
