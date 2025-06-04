@@ -2784,7 +2784,10 @@ with ui.accordion(open=False, id="live_map_accordion"):
                 return
 
             df["carNo"] = to_numeric(df["name"], errors="coerce").astype("Int64")
-            df = df[df["carNo"].isin(carNos)]
+            if carNos:
+                df = df[df["carNo"].isin(carNos)]
+            df.dropna(subset=["lat", "lon"], inplace=True)
+
             if df.empty:
                 return
 
