@@ -2989,6 +2989,7 @@ def update_category_select():
         "wrc": {"All": "P0", "WRC": "P1", "WRC2": "P2", "WRC3": "P3", "JWRC": "P4"},
         "erc": {
             "All": "P0",
+            "ERC": "ERC",
             "ERC1": "ERC1",
             "ERC3": "ERC3",
             "ERC4": "ERC4",
@@ -3030,6 +3031,8 @@ def update_category_select():
         selected = "P1"
     elif "ERC1" in categories:
         selected = "ERC1"
+    elif "ERC" in categories:
+        selected = "ERC"
     ui.update_select("category", choices=categories, selected=selected)
 
 
