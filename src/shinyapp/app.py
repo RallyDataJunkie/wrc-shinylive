@@ -571,21 +571,39 @@ with ui.accordion(open=False):
 
                 # TO DO this is broken and does not always render the leaflet map?
                 @render_widget
-                @reactive.event(rally_geodata)
                 def allstages_map():
                     if not input.event_accordion():
                         return
                     geostages = rally_geodata()
                     if geostages.empty:
                         return
-                    
-                    # eventgeodata = getWRCAPI2event()
                     # poi_df = wrcapi.get_poilist_data(eventgeodata["poilistid"])
                     labelcoords = list(zip(geostages["name"], geostages["start"]))
                     m = wrcapi.GeoTools.simple_stage_map(
                         geostages, labelcoords=labelcoords
                     )
                     return m
+
+                @reactive.event(
+                    rally_geodata,
+                    input.year,
+                    input.season_round,
+                    input.category,
+                    input.event_accordion,
+                )
+                def update_allstages_map():
+                    if "Event stages map" not in input.event_accordion():
+                        return
+                    geostages = rally_geodata()
+                    if geostages.empty:
+                        return
+                    allstages_map.clear()
+                    labelcoords = list(zip(geostages["name"], geostages["start"]))
+                    print("sending map", allstages_map)
+                    print("sending map()", allstages_map())
+                    wrcapi.GeoTools.simple_stage_map(
+                        geostages, labelcoords=labelcoords, m=allstages_map()
+                    )
 
             with ui.accordion_panel("Event stage times"):
 
