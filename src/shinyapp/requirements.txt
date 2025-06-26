@@ -9,6 +9,7 @@ url-normalize
 parse
 #seaborn
 sqlite_utils
+typeguard==4.4.2
 inflect
 adjustText
 #anywidget
