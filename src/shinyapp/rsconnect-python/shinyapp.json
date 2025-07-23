@@ -1,0 +1,12 @@
+{
+    "https://api.shinyapps.io": {
+        "server_url": "https://api.shinyapps.io",
+        "filename": "/Users/tonyhirst/Documents/GitHub/wrc-shinylive/src/shinyapp",
+        "app_url": "https://psychemedia.shinyapps.io/rallydj-wrc/",
+        "app_id": 14271384,
+        "app_guid": null,
+        "title": "RallyDJ-WRC",
+        "app_mode": "python-shiny",
+        "app_store_version": 1
+    }
+}

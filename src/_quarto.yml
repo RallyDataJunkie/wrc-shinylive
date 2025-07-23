@@ -1,0 +1,14 @@
+project:
+  type: website
+website:
+  title: "RallyDataJunkie WRC Live Timing and Results"
+  description: "Interactive demos using in-browser Pyodide/Python."
+  page-navigation: true
+  sidebar:
+    contents:
+      - href: index.qmd
+      - section: ShinyApp — Getting Started
+        contents:
+          - 10_season_calendar.qmd
+          - 15_event_overview.qmd
+

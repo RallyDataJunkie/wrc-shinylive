@@ -1,13 +1,11 @@
 import asyncio
-import random
 import sqlite3
-from datetime import datetime
 from typing import Any, Awaitable
 
-import pandas as pd
+from pandas import read_sql_query, DataFrame
 
 from shiny import reactive
-from shiny.express import input, render, ui
+from shiny.express import render, ui
 
 import requests
 
@@ -33,38 +31,38 @@ def init_db(con: sqlite3.Connection) -> None:
             """
         )
 
-        items = get_data()
-        data = [
-            (
-                record["name"],
-                record["lon"],
-                record["lat"],
-                record["speed"],
-                record["heading"],
-                record["utx"],
-                record["driverid"],
-                record["track"],
-                record["status"],
-                record["gear"],
-                record["throttle"],
-                record["brk"],
-                record["rpm"],
-                record["accx"],
-                record["accy"],
-                record["kms"],
-                record["altitude"],
-            )
-            for record in items
-        ]
-        cur.executemany(
-            """
-    INSERT INTO wrctimes
-    (name, lon, lat, speed, heading, utx, driverid, 
-        track, status, gear, throttle, brk, rpm, 
-        accx, accy, kms, altitude) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    """,
-            data,
-        )
+    #     items = get_data()
+    #     data = [
+    #         (
+    #             record["name"],
+    #             record["lon"],
+    #             record["lat"],
+    #             record["speed"],
+    #             record["heading"],
+    #             record["utx"],
+    #             record["driverid"],
+    #             record["track"],
+    #             record["status"],
+    #             record["gear"],
+    #             record["throttle"],
+    #             record["brk"],
+    #             record["rpm"],
+    #             record["accx"],
+    #             record["accy"],
+    #             record["kms"],
+    #             record["altitude"],
+    #         )
+    #         for record in items
+    #     ]
+    #     cur.executemany(
+    #         """
+    # INSERT INTO wrctimes
+    # (name, lon, lat, speed, heading, utx, driverid, 
+    #     track, status, gear, throttle, brk, rpm, 
+    #     accx, accy, kms, altitude) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    # """,
+    #         data,
+    #     )
         con.commit()
         print("db initialised")
     finally:
@@ -79,7 +77,7 @@ init_db(conn)
 
 
 def update_db(con: sqlite3.Connection) -> None:
-    """Update a single stock price entry at random"""
+    """Update db with grabbed data."""
 
     cur = con.cursor()
     try:
@@ -125,7 +123,7 @@ import time
 
 
 async def update_db_task(con: sqlite3.Connection) -> Awaitable[None]:
-    """Task that alternates between sleeping and updating prices"""
+    """Task that alternates between sleeping and updating telemetry."""
     while True:
         await asyncio.sleep(5)
         update_db(con)
@@ -138,13 +136,13 @@ _ = asyncio.create_task(update_db_task(conn))
 
 
 def tbl_last_modified() -> Any:
-    df = pd.read_sql_query("SELECT MAX(utx) AS utx FROM wrctimes", conn)
+    df = read_sql_query("SELECT MAX(utx) AS utx FROM wrctimes", conn)
     return df["utx"].to_list()
 
 
 @reactive.poll(tbl_last_modified, 5.1)
-def car_getdata() -> pd.DataFrame:
-    return pd.read_sql_query("SELECT * FROM wrctimes", conn)
+def car_getdata() -> DataFrame:
+    return read_sql_query("SELECT * FROM wrctimes", conn)
 
 
 with ui.card():

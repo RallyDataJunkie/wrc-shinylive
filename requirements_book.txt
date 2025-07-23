@@ -1,0 +1,13 @@
+quarto
+
+requests
+requests-cache
+pandas
+plotnine
+numpy
+matplotlib
+seaborn
+
+jupyterlite-simple-cors-proxy
+
+sqlite-utils

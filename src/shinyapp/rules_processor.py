@@ -232,14 +232,14 @@ def rule_into_first(row):
             if row["overallPosDelta"] > 1
             else f"""moved ahead of {row["prevLeaderName"]}"""
         )
-        remark = f"""With his {Nth(row["position"])} place on stage, {row["driverName"]} {big_jump} into first place overall, taking a lead of {round(row["overallChase"], 1)}s"""
+        remark = f"""With his {Nth(row["position"])} place on stage, {row["driverName"]} {big_jump} into first place overall, taking a lead of {round(abs(row["overallChase"]), 1)}s"""
     return (remark, 1.0)
 
 
 def rule_lost_first(row):
     remark = ""
     if row.get("prevLeader") and not row.get("currLeader"):
-        remark = f"""Coming in at {Nth(row["position"])} on the stage, {row["Gap"]}s behind the stage winner, {row["driverName"]} lost the overall lead, falling back to {Nth(row["overallPos"])} place"""
+        remark = f"""Coming in at {Nth(row["position"])} on the stage, {abs(row["Gap"])}s behind the stage winner, {row["driverName"]} lost the overall lead, falling back to {Nth(row["overallPos"])} place"""
         if row["overallPos"] >= 2:
             fell_back = f"""{remark}, {row["overallGap"]}s behind the new leader."""
         else:
@@ -292,7 +292,7 @@ def rule_up_into_third(row):
     remark = ""
     if row.get("overallPos") == 3:
         if row.get("prevOverallPos", 3) > 3 and row.get("overallPosDelta", 0) > 0:
-            remark = f"""__{numToWords(p.ordinal(row["position"])).capitalize()} on stage__ __{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallGap")}s behind second and *{row.get("overallDiff")}s off the lead*."""
+            remark = f"""__{numToWords(p.ordinal(row["position"])).capitalize()} on stage__ __{row["driverName"]}__ moved *up into __third__ overall*, up {numToWords(row.get("overallPosDelta"))} {p.plural("place", row.get("overallPosDelta"))}, {row.get("overallDiff")}s behind second and *{row.get("overallGap")}s off the lead*."""
         elif row.get("prevOverallPos") is None:
             remark = f"""__{row["driverName"]}__ went into __third__, *{row.get("Diff")}s* behind second and *{row.get("Gap")}s* off the lead pace."""
         return (remark, 0.73)

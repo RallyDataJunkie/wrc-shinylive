@@ -1,0 +1,88 @@
+---
+format: html
+filters:
+  - shinylive
+---
+# Event Overview
+
+A "hero" style overview of a selected event. The data is pulled from a `season_data()` reactive calculation, which in turn initialises the `WRCLiveTimingAPIClient()` object with a full calendar.
+
+:::{.column-screen-inset}
+```{shinylive-python}
+#| standalone: true
+#| layout: horizontal
+#| viewerHeight: 800
+#| components: [viewer, editor]
+from shiny.express import ui, input
+from shiny import render, reactive
+from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient
+
+wrc = WRCLiveTimingAPIClient(use_cache=True, backend="memory", expire_after=600)
+
+ui.panel_title("Season calendar")
+
+ui.input_select(
+    "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
+)
+
+# Create event selector
+# Dynamically populated using a list of events
+# based on the season selection
+ui.input_select("event", "Event:", {})
+
+# Events are pulled from the season_data() feed
+@reactive.effect
+def update_events_select():
+    season = season_data()
+    if season_data().empty:
+        return
+    # events = season["EventName"].to_list()
+    events = (
+        season[["rallyId", "rallyTitle"]].set_index("rallyId")["rallyTitle"].to_dict()
+    )
+    wrc.setEvent()
+    ui.update_select("event", choices=events, selected=wrc.rallyId)
+
+
+@render.ui
+@reactive.event(input.event)
+def rally_overview_hero():
+    season = season_data()
+    event = input.event()
+    round = season.loc[season["rallyId"] == event, "ROUND"].iloc[0]
+    so = ui.value_box(
+        title=season.loc[season["rallyId"] == event, "date"].iloc[0],
+        value=season.loc[season["rallyId"] == event, "rallyTitle"].iloc[0],
+        theme="text-black",
+        showcase=ui.markdown(f"__ROUND {round}__"),
+        showcase_layout="left center",
+        full_screen=True,
+    )
+    return so
+
+@reactive.calc
+def season_data():
+    wrc.initialise(year=int(input.season()))
+    # WRC API data fetch
+    season = wrc.getResultsCalendar()
+    return season
+
+## file: requirements.txt
+jupyterlite_simple_cors_proxy
+
+pandas
+requests
+requests-cache
+attrs
+cattrs
+platformdirs
+url-normalize
+parse
+
+sqlite3
+sqlite_utils
+click
+pluggy
+
+wrc_rallydj
+```

@@ -1473,7 +1473,13 @@ with ui.accordion(open=False):
                     )
                     def stage_report_remarks():
                         # TO DO - move this into stage_times_remarks() ?
+                        # TO DO - need two classes of report:
+                        # - complete stage / final results
+                        # - stage running
+                        # - maybe also a stage running but the cateogy has completed
                         priority = input.category()
+                        # TO DO - the priority thing is wrong
+                        # We need eligibility as well as class
                         stageId = input.stage()
                         if not priority or not stageId:
                             return "Still initialising..."
@@ -2843,6 +2849,111 @@ with ui.accordion(open=False, id="live_map_accordion"):
 
 
 @reactive.calc
+@reactive.event(input.year, input.rally_seasonId)
+def getTelemRallies():
+    year = input.year()
+    if not year:
+        return DataFrame()
+    # TO DO: could we get a race on here on the =wrc.championship value?
+    telem_rallies = wrcapi.get_rallies_data(
+        int(input.year()), typ=wrc.championship.upper()
+    )
+    return telem_rallies
+
+
+@reactive.calc
+@reactive.event(input.season_round, input.year, getTelemRallies)
+def getTelemRally():
+    eventId = input.season_round()
+    year = input.year()
+    telem_rallies = getTelemRallies()
+    if not eventId or telem_rallies.empty:
+        return DataFrame()
+
+    telem_rally = telem_rallies[telem_rallies["sas-eventid"] == str(eventId)]
+    if telem_rally.empty:
+        return DataFrame()
+    print("TELEM RALLY", telem_rally)
+    df_rallydata = wrcapi.process_rally_data(
+        telem_rallies, rallyname=telem_rally.iloc[0]["name"], year=int(year)
+    )
+    return df_rallydata
+
+
+@reactive.calc
+@reactive.event(getTelemRally, input.stage, input.category)
+def getTelemStageData():
+    stageId = input.stage()
+    priority = input.category()
+    df_rallydata = getTelemRally()
+    if not stageId or not priority or df_rallydata.empty:
+        return DataFrame()
+
+    df_telem_stagedata = wrcapi.process_stage_data(df_rallydata, stageId=str(stageId))
+    stage_times_df = wrc.getStageTimes(
+        stageId=int(stageId), priority=priority, raw=False
+    )
+    if df_telem_stagedata.empty or stage_times_df.empty:
+        return DataFrame()
+
+    car_driver_dict = dict(
+        stage_times_df[["carNo", "driverName"]]
+        .dropna()
+        .assign(carNo=lambda df: df["carNo"].astype(str))
+        .values
+    )
+    df_telem_stagedata = df_telem_stagedata[
+        df_telem_stagedata["nr"].isin(car_driver_dict.keys())
+    ]
+    df_telem_stagedata["driverName"] = df_telem_stagedata["nr"].map(car_driver_dict)
+
+    # TO DO
+    # make a driver rebase list
+    # get the telem for each driver on that stage
+    # add the teleme to a db table so we only get it once.
+    return df_telem_stagedata
+
+
+with ui.accordion(open=False, id="micro_splits__accordion"):
+
+    with ui.accordion_panel("Micro-splits"):
+
+        @render.express
+        @reactive.event(input.interpretation_prompt_switch)
+        def micro_splits_base_interpretation_container():
+            ui.input_switch(
+                "micro_splits_base_interpretation_md",
+                "Show interpretation prompts",
+                False,
+            )
+
+        @render.ui
+        @reactive.event(input.micro_splits_base_interpretation_md)
+        def micro_splits_base_interpretation():
+            if input.micro_splits_base_interpretatio():
+                md = micro_splits_base_interpretation_md
+
+                return ui.markdown(
+                    f"""<hr/>\n\n<div style="background-color:{INTEPRETATION_PANEL_COLOUR}">{md}</div>\n\n<hr/>\n\n"""
+                )
+
+        # Create microsplits driver rebase selector
+        ui.input_select(
+            "microsplits_rebase_driver",
+            "Microsplits driver rebase:",
+            {},
+        )
+
+        @render.ui
+        @reactive.event(getTelemStageData)
+        def testMicroSplits():
+            df_stagedata = getTelemStageData()
+            # print(df_stagedata)
+            if df_stagedata.empty:
+                return ui.markdown("No telem stage data...")
+
+
+@reactive.calc
 @reactive.event(input.season_round)
 def getEventData():
     wrc.setEventById(int(input.season_round()))
@@ -3192,6 +3303,14 @@ def update_stages_driver_rebase_select():
 
 
 @reactive.effect
+# @reactive.event() TO DO
+def update_microsplits_rebase_select():
+    pass
+    # microsplits_rebase_drivers =
+    # ui.update_select("microsplits_rebase_driver", choices=microsplits_rebase_drivers)
+
+
+@reactive.effect
 @reactive.event(input.rally_seasonId, input.category)
 def update_championships_select():
     seasonId = input.rally_seasonId()
@@ -3271,8 +3390,9 @@ def split_sections_map_core(wrc, stageId, geostages, ax=None, heat_colours=None)
     # Get last point coordinates from last row
     last_x, last_y = gdf_segments2.iloc[-1].geometry.coords[-1]
     # Plot the points directly with matplotlib
-    ax.scatter(first_x, first_y, color="green", s=10, zorder=5)
-    ax.scatter(last_x, last_y, color="red", s=10, zorder=5)
+    # ax.scatter(first_x, first_y, color="green", s=10, zorder=5)
+    # ax.scatter(last_x, last_y, color="red", s=10, zorder=5)
+    ax.scatter(last_x, last_y, color="orange", s=10, zorder=5)
 
     return ax
 

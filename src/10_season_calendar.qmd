@@ -1,0 +1,71 @@
+---
+format: html
+filters:
+  - shinylive
+---
+# Season Calendar
+
+The season calendar provides details of rallies from the current and previous seasons.
+
+The `WRCLiveTimingAPIClient()` is initialised against the selected season. Updates to the season causes the client to be reinitialised with the corresponding season.
+
+:::{.column-screen-inset}
+```{shinylive-python}
+#| standalone: true
+#| layout: horizontal
+#| viewerHeight: 800
+#| components: [viewer, editor]
+from shiny.express import ui, input
+from shiny import render, reactive
+from wrc_rallydj.livetiming_api import WRCLiveTimingAPIClient
+
+wrc = WRCLiveTimingAPIClient(use_cache=True, backend="memory", expire_after=600)
+
+ui.panel_title("Season calendar")
+
+ui.input_select(
+    "season", "Season:", [str(i) for i in range(2024, 2026)], selected="2025"
+)
+
+@render.data_frame
+def season_frame():
+    season = season_data()
+    if season.empty:
+        return
+    retcols = [
+        "ROUND",
+        "rallyTitle",
+        "rallyCountry",
+        "date",
+        "driver",
+        "coDriver",
+        "teamName",
+        "manufacturer",
+    ]
+    return render.DataGrid(season[retcols])
+
+def season_data():
+    wrc.initialise(year=int(input.season()))
+    # WRC API data fetch
+    season = wrc.getResultsCalendar()
+    return season
+
+## file: requirements.txt
+jupyterlite_simple_cors_proxy
+
+pandas
+requests
+requests-cache
+attrs
+cattrs
+platformdirs
+url-normalize
+parse
+
+sqlite3
+sqlite_utils
+click
+pluggy
+
+wrc_rallydj
+```
