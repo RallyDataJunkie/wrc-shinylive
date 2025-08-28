@@ -8,6 +8,9 @@ from io import StringIO
 import kml2geojson
 from typing import Dict, Any
 import re
+import io
+import zipfile
+import json
 
 import logging
 
@@ -21,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # from time import sleep
 # import random
-import json
+
 import gzip
 import base64
 
@@ -85,14 +88,23 @@ class WRCDataAPIClient:
             local_url = (
                 local_url
                 if local_url
-                else f"{LOCAL_DATA_STUB}/{kmlfile.split(".")[0]}.json"
+                else f"{LOCAL_DATA_STUB}/{kmlfile.split(".")[0]}.zip"
             )
 
             logger.info(f"Trying local geojson file: {local_url}")
             r = self.r.get(local_url)
             if r.status_code==200:
                 try:
-                    geojson = r.json()
+                    zip_data = r.content
+                    zip_buffer = io.BytesIO(zip_data)
+                    with zipfile.ZipFile(zip_buffer) as z:
+                        # List all files in the zip
+                        print(z.namelist())
+
+                        # Read a specific file (assuming it contains JSON)
+                        with z.open(z.namelist()[0]) as f:
+                            geojson = json.load(f)
+                    #geojson = r.json()
                     if geojson:
                         return geojson
                 except:
