@@ -11,8 +11,8 @@ import re
 
 import logging
 
-LOCAL_DATA_STUB = "http://localhost:8126/app1/resources"
-
+# LOCAL_DATA_STUB = "http://localhost:8126/app1/resources"
+LOCAL_DATA_STUB = "https://rallydatajunkie.com/wrc-shinylive/resources"
 # Set a basic logging level
 logging.basicConfig(level=logging.INFO)
 
@@ -91,8 +91,12 @@ class WRCDataAPIClient:
             logger.info(f"Trying local geojson file: {local_url}")
             r = self.r.get(local_url)
             if r.status_code==200:
-                geojson = r.json()
-                return geojson
+                try:
+                    geojson = r.json()
+                    if geojson:
+                        return geojson
+                except:
+                    pass
 
         kmlurl = self.WRC_KML_PATH.format(kmlfile=kmlfile)
         logger.info(f"Trying KML XML url {kmlurl}")
