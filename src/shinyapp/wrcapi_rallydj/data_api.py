@@ -1,5 +1,4 @@
 # Tools for working with the WRC data api
-
 import datetime
 from requests_cache import CachedSession
 from datetime import timedelta
@@ -9,6 +8,16 @@ from io import StringIO
 import kml2geojson
 from typing import Dict, Any
 import re
+
+import logging
+
+LOCAL_DATA_STUB = "http://localhost:8126/app1/resources"
+
+# Set a basic logging level
+logging.basicConfig(level=logging.INFO)
+
+# Logging for this package
+logger = logging.getLogger(__name__)
 
 # from time import sleep
 # import random
@@ -57,7 +66,36 @@ class WRCDataAPIClient:
     def kmlfile_to_json(self, kmlfile):
         if not isinstance(kmlfile, str) or not kmlfile:
             return {}
+        # Try local lookup first
+        try:
+            from shiny import req
+            request = req()
+            # Get base URL without trailing slash
+            local_url = f"{request.url.scheme}://{request.url.netloc}"
+        except:
+            local_url = ""
+        if not local_url:
+            try:
+                from js import window
+                local_url = str(window.location.origin)
+            except:
+                local_url = ""
+
+        if local_url or LOCAL_DATA_STUB:
+            local_url = (
+                local_url
+                if local_url
+                else f"{LOCAL_DATA_STUB}/{kmlfile.split(".")[0]}.json"
+            )
+
+            logger.info(f"Trying local geojson file: {local_url}")
+            r = self.r.get(local_url)
+            if r.status_code==200:
+                geojson = r.json()
+                return geojson
+
         kmlurl = self.WRC_KML_PATH.format(kmlfile=kmlfile)
+        logger.info(f"Trying KML XML url {kmlurl}")
         text = StringIO(
             re.sub(
                 r"[\u200b\u200e\u200f]",
@@ -86,7 +124,7 @@ class WRCDataAPIClient:
                 return [stages]
         if not isinstance(kmlfile, str) or not kmlfile:
             return GeoDataFrame() if self.GeoTools else {}
-        
+
         gj = self.kmlfile_to_json(kmlfile)
         if not gj:
             return GeoDataFrame() if self.GeoTools else {}
@@ -177,13 +215,16 @@ class WRCDataAPIClient:
         df["_record_name"] = rname
         return df
 
-    def get_base_data(self, typ="WRC", retval=False):
+    def get_base_data(self, typ="WRC", season_round="", retval=False):
         """Get base rally data, keyed by year."""
         # The "availability now" list adds entries when a rally is running.
         # This DOES NOT include shakedown or the days prior to the rally start.
         # q = "queryMeta?t=%22Event%22&p=%7B%22n%22%3A%22availability%22%2C%22v%22%3A%22now%22%7D&maxdepth=1"
         # TO DO the following filters on category
-        q = f"queryMeta?t=%22Event%22&p=%7B%22n%22%3A%22category%22%2C%22v%22%3A%22{typ.upper()}%22%7D&maxdepth=1"
+        if season_round:
+            q = f"queryMeta?t=%22Event%22&p=%7B%22n%22%3A%22sas-eventid%22%2C%22v%22%3A%22{season_round}%22%7D&maxdepth=1"
+        else:
+            q = f"queryMeta?t=%22Event%22&p=%7B%22n%22%3A%22category%22%2C%22v%22%3A%22{typ.upper()}%22%7D&maxdepth=1"
         # TO DO - to get the kmlurl we need to set the depth to 2 and parse down
 
         # TO DO - we can get event by category:
@@ -196,7 +237,7 @@ class WRCDataAPIClient:
         # https://webappsdata.wrc.com/srv/wrc/json/api/wrcsrv/queryMeta?t=%22Event%22&p=%7B%22n%22%3A%22info-surface%22%2C%22v%22%3A%22Gravel%22%7D&maxdepth=1
         # TO DO - is there a way to query on multiple params?
         url = self.WRC_DATA_API_BASE.format(query=q)
-
+        logger.info(f"get_base_data() — WRC_DATA_API_BASE_QUERY url: {url}")
         basedata = self.r.get(url, verify=False).json()
         self.championshipType = typ
 
@@ -307,7 +348,7 @@ class WRCDataAPIClient:
         _df.drop_duplicates(inplace=True)
         return _df
 
-    def get_rallies_data(self, year=None, typ="WRC", alldata=None, as_dict=False):
+    def get_rallies_data(self, year=None, typ="WRC", alldata=None, as_dict=False, season_round=""):
         """Get rally data as dataframe."""
         # If we provide a year for the rallies, assume this is the year we are using
         if year is not None:
@@ -315,8 +356,8 @@ class WRCDataAPIClient:
         else:
             year = self.year
         df_rallies = pd.DataFrame()
-        if typ != self.championshipType or year != self.year:
-            alldata = self.get_base_data(typ=typ, retval=True)
+        if typ != self.championshipType or year != self.year or season_round!="":
+            alldata = self.get_base_data(typ=typ, season_round=season_round, retval=True)
         elif alldata is None:
             alldata = (
                 self.alldata
