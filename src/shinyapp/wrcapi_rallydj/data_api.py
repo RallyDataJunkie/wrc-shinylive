@@ -94,18 +94,21 @@ class WRCDataAPIClient:
             logger.info(f"Trying local geojson file: {local_url}")
             r = self.r.get(local_url)
             if r.status_code==200:
+                logger.info(f"Local geojson file retrieved ok...: {local_url}")
                 try:
                     zip_data = r.content
                     zip_buffer = io.BytesIO(zip_data)
                     with zipfile.ZipFile(zip_buffer) as z:
                         # List all files in the zip
-                        print(z.namelist())
+                        logger.info("Opening {z.namelist()[0]}")
 
                         # Read a specific file (assuming it contains JSON)
                         with z.open(z.namelist()[0]) as f:
                             geojson = json.load(f)
-                    #geojson = r.json()
+                        logger.info("Parsed geojson")
+                    # geojson = r.json()
                     if geojson:
+                        logger.info("None empty geojson")
                         return geojson
                 except:
                     pass
