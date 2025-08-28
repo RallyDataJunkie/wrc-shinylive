@@ -310,6 +310,9 @@ def rule_retained_third(row):
 
 def process_rally_overall_rules(df):
     # Apply each rule to create new columns
+    if df.empty or "position" not in df.columns:
+        return []
+    
     df["position"] = df["position"].astype("int64")
     remarks_df = DataFrame(
         {
