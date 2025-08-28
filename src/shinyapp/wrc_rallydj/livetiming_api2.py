@@ -131,12 +131,19 @@ class APIClient:
             return {}
         # r = requests.get(url)
         if r.status_code!=200:
-            return()
-        
-        rj = r.json()
-        if "status" in rj and rj["status"] == "Not Found":
+            logger.info(f"Not ok response from {url}")
             return {}
-        return r.json()
+
+        try:
+            rj = r.json()
+        except ValueError:
+            # .json() failed to decode
+            logger.info(f"Failed to parse JSON from {url}")
+            return {}
+        if not rj:
+            logger.info(f"Empty JSON from {url}")
+            
+        return rj
 
     def _getSeasons(self, updateDB=False):
         """The seasons feed is regularly updated throughout the season."""
@@ -154,7 +161,7 @@ class APIClient:
     def _getSeasonDetail(self, seasonId, updateDB=False):
         if not seasonId:
             return DataFrame(), DataFrame(), DataFrame()
-         
+
         stub = f"season-detail.json?seasonId={seasonId}"
         json_data = self._WRC_RedBull_json(stub)
         if "championships" not in json_data:
@@ -434,7 +441,7 @@ class APIClient:
     def _getEventGroups(self, eventId, updateDB=False):
         if not eventId:
             return DataFrame()
-        
+
         stub = f"events/{eventId}/groups.json"
         json_data = self._WRC_RedBull_json(stub)
 
@@ -593,7 +600,7 @@ class APIClient:
 
         if not eventId:
             return DataFrame(), DataFrame(), DataFrame()
-        
+
         stub = f"events/{eventId}/stages.json"
         json_data = self._WRC_RedBull_json(stub)
         stages_df = DataFrame(json_data)
@@ -631,7 +638,7 @@ class APIClient:
     def _getStageTimes(self, eventId, rallyId, stageId=None, updateDB=False):
         if not eventId or not stageId or not rallyId:
             return DataFrame()
-        
+
         stub = f"events/{eventId}/stages/{stageId}/stagetimes.json?rallyId={rallyId}"     
         json_data = self._WRC_RedBull_json(stub)
         stagetimes_df = DataFrame(json_data)
@@ -650,7 +657,7 @@ class APIClient:
         stageId = stageId if stageId else self.stageId
         if not eventId or not stageId or not rallyId:
             return DataFrame()
-        
+
         stub = f"events/{eventId}/stages/{stageId}/splittimes.json?rallyId={rallyId}"
         json_data = self._WRC_RedBull_json(stub)
         splitTimes_df = DataFrame(json_data)
@@ -683,7 +690,7 @@ class APIClient:
         # stageId = stageId if stageId else self.stageId
         if not eventId or not stageId or not rallyId:
             return DataFrame()
-        
+
         stub = f"events/{eventId}/stages/{stageId}/results.json?rallyId={rallyId}"
         if by_championship and championshipId:
             stub = stub + f"&championshipId={championshipId}"
