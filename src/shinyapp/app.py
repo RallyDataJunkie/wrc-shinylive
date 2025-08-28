@@ -19,6 +19,15 @@ from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
 import math
 
+
+import logging
+
+# Set a basic logging level
+logging.basicConfig(level=logging.INFO)
+
+# Logging for this package
+logger = logging.getLogger(__name__)
+
 import re
 from rules_processor import (
     Nth,
@@ -174,12 +183,13 @@ with ui.sidebar(open="desktop"):
 @reactive.event(input.year, input.season_round, input.category)
 def getWRCAPI2event():
     if not input.year() or not input.category() or not input.season_round():
+        logger.info("getWRCAPI2event — missing input data?")
         return {}
 
     # TO DO year, sas-eventid is round, typ is .upper() on championship
     # Could we get a race here from wrc.championship?
-    r = wrcapi.get_rallies_data(int(input.year()), typ=wrc.championship.upper())
-
+    r = wrcapi.get_rallies_data(int(input.year()), typ=wrc.championship.upper(), season_round=str(input.season_round()))
+    print(r)
     r = r[r["sas-eventid"].astype(str) == str(input.season_round())]
     retval = r.to_dict(orient="records")[0] if not r.empty else {}
 
@@ -189,14 +199,17 @@ def getWRCAPI2event():
 @reactive.calc
 @reactive.event(getWRCAPI2event, input.year, input.season_round, input.category)
 def rally_geodata():
+    logger.info("Trying to get rally geodata")
     geodata = getWRCAPI2event()
     if not geodata:
+        logger.info("No geodata found?")
         return DataFrame()
 
     if "kmlfile" in geodata:
         kmlstub = geodata["kmlfile"]
         geostages = wrcapi.read_kmlfile(kmlstub)
         return geostages
+    logger.info("No kmlfile reference found?")
 
     return DataFrame()
 
@@ -493,13 +506,12 @@ with ui.accordion(open=False):
                                 by="number", ascending=True
                             )
 
-                        overallResults = wrc.getStageOverallResults(
-                            raw=False, last=True
-                        )
+                        _, _, overallResults = getOverallStageResultsData()
+
                         if not overallResults.empty:
                             pass
                             # HACK TO DO TO REMOVE
-                            print(overallResults.iloc[-1].to_dict())
+                            #print(overallResults.iloc[-1].to_dict())
 
                     if wrc.isRallyInDate():
                         event_status_ = "*__This event is currently running.__*"
@@ -543,11 +555,15 @@ with ui.accordion(open=False):
                         else:
                             superspecial_ = ""
                         # TO DO  if in priority need to use class position
+                        previous_stages_ = f"""Comprising __{numToWords(stagesInfo["code"].shape[0])} competitive {p.plural("stage", stagesInfo["code"].shape[0])}__{superspecial_} over a total competitive rally distance of __{stagesInfo["distance"].sum().round(1)} km__, *{event["name"]}*"""
 
-                        finalStageOverallWinner = overallResults[
+                        if overallResults.empty:
+                            previous_stages_ = f"{previous_stages_} [the overall winner data is not available]."
+                        else:
+                            finalStageOverallWinner = overallResults[
                             overallResults["position"] == 1
                         ].iloc[-1]
-                        previous_stages_ = f"""Comprising __{numToWords(stagesInfo["code"].shape[0])} competitive {p.plural("stage", stagesInfo["code"].shape[0])}__{superspecial_} over a total competitive rally distance of __{stagesInfo["distance"].sum().round(1)} km__, *{event["name"]}* was won by __{finalStageOverallWinner["driverName"]}__ and co-driver __{finalStageOverallWinner["codriverName"]}__ in a __{finalStageOverallWinner["entrantName"]} *{finalStageOverallWinner["vehicleModel"]}*__ with an overall rally time of {finalStageOverallWinner["stageTime"]} ({finalStageOverallWinner["penaltyTime"]} penalties)."""
+                            previous_stages_ = f"""{previous_stages_} was won by __{finalStageOverallWinner["driverName"]}__ and co-driver __{finalStageOverallWinner["codriverName"]}__ in a __{finalStageOverallWinner["entrantName"]} *{finalStageOverallWinner["vehicleModel"]}*__ with an overall rally time of {format_timedelta(finalStageOverallWinner["totalTimeMs"])} ({format_timedelta(finalStageOverallWinner["penaltyTimeMs"])} penalties)."""
                         # Possible comment about team dominance. In terms of team standings, tool all three podium positions, top four etx
                         md.append(previous_stages_)
 
@@ -571,6 +587,7 @@ with ui.accordion(open=False):
 
                 # TO DO this is broken and does not always render the leaflet map?
                 @render_widget
+                @reactive.event(input.year, input.season_round, input.category)
                 def allstages_map():
                     if not input.event_accordion():
                         return
@@ -622,7 +639,7 @@ with ui.accordion(open=False):
                         "status",
                     ]
                     return render.DataGrid(itinerary[itinerary["type"]=="StageStart"][retcols])
-                
+
                 @render.ui
                 def app_stage_times_remarks():
                     md = stage_times_remarks(wrc)
@@ -1620,15 +1637,18 @@ with ui.accordion(open=False):
                     def single_stage_map():
                         stageId = input.stage()
                         if not stageId:
-                            return ui.markdown("No stage to report on...")
+                            logger.info("Stage map — no stage to report on...")
+                            return
 
                         geostages = rally_geodata()
                         if geostages.empty:
-                            return ui.markdown("No route data available...")
+                            logger.info("Stage map — no route data available...")
+                            return
 
                         stages_info = wrc.getStageInfo(raw=False)
                         if stages_info.empty:
-                            return ui.markdown("Awaiting stages data...")
+                            logger.info("Stage map — awaiting stages data...")
+                            return
 
                         stage_info = stages_info[
                             stages_info["stageId"] == int(stageId)
@@ -1838,7 +1858,7 @@ with ui.accordion(open=False):
                     # TO DO report for other priorites
                     if input.priority() not in ["P0","P1"]:
                         return ui.markdown("*No report available.*")
-                     
+
                     split_times_wide = get_split_times_wide()
                     split_cols = wrc.getSplitCols(split_times_wide)
                     split_pos_wide = split_times_wide.copy()
@@ -2823,6 +2843,9 @@ with ui.accordion(open=False, id="live_map_accordion"):
             center_lon = df["lon"].mean()
             # m = Map(center=(center_lat, center_lon), zoom=9)
             geostages = rally_geodata()
+            if isinstance(geostages, str):
+                logger.info("Event stages map — no map stages data?")
+                return
             m = wrcapi.GeoTools.simple_stage_map(geostages)
             # Add markers for each point in the data
             # Add markers to map
