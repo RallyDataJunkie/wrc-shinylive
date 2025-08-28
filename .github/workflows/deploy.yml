@@ -40,6 +40,7 @@ jobs:
           python -m pip install -r requirements_shiny.txt
           mkdir -p ./dist
           shinylive export src/shinyapp ./dist --full-shinylive --template-params=src/shinyapp_params.json
+          cp -r ./resources ./dist
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
