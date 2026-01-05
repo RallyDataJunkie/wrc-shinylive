@@ -1447,11 +1447,11 @@ class WRCTimingResultsAPIClientV2:
             priority_ = f"""AND e.priority LIKE "%{priority}" """ if priority else ""
             sql = f"SELECT d.code AS driverCode, d.fullName AS driverName, cd.fullName AS codriverName, m.name AS manufacturerName, n.name AS entrantName, e.vehicleModel, e.identifier AS carNo, sh.* FROM shakedown_times AS sh {_entry_join} {_driver_join} {_codriver_join} {_manufacturer_join} {_entrants_join} WHERE 1=1 {eventId_} {priority_};"
 
+        r = self.db_manager.read_sql(sql)
+        # Hack to poll API if empty
+        if r.empty:
+            self._getEventShakeDownTimes(eventId=eventId, updateDB=True)
             r = self.db_manager.read_sql(sql)
-            # Hack to poll API if empty
-            if r.empty:
-                self._getEventShakeDownTimes(eventId=eventId, updateDB=True)
-                r = self.db_manager.read_sql(sql)
 
         return r
 
